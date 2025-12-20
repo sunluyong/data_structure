@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>01 数组：内存世界的原住民</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0B1020;
+            --text-color: #EAF2FF;
+            --accent-color: #22D3EE;
+            --secondary-color: #60A5FA;
+            --highlight-bg: rgba(34, 211, 238, 0.1);
+            --code-bg: #1a202c;
+            --slide-width: 1920px;
+            --slide-height: 1080px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            margin: 0;
+            background-color: #000;
+            color: var(--text-color);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        #app {
+            width: var(--slide-width);
+            height: var(--slide-height);
+            background-color: var(--bg-color);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+        }
+
+        /* 装饰背景元素 */
+        .bg-decoration {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            background-image: 
+                radial-gradient(circle at 10% 10%, rgba(96, 165, 250, 0.05) 0%, transparent 20%),
+                radial-gradient(circle at 90% 90%, rgba(34, 211, 238, 0.05) 0%, transparent 20%);
+            pointer-events: none;
+        }
+        
+        .grid-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-size: 50px 50px;
+            background-image: linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+                              linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+            z-index: 0;
+        }
+
+        /* 幻灯片容器 */
+        .slide {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+            padding: 80px 100px;
+            flex-direction: column;
+            z-index: 1;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+
+        .slide.active {
+            display: flex;
+            opacity: 1;
+        }
+
+        /* 通用排版 */
+        h1 {
+            font-size: 150px;
+            font-weight: 800;
+            line-height: 1.1;
+            margin-bottom: 40px;
+            background: linear-gradient(135deg, #fff 0%, var(--secondary-color) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        h2 {
+            font-size: 72px;
+            margin-bottom: 60px;
+            color: var(--accent-color);
+            border-bottom: 4px solid var(--accent-color);
+            padding-bottom: 20px;
+            display: inline-block;
+        }
+
+        h3 {
+            font-size: 48px;
+            margin-bottom: 30px;
+            color: var(--secondary-color);
+        }
+
+        p, li {
+            font-size: 38px;
+            line-height: 1.5;
+            margin-bottom: 25px;
+            color: #d1d5db;
+        }
+
+        strong {
+            color: var(--accent-color);
+            font-weight: 700;
+        }
+
+        ul, ol {
+            list-style: none;
+        }
+
+        ul li {
+            position: relative;
+            padding-left: 50px;
+            margin-bottom: 35px;
+        }
+
+        ul li::before {
+            content: "•";
+            color: var(--accent-color);
+            position: absolute;
+            left: 0;
+            font-size: 1.2em;
+        }
+
+        /* 布局辅助 */
+        .layout-center {
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        .layout-2col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 80px;
+            height: 100%;
+            align-content: center;
+        }
+
+        .col-content {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 40px;
+            margin-bottom: 30px;
+        }
+
+        .card-title {
+            font-size: 42px;
+            color: var(--accent-color);
+            margin-bottom: 20px;
+            display: block;
+            font-weight: bold;
+        }
+
+        .highlight-box {
+            background: var(--highlight-bg);
+            border-left: 8px solid var(--accent-color);
+            padding: 40px;
+            margin: 40px 0;
+            border-radius: 0 20px 20px 0;
+        }
+        
+        .formula {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 60px;
+            text-align: center;
+            margin: 40px 0;
+            color: #fff;
+            background: rgba(0,0,0,0.3);
+            padding: 30px;
+            border-radius: 20px;
+            border: 2px dashed var(--secondary-color);
+        }
+
+        /* 表格样式 */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 32px;
+            margin-top: 20px;
+        }
+
+        th, td {
+            padding: 20px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+        }
+
+        th {
+            color: var(--accent-color);
+            font-size: 36px;
+            border-bottom: 3px solid var(--accent-color);
+        }
+        
+        td:first-child {
+            font-weight: bold;
+            color: var(--secondary-color);
+        }
+
+        /* 图标大尺寸 */
+        .icon-large {
+            font-size: 120px;
+            color: var(--secondary-color);
+            margin-bottom: 30px;
+            display: block;
+        }
+
+        /* 页脚 */
+        .footer {
+            position: absolute;
+            bottom: 30px;
+            right: 40px;
+            font-size: 24px;
+            color: rgba(255, 255, 255, 0.4);
+            z-index: 2;
+        }
+
+        /* 代码块 */
+        .code-block {
+            font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+            background: var(--code-bg);
+            padding: 30px;
+            border-radius: 15px;
+            border: 1px solid #333;
+            font-size: 28px;
+            line-height: 1.6;
+            color: #a5b3ce;
+            white-space: pre;
+            overflow-x: auto;
+        }
+        
+        .code-keyword { color: #c678dd; }
+        .code-type { color: #e5c07b; }
+        .code-string { color: #98c379; }
+        .code-comment { color: #5c6370; font-style: italic; }
+        .code-number { color: #d19a66; }
+
+        /* 数组格子可视化 */
+        .array-visual {
+            display: flex;
+            margin: 40px 0;
+        }
+        .array-cell {
+            width: 100px;
+            height: 100px;
+            border: 2px solid var(--accent-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 40px;
+            font-weight: bold;
+            color: #fff;
+            position: relative;
+            background: rgba(34, 211, 238, 0.1);
+        }
+        .array-cell + .array-cell {
+            border-left: none;
+        }
+        .array-index {
+            position: absolute;
+            bottom: -40px;
+            font-size: 24px;
+            color: #888;
+        }
+        .array-addr {
+            position: absolute;
+            top: -40px;
+            font-size: 20px;
+            color: var(--secondary-color);
+            font-family: monospace;
+        }
+
+        /* 实用类 */
+        .text-huge { font-size: 60px; }
+        .text-center { text-align: center; }
+        .mb-0 { margin-bottom: 0; }
+        .mt-20 { margin-top: 40px; }
+        .color-accent { color: var(--accent-color); }
+        .color-warn { color: #ef4444; }
+        .color-success { color: #10b981; }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <div class="bg-decoration"></div>
+    <div class="grid-overlay"></div>
+    
+    <!-- P01: 封面 -->
+    <section class="slide active layout-center" data-title="封面">
+        <div style="text-align: center;">
+            <i class="fas fa-th icon-large" style="font-size: 220px; color: var(--accent-color); margin-bottom: 60px;"></i>
+            <h1>数据结构与算法</h1>
+            <p class="text-huge" style="color: var(--secondary-color); font-size: 80px;">数组：内存世界的原住民</p>
+        </div>
+    </section>
+
+    <!-- P02: 为什么用 C 语言 -->
+    <section class="slide" data-title="为什么用 C 语言">
+        <h2>为什么选择 C 语言？</h2>
+        <div style="display: flex; flex-direction: column; height: 80%; justify-content: center; gap: 30px;">
+            
+            <!-- Point 1 -->
+            <div class="card" style="display: flex; align-items: flex-start; gap: 30px; padding: 20px; margin-bottom: 0;">
+                <div style="font-size: 80px; color: var(--accent-color); font-weight: bold; line-height: 1;">1</div>
+                <div>
+                    <span class="card-title" style="margin-bottom: 15px;">语法极简，聚焦逻辑</span>
+                    <p class="mb-0">数据结构的核心是<strong>思想</strong>，而非花哨的语法糖。只需掌握最基础的：变量、条件、循环、数组。</p>
+                </div>
+            </div>
+
+            <!-- Point 2 -->
+            <div class="card" style="display: flex; align-items: flex-start; gap: 30px; padding: 20px; margin-bottom: 0;">
+                <div style="font-size: 80px; color: var(--accent-color); font-weight: bold; line-height: 1;">2</div>
+                <div>
+                    <span class="card-title" style="margin-bottom: 15px;">拒绝“黑魔法”封装</span>
+                    <p class="mb-0">高级语言 (Python/Java) 隐藏了太多底层细节。C 语言虽然“麻烦”，但能让你看清<strong>每一个字节的去向</strong>。</p>
+                </div>
+            </div>
+
+            <!-- Point 3 -->
+            <div class="card" style="display: flex; align-items: flex-start; gap: 30px; padding: 20px; margin-bottom: 0;">
+                <div style="font-size: 80px; color: var(--accent-color); font-weight: bold; line-height: 1;">3</div>
+                <div>
+                    <span class="card-title" style="margin-bottom: 15px;">直面内存真相</span>
+                    <p class="mb-0">性能与内存息息相关。只有 <strong>C/C++ 指针</strong> 允许你直接触摸内存，理解数据在硬件中的真实形态。</p>
+                </div>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- P03: 什么是数组 -->
+    <section class="slide" data-title="什么是数组">
+        <h2>什么是数组？</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="highlight-box">
+                    <p class="mb-0">数组是<strong>一块连续的内存空间</strong>，用于存放一组<strong>相同类型</strong>的数据。</p>
+                </div>
+                <ul>
+                    <li><strong>连续存储</strong>：像一排紧挨着的房间。</li>
+                    <li><strong>固定步长</strong>：每个房间大小完全一致。</li>
+                    <li><strong>下标访问</strong>：通过门牌号（Index）快速定位。</li>
+                </ul>
+                <div class="array-visual" style="margin-top: 60px;">
+                    <div class="array-cell" style="border-style: dashed; border-color: #94a3b8; background: rgba(255,255,255,0.05);"></div>
+                    <div class="array-cell">3<span class="array-index">0</span></div>
+                    <div class="array-cell">1<span class="array-index">1</span></div>
+                    <div class="array-cell">4<span class="array-index">2</span></div>
+                    <div class="array-cell">1<span class="array-index">3</span></div>
+                    <div class="array-cell">5<span class="array-index">4</span></div>
+                    <div class="array-cell" style="border-style: dashed; border-color: #94a3b8; background: rgba(255,255,255,0.05);"></div>
+                </div>
+            </div>
+            <div class="col-content">
+                <div class="code-block">
+<span class="code-type">int</span> main() {
+    <span class="code-comment">// 声明并初始化数组</span>
+    <span class="code-type">int</span> a[] = {3, 1, 4, 1, 5};
+    
+    <span class="code-comment">// 计算元素个数</span>
+    <span class="code-type">int</span> n = <span class="code-keyword">sizeof</span>(a) / <span class="code-keyword">sizeof</span>(a[<span class="code-number">0</span>]);
+
+    <span class="code-comment">// 遍历打印</span>
+    <span class="code-keyword">for</span> (<span class="code-type">int</span> i = <span class="code-number">0</span>; i &lt; n; i++) {
+        printf(<span class="code-string">"a[%d] = %d\n"</span>, i, a[i]);
+    }
+}</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P03: 为什么高效 - 逻辑视角 -->
+    <section class="slide" data-title="高效的奥秘：随机访问">
+        <h2>高效的奥秘 (1)：逻辑视角</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <h3>随机访问 (Random Access)</h3>
+                <p>指可以直接访问任意位置的数据，而不需要从头遍历。</p>
+                <div class="formula" style="font-size: 50px; white-space: nowrap; padding: 30px;">
+                    addr(i) = base + i * size
+                </div>
+                <p>CPU 只需要进行一次<strong>乘法</strong>和一次<strong>加法</strong>，就能算出任意元素的内存地址。</p>
+            </div>
+            <div class="col-content" style="align-items: center;">
+                <div style="width: 100%; max-width: 900px;">
+                    <div class="array-visual" style="justify-content: center; margin-bottom: 30px; margin-top: 100px;">
+                        <div class="array-cell" style="background: rgba(96, 165, 250, 0.2); width: 180px;">Base<span class="array-addr" style="left: 50%; transform: translateX(-50%); white-space: nowrap; top: -60px; font-size: 28px;">1000</span></div>
+                        <div class="array-cell" style="width: 100px;">...</div>
+                        <div class="array-cell" style="border-color: #fff; box-shadow: 0 0 20px var(--accent-color); width: 180px;">Target<span class="array-addr" style="left: 50%; transform: translateX(-50%); white-space: nowrap; top: -60px; font-size: 28px;">1000 + 3*4 = 1012</span></div>
+                        <div class="array-cell" style="width: 100px;">...</div>
+                    </div>
+                    <p class="text-center" style="font-size: 32px; color: #888; margin-top: 50px;">假设 int 占 4 字节，访问 index=3</p>
+                </div>
+                
+                <div class="card" style="margin-top: 40px; border-color: #ef4444; width: 100%;">
+                    <span class="card-title" style="color: #ef4444; font-size: 32px;"><i class="fas fa-times-circle"></i> 对比：链表 (Linked List)</span>
+                    <p style="font-size: 30px;">节点地址分散，必须从头顺藤摸瓜（Next指针）。</p>
+                    <p style="font-size: 30px;">查找第 n 个元素：<strong>O(n)</strong></p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P04: 为什么高效 - 物理视角 -->
+    <section class="slide" data-title="高效的奥秘：物理视角">
+        <h2>高效的奥秘 (2)：物理视角</h2>
+        <p>数组在物理内存中的<strong>连续性</strong>，完美契合了现代 CPU 的缓存机制。</p>
+        
+        <div class="layout-2col mt-20">
+            <div class="col-content">
+                <div class="card">
+                    <span class="card-title"><i class="fas fa-microchip"></i> 空间局部性原理</span>
+                    <p>程序倾向于访问相邻的内存位置。</p>
+                </div>
+                <div class="highlight-box">
+                    <p class="mb-0"><strong>预取优势 (Prefetching)</strong><br>CPU 读取 `a[0]` 时，会顺便把 `a[1]...a[k]` 一起加载到高速缓存 (Cache) 中。</p>
+                </div>
+            </div>
+            <div class="col-content">
+                <div style="background: #2d3748; padding: 40px; border-radius: 20px; position: relative;">
+                    <p style="font-size: 28px; color: #888; margin-bottom: 10px;">CPU Cache Line (64 Bytes)</p>
+                    <div style="display: flex; gap: 4px;">
+                        <div style="flex: 1; height: 60px; background: var(--accent-color); border-radius: 4px;"></div>
+                        <div style="flex: 1; height: 60px; background: var(--accent-color); border-radius: 4px;"></div>
+                        <div style="flex: 1; height: 60px; background: var(--accent-color); border-radius: 4px;"></div>
+                        <div style="flex: 1; height: 60px; background: var(--accent-color); border-radius: 4px;"></div>
+                    </div>
+                    <p style="margin-top: 20px; font-size: 32px; color: var(--text-color);">
+                        <i class="fas fa-check-circle color-success"></i> 
+                        数组遍历：Cache Hit (极快)
+                    </p>
+                </div>
+                
+                <div style="background: #2d3748; padding: 40px; border-radius: 20px; margin-top: 30px; opacity: 0.6;">
+                    <p style="font-size: 28px; color: #888; margin-bottom: 10px;">链表节点分布</p>
+                    <div style="display: flex; justify-content: space-between;">
+                        <div style="width: 20%; height: 60px; background: #ef4444; border-radius: 4px;"></div>
+                        <div style="width: 20%; height: 60px; background: #ef4444; border-radius: 4px;"></div>
+                        <div style="width: 20%; height: 60px; background: #ef4444; border-radius: 4px;"></div>
+                    </div>
+                    <p style="margin-top: 20px; font-size: 32px; color: var(--text-color);">
+                        <i class="fas fa-times-circle color-warn"></i> 
+                        链表遍历：Cache Miss (较慢)
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P05: 算法复杂度 -->
+    <section class="slide" data-title="时间复杂度 Big O">
+        <h2>时间复杂度：Big O 记号</h2>
+        <p style="margin-bottom: 20px;">描述随着数据规模 <strong>n</strong> 的增长，操作步数的增长趋势。</p>
+        
+        <div class="layout-2col" style="height: 80%;">
+            <div class="col-content" style="justify-content: flex-start;">
+                <ul style="font-size: 32px; margin-bottom: 20px;">
+                    <li style="margin-bottom: 20px;">
+                        <strong>O(1) 常数级</strong>
+                        <p style="font-size: 26px; color: #888; margin-bottom: 5px;">无论 n 多大，只需 1 步</p>
+                    </li>
+                    <li style="margin-bottom: 20px;">
+                        <strong>O(n) 线性级</strong>
+                        <p style="font-size: 26px; color: #888; margin-bottom: 5px;">n 多大，就要几步</p>
+                    </li>
+                    <li style="margin-bottom: 20px;">
+                        <strong>O(n²) 平方级</strong> <span class="color-warn" style="font-size: 24px;">(慎用)</span>
+                        <p style="font-size: 26px; color: #888; margin-bottom: 5px;">n 翻倍，耗时增 4 倍</p>
+                    </li>
+                </ul>
+                <div class="highlight-box" style="margin-top: 10px; padding: 25px;">
+                    <p style="font-size: 30px; margin-bottom: 10px;"><strong>简化三原则：</strong></p>
+                    <ol style="font-size: 28px; margin-left: 30px;">
+                        <li>只保留最高阶项 (n<sup>2</sup> + n → n<sup>2</sup>)</li>
+                        <li>忽略常数系数 (2n → n)</li>
+                        <li>默认讨论“最坏情况”</li>
+                    </ol>
+                </div>
+            </div>
+            <div class="col-content layout-center">
+                <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">
+                    <svg width="100%" height="600" viewBox="0 0 600 500" style="overflow: visible;">
+                        <!-- 定义箭头 -->
+                        <defs>
+                            <marker id="arrow" markerWidth="10" markerHeight="10" refX="0" refY="3" orient="auto" markerUnits="strokeWidth">
+                                <path d="M0,0 L0,6 L9,3 z" fill="#fff" />
+                            </marker>
+                        </defs>
+                        
+                        <!-- 坐标轴 -->
+                        <line x1="50" y1="450" x2="550" y2="450" stroke="#fff" stroke-width="4" marker-end="url(#arrow)" />
+                        <line x1="50" y1="450" x2="50" y2="50" stroke="#fff" stroke-width="4" marker-end="url(#arrow)" />
+                        <text x="600" y="460" fill="#fff" font-size="24" font-family="sans-serif">n (规模)</text>
+                        <text x="40" y="10" fill="#fff" font-size="24" font-family="sans-serif">Time (耗时)</text>
+                        
+                        <!-- O(n^2) -->
+                        <path d="M 50 450 Q 250 450 400 50" fill="none" stroke="#ef4444" stroke-width="6" />
+                        <text x="410" y="60" fill="#ef4444" font-size="32" font-weight="bold">O(n²)</text>
+                        
+                        <!-- O(n) -->
+                        <line x1="50" y1="450" x2="500" y2="200" stroke="#60A5FA" stroke-width="6" />
+                        <text x="510" y="210" fill="#60A5FA" font-size="32" font-weight="bold">O(n)</text>
+                        
+                        <!-- O(1) -->
+                        <line x1="50" y1="420" x2="500" y2="420" stroke="#10b981" stroke-width="6" />
+                        <text x="510" y="430" fill="#10b981" font-size="32" font-weight="bold">O(1)</text>
+                    </svg>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P06: 数组的“偏科” -->
+    <section class="slide" data-title="数组的操作特性">
+        <h2>数组的“偏科”成绩单</h2>
+        <p>数组在读写方面是天才，但在增删方面略显笨拙。</p>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th>操作</th>
+                    <th>时间复杂度</th>
+                    <th>说明</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>读取 (Access)</td>
+                    <td class="color-success"><strong>O(1)</strong></td>
+                    <td>随机访问，秒级定位</td>
+                </tr>
+                <tr>
+                    <td>修改 (Update)</td>
+                    <td class="color-success"><strong>O(1)</strong></td>
+                    <td>直接覆盖内存</td>
+                </tr>
+                <tr>
+                    <td>插入 (Insert)</td>
+                    <td class="color-warn"><strong>O(n)</strong></td>
+                    <td>最坏需移动 n 个元素</td>
+                </tr>
+                <tr>
+                    <td>删除 (Delete)</td>
+                    <td class="color-warn"><strong>O(n)</strong></td>
+                    <td>最坏需移动 n 个元素</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="highlight-box">
+            <p class="mb-0"><strong>原则</strong>：如果你的场景是“读多写少”（如配置表、缓存索引），数组是首选。</p>
+        </div>
+    </section>
+
+    <!-- P07: 插入操作图解 -->
+    <section class="slide" data-title="插入操作演示">
+        <h2>为什么插入慢？(数据搬移)</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <p>要在 index=2 的位置插入元素 "99"：</p>
+                <div class="array-visual" style="flex-wrap: wrap; margin-bottom: 10px;">
+                    <div class="array-cell">3</div>
+                    <div class="array-cell">1</div>
+                    <div class="array-cell" style="background: transparent; border: 2px dashed #666; color: #666;">?</div>
+                    <div class="array-cell">4</div>
+                    <div class="array-cell">1</div>
+                    <div class="array-cell">5</div>
+                </div>
+                <p style="font-size: 30px; color: var(--secondary-color);">必须先把后面的元素全部向后挪一位！</p>
+                <div style="margin-top: 20px;">
+                    <i class="fas fa-arrow-right" style="margin-left: 330px; color: #ef4444; font-size: 40px;"></i>
+                    <i class="fas fa-arrow-right" style="margin-left: 60px; color: #ef4444; font-size: 40px;"></i>
+                    <i class="fas fa-arrow-right" style="margin-left: 60px; color: #ef4444; font-size: 40px;"></i>
+                </div>
+            </div>
+            <div class="col-content">
+                <div class="code-block" style="font-size: 24px;">
+<span class="code-type">void</span> insert(<span class="code-type">int</span> index, <span class="code-type">int</span> value) {
+    <span class="code-comment">// 1. 腾位置：从后往前搬</span>
+    <span class="code-keyword">for</span> (<span class="code-type">int</span> i = size; i &gt; index; i--) {
+        arr[i] = arr[i-1]; 
+    }
+    
+    <span class="code-comment">// 2. 入住</span>
+    arr[index] = value;
+}</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P08: 动态数组 -->
+    <section class="slide" data-title="动态数组">
+        <h2>动态数组 (Dynamic Array)</h2>
+        <p>解决了静态数组“大小固定”的痛点（如 Java ArrayList, C++ Vector, Python List）。</p>
+        
+        <div class="layout-2col mt-20">
+            <div class="col-content">
+                <h3>自动扩容机制</h3>
+                <ol>
+                    <li><strong>初始化</strong>：申请小空间 (Capacity=10)</li>
+                    <li><strong>存满时</strong>：触发扩容 (Grow)</li>
+                    <li><strong>搬家</strong>：
+                        <ul>
+                            <li>申请<strong>更大</strong>的新空间 (x2)</li>
+                            <li>将旧数据<strong>复制</strong>过去</li>
+                            <li><strong>释放</strong>旧空间</li>
+                        </ul>
+                    </li>
+                </ol>
+            </div>
+            <div class="col-content">
+                <div style="text-align: center;">
+                    <div style="border: 2px solid #666; padding: 20px; display: inline-block; border-radius: 10px;">
+                        <p style="font-size: 24px;">Old (Size 4)</p>
+                        <div style="display: flex; gap: 5px;">
+                            <div style="width: 40px; height: 40px; background: #666;"></div>
+                            <div style="width: 40px; height: 40px; background: #666;"></div>
+                            <div style="width: 40px; height: 40px; background: #666;"></div>
+                            <div style="width: 40px; height: 40px; background: #666;"></div>
+                        </div>
+                    </div>
+                    
+                    <div style="font-size: 40px; margin: 20px 0; color: var(--accent-color);"><i class="fas fa-arrow-down"></i> Copy</div>
+                    
+                    <div style="border: 2px solid var(--accent-color); padding: 20px; display: inline-block; border-radius: 10px;">
+                        <p style="font-size: 24px; color: var(--accent-color);">New (Size 8)</p>
+                        <div style="display: flex; gap: 5px;">
+                            <div style="width: 40px; height: 40px; background: var(--secondary-color);"></div>
+                            <div style="width: 40px; height: 40px; background: var(--secondary-color);"></div>
+                            <div style="width: 40px; height: 40px; background: var(--secondary-color);"></div>
+                            <div style="width: 40px; height: 40px; background: var(--secondary-color);"></div>
+                            <div style="width: 40px; height: 40px; border: 1px dashed #fff;"></div>
+                            <div style="width: 40px; height: 40px; border: 1px dashed #fff;"></div>
+                            <div style="width: 40px; height: 40px; border: 1px dashed #fff;"></div>
+                            <div style="width: 40px; height: 40px; border: 1px dashed #fff;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P08-1: 动态数组-结构体定义 -->
+    <section class="slide" data-title="代码实现：定义">
+        <h2>代码实现：定义结构体</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="code-block">
+<span class="code-keyword">typedef</span> <span class="code-keyword">struct</span> {
+    <span class="code-type">int</span>   *data;     <span class="code-comment">// 连续内存指针</span>
+    <span class="code-type">size_t</span> size;     <span class="code-comment">// 实际元素个数</span>
+    <span class="code-type">size_t</span> capacity; <span class="code-comment">// 总容量</span>
+} DynamicArray;</div>
+            </div>
+            <div class="col-content">
+                <div class="card">
+                    <span class="card-title">关键字段解析</span>
+                    <ul style="font-size: 36px;">
+                        <li><strong>data</strong>: 指向底层真正的静态数组。</li>
+                        <li><strong>size</strong>: 住了多少人 (Len)。</li>
+                        <li><strong>capacity</strong>: 房子有多大 (Cap)。</li>
+                    </ul>
+                </div>
+                <div class="highlight-box">
+                    <p class="mb-0">时刻保持：<strong>size ≤ capacity</strong></p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P08-2: 动态数组-Push Back -->
+    <section class="slide" data-title="代码实现：追加元素">
+        <h2>代码实现：追加元素 (Push Back)</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="code-block" style="font-size: 26px;">
+<span class="code-type">void</span> push_back(DynamicArray *da, <span class="code-type">int</span> val) {
+    <span class="code-comment">// 1. 检查容量</span>
+    <span class="code-keyword">if</span> (da->size == da->capacity) {
+        grow(da);  <span class="code-comment">// 扩容！</span>
+    }
+    
+    <span class="code-comment">// 2. 放入新元素</span>
+    da->data[da->size] = val;
+    
+    <span class="code-comment">// 3. 更新计数</span>
+    da->size++;
+}</div>
+            </div>
+            <div class="col-content">
+                <p style="font-size: 40px;">这是最常用的操作。</p>
+                <div style="margin-top: 40px;">
+                    <p><i class="fas fa-arrow-right color-accent"></i> <strong>大多数情况</strong>：容量够用，直接放，<strong>O(1)</strong>。</p>
+                    <p style="margin-top: 40px;"><i class="fas fa-exclamation-triangle color-warn"></i> <strong>极少数情况</strong>：容量满了，触发扩容，<strong>O(n)</strong>。</p>
+                </div>
+                <p style="margin-top: 60px; font-size: 30px; color: #888;">(这种“大多数快、偶尔慢”的特性，均摊时间复杂度仍为 O(1))</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- P08-3: 动态数组-Grow -->
+    <section class="slide" data-title="代码实现：自动扩容">
+        <h2>核心难点：自动扩容 (Grow)</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="code-block" style="font-size: 22px;">
+<span class="code-type">void</span> grow(DynamicArray *da) {
+    <span class="code-comment">// 1. 计算新容量 (通常翻倍)</span>
+    <span class="code-type">int</span> new_cap = da->capacity * <span class="code-number">2</span>;
+    <span class="code-type">int</span> *new_data = malloc(new_cap * <span class="code-keyword">sizeof</span>(<span class="code-type">int</span>));
+
+    <span class="code-comment">// 2. 搬家 (复制数据)</span>
+    <span class="code-keyword">for</span> (<span class="code-type">int</span> i = <span class="code-number">0</span>; i &lt; da->size; ++i) {
+        new_data[i] = da->data[i];
+    }
+
+    <span class="code-comment">// 3. 销毁旧房子，启用新房子</span>
+    free(da->data);
+    da->data = new_data;
+    da->capacity = new_cap;
+}</div>
+            </div>
+            <div class="col-content">
+                <div class="highlight-box">
+                    <p class="mb-0"><strong>代价是昂贵的！</strong></p>
+                </div>
+                <ul>
+                    <li><strong>申请内存</strong>：需要操作系统分配。</li>
+                    <li><strong>数据复制</strong>：O(n) 的操作，元素越多越慢。</li>
+                </ul>
+                <div class="card" style="margin-top: 40px; border-color: var(--secondary-color);">
+                    <span class="card-title" style="font-size: 32px; color: var(--secondary-color);">策略权衡</span>
+                    <p style="font-size: 30px;">
+                        扩容倍数太大 → 浪费内存<br>
+                        扩容倍数太小 → 频繁扩容 (卡顿)
+                    </p>
+                    <p style="font-size: 28px; color: #888; margin-top: 20px;">* Java ArrayList 默认 1.5 倍，C++ Vector 通常 2 倍</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P09: 总结 -->
+    <section class="slide" data-title="课堂小结">
+        <h2>课堂小结：简单却深刻</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="card">
+                    <span class="card-title">核心特性回顾</span>
+                    <ul style="margin-bottom: 0;">
+                        <li style="margin-bottom: 30px;">
+                            <strong class="color-success">极致高效 (优势)</strong><br>
+                            核心在于<strong>连续内存 + 随机访问</strong>。<br>
+                            <span style="font-size: 28px; color: #888;">它完美契合 CPU 缓存设计，读写 O(1)。</span>
+                        </li>
+                        <li>
+                            <strong class="color-warn">主要短板 (劣势)</strong><br>
+                            <strong>插入删除</strong>需要移动大量元素 (O(n))。<br>
+                            <span style="font-size: 28px; color: #888;">解决方案：使用<strong>动态数组</strong>智能扩容。</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            <div class="col-content">
+                <div class="highlight-box">
+                    <span class="card-title" style="margin-bottom: 16px; display:block;">工程启示</span>
+                    <p style="margin-bottom: 20px;">它是<strong>栈、队列、哈希表</strong>等高级结构的底层基石。</p>
+                    <p style="font-size: 32px; color: #a5b3ce; font-style: italic;">“能用数组高效解决的问题，就不要引入更复杂的数据结构。”</p>
+                </div>
+                
+                <div style="margin-top: 20px; text-align: center;">
+                    <p style="font-size: 32px; color: #888; margin-bottom: 10px;">Next</p>
+                    <div style="font-size: 60px; font-weight: bold; color: var(--secondary-color);">
+                        链表 (Linked List) <i class="fas fa-link"></i>
+                    </div>
+                    <p style="font-size: 28px; color: #666; margin-top: 10px;">牺牲随机访问，换取极致的插入灵活性</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P10: 思考题 -->
+    <section class="slide layout-center" data-title="思考题">
+        <h2>🤔 课后思考</h2>
+        <div style="width: 80%; margin-top: 60px;">
+            <p style="font-size: 48px; margin-bottom: 60px;">
+                数组的索引通常从 <strong>0</strong> 开始 (0-based)，而不是从 1 开始。<br>
+                结合今天的 <strong>寻址公式</strong>，你能猜到设计者为什么要这么做吗？
+            </p>
+            
+            <div class="formula" style="font-size: 48px; opacity: 0.6;">
+                addr(i) = base + i * size
+            </div>
+            
+            <p style="color: #888; font-size: 32px;">提示：如果从 1 开始，计算机在计算地址时是否会多做一步指令？</p>
+        </div>
+    </section>
+
+    <!-- 页脚 -->
+    <div class="footer">
+        <span id="page-number">1 / 10</span>
+    </div>
+
+</div>
+
+<script>
+    // 幻灯片逻辑
+    const slides = document.querySelectorAll('.slide');
+    const pageNumberEl = document.getElementById('page-number');
+    const totalSlides = slides.length;
+
+    // 从 URL 获取页码 (page=1 对应 index 0)
+    function getPageFromUrl() {
+        const params = new URLSearchParams(window.location.search);
+        const page = parseInt(params.get('page'));
+        if (!isNaN(page) && page >= 1 && page <= totalSlides) {
+            return page - 1;
+        }
+        return 0;
+    }
+
+    let currentSlide = getPageFromUrl();
+
+    function updateSlide() {
+        slides.forEach((slide, index) => {
+            slide.classList.remove('active');
+            if (index === currentSlide) {
+                slide.classList.add('active');
+            }
+        });
+        pageNumberEl.textContent = `${currentSlide + 1} / ${totalSlides}`;
+        
+        // 更新 URL 参数
+        try {
+            const url = new URL(window.location.href);
+            url.searchParams.set('page', currentSlide + 1);
+            window.history.replaceState(null, '', url.href);
+        } catch (e) {
+            console.error('URL update failed:', e);
+        }
+    }
+
+    function nextSlide() {
+        if (currentSlide < totalSlides - 1) {
+            currentSlide++;
+            updateSlide();
+        }
+    }
+
+    function prevSlide() {
+        if (currentSlide > 0) {
+            currentSlide--;
+            updateSlide();
+        }
+    }
+
+    // 键盘控制
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'Enter') {
+            nextSlide();
+        } else if (e.key === 'ArrowLeft') {
+            prevSlide();
+        }
+    });
+
+    // 响应式缩放
+    function resizeApp() {
+        const app = document.getElementById('app');
+        const windowWidth = window.innerWidth;
+        const windowHeight = window.innerHeight;
+        const scaleX = windowWidth / 1920;
+        const scaleY = windowHeight / 1080;
+        const scale = Math.min(scaleX, scaleY);
+        
+        app.style.transform = `scale(${scale})`;
+    }
+
+    window.addEventListener('resize', resizeApp);
+    
+    // 初始化
+    resizeApp(); 
+    updateSlide();
+</script>
+
+</body>
+</html>

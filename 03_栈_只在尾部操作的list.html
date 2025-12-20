@@ -1,0 +1,1123 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>03 栈：只在尾部操作的 List</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0B1020;
+            --text-color: #EAF2FF;
+            --accent-color: #22D3EE;     /* 青色：核心强调 */
+            --secondary-color: #60A5FA;  /* 蓝色：次要强调，配合青色 */
+            --highlight-bg: rgba(34, 211, 238, 0.1);
+            --code-bg: #1a202c;
+            --slide-width: 1920px;
+            --slide-height: 1080px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            margin: 0;
+            background-color: #000;
+            color: var(--text-color);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        #app {
+            width: var(--slide-width);
+            height: var(--slide-height);
+            background-color: var(--bg-color);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+            transform-origin: center center;
+        }
+
+        /* 装饰背景元素 */
+        .bg-decoration {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            background-image: 
+                radial-gradient(circle at 15% 15%, rgba(96, 165, 250, 0.08) 0%, transparent 25%),
+                radial-gradient(circle at 85% 85%, rgba(34, 211, 238, 0.08) 0%, transparent 25%);
+            pointer-events: none;
+        }
+        
+        .grid-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-size: 60px 60px;
+            background-image: linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+                              linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+            z-index: 0;
+        }
+
+        /* 幻灯片容器 */
+        .slide {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+            padding: 80px 100px;
+            flex-direction: column;
+            z-index: 1;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+
+        .slide.active {
+            display: flex;
+            opacity: 1;
+        }
+
+        /* 通用排版 */
+        h1 {
+            font-size: 140px;
+            font-weight: 800;
+            line-height: 1.1;
+            margin-bottom: 40px;
+            background: linear-gradient(135deg, #fff 0%, var(--secondary-color) 100%);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        h2 {
+            font-size: 72px;
+            margin-bottom: 50px;
+            color: var(--accent-color);
+            border-bottom: 4px solid var(--accent-color);
+            padding-bottom: 20px;
+            display: inline-block;
+        }
+
+        h3 {
+            font-size: 48px;
+            margin-bottom: 30px;
+            color: var(--secondary-color);
+        }
+
+        p, li {
+            font-size: 36px;
+            line-height: 1.5;
+            margin-bottom: 24px;
+            color: #d1d5db;
+        }
+
+        strong {
+            color: var(--accent-color);
+            font-weight: 700;
+        }
+
+        ul, ol {
+            list-style: none;
+        }
+
+        ul li {
+            position: relative;
+            padding-left: 50px;
+            margin-bottom: 30px;
+        }
+
+        ul li::before {
+            content: "•";
+            color: var(--accent-color);
+            position: absolute;
+            left: 0;
+            font-size: 1.2em;
+        }
+
+        /* 布局辅助 */
+        .layout-center {
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        .layout-2col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 80px;
+            height: 100%;
+            align-content: center;
+        }
+
+        .col-content {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 40px;
+            margin-bottom: 30px;
+        }
+
+        .card-title {
+            font-size: 42px;
+            color: var(--accent-color);
+            margin-bottom: 20px;
+            display: block;
+            font-weight: bold;
+        }
+
+        .highlight-box {
+            background: var(--highlight-bg);
+            border-left: 8px solid var(--secondary-color);
+            padding: 40px;
+            margin: 30px 0;
+            border-radius: 0 20px 20px 0;
+        }
+
+        /* 代码块 */
+        .code-block {
+            font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+            background: var(--code-bg);
+            padding: 30px;
+            border-radius: 15px;
+            border: 1px solid #333;
+            font-size: 26px;
+            line-height: 1.5;
+            color: #a5b3ce;
+            white-space: pre-wrap; /* 自动换行 */
+            word-break: break-all; /* 防止长单词溢出 */
+            overflow-x: hidden; /* 隐藏水平滚动 */
+            overflow-y: auto; /* 垂直滚动 */
+            max-height: 720px; /* 限制高度，超出滚动 */
+        }
+        
+        /* 滚动条样式 */
+        .code-block::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+        .code-block::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 5px;
+        }
+        .code-block::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        
+        .code-keyword { color: #c678dd; }
+        .code-type { color: #e5c07b; }
+        .code-func { color: #61afef; }
+        .code-comment { color: #5c6370; font-style: italic; }
+        .code-number { color: #d19a66; }
+        .code-string { color: #98c379; }
+
+        /* 栈的可视化组件 */
+        .stack-container {
+            width: 240px;
+            height: 500px;
+            border-left: 6px solid var(--secondary-color);
+            border-right: 6px solid var(--secondary-color);
+            border-bottom: 6px solid var(--secondary-color);
+            border-radius: 0 0 10px 10px;
+            position: relative;
+            display: flex;
+            flex-direction: column-reverse; /* 底部对齐，往上堆 */
+            align-items: center;
+            padding-bottom: 10px;
+            background: rgba(255, 255, 255, 0.02);
+            margin: 0 auto;
+        }
+
+        .stack-item {
+            width: 200px;
+            height: 60px;
+            background: linear-gradient(135deg, var(--accent-color), var(--secondary-color));
+            margin-bottom: 5px; /* 变成视觉上的 margin-top 因为是 column-reverse */
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #000;
+            font-weight: bold;
+            font-size: 28px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            transition: all 0.3s ease;
+        }
+
+        .stack-label {
+            position: absolute;
+            right: -140px;
+            font-size: 24px;
+            color: #888;
+            display: flex;
+            align-items: center;
+        }
+        .stack-label::before {
+            content: "";
+            display: block;
+            width: 40px;
+            height: 2px;
+            background: #666;
+            margin-right: 10px;
+        }
+
+        /* 数组实现栈的图示 */
+        .array-stack-visual {
+            display: flex;
+            margin-top: 40px;
+            position: relative;
+            padding-top: 60px;
+        }
+        .array-cell {
+            width: 100px;
+            height: 100px;
+            border: 2px solid var(--accent-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 36px;
+            color: #fff;
+            position: relative;
+            background: rgba(34, 211, 238, 0.1);
+        }
+        .array-cell:not(:last-child) {
+            border-right: none;
+        }
+        .array-index {
+            position: absolute;
+            bottom: -40px;
+            font-size: 24px;
+            color: #666;
+        }
+        .top-pointer {
+            position: absolute;
+            top: -50px;
+            left: 0;
+            transition: left 0.3s ease;
+            text-align: center;
+            width: 100px;
+        }
+        .top-pointer i {
+            color: var(--secondary-color);
+            font-size: 40px;
+            display: block;
+        }
+        .top-pointer span {
+            color: var(--secondary-color);
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        /* 页脚 */
+        .footer {
+            position: absolute;
+            bottom: 30px;
+            right: 40px;
+            font-size: 24px;
+            color: rgba(255, 255, 255, 0.4);
+            z-index: 2;
+        }
+        
+        .icon-large {
+            font-size: 100px;
+            color: var(--secondary-color);
+            margin-bottom: 20px;
+        }
+
+        /* 颜色辅助类 */
+        .text-accent { color: var(--accent-color); }
+        .text-secondary { color: var(--secondary-color); }
+        .text-warn { color: #ef4444; }
+        .text-success { color: #10b981; }
+        .text-op { color: var(--secondary-color); }
+        
+        /* 表格样式 */
+        table.shunting-yard {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 26px;
+            margin-top: 20px;
+        }
+        table.shunting-yard th, table.shunting-yard td {
+            padding: 15px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+        }
+        table.shunting-yard th {
+            color: var(--accent-color);
+            border-bottom: 2px solid var(--accent-color);
+        }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <div class="bg-decoration"></div>
+    <div class="grid-overlay"></div>
+
+    <!-- P01: 封面 -->
+    <section class="slide active layout-center" data-title="封面">
+        <div style="text-align: center;">
+            <i class="fas fa-layer-group icon-large" style="font-size: 200px; margin-bottom: 60px; color: var(--secondary-color);"></i>
+            <h1>数据结构与算法</h1>
+            <p style="font-size: 80px; color: var(--accent-color); margin-top: 20px;">栈：只在尾部操作的 List</p>
+        </div>
+    </section>
+
+    <!-- P02: 什么是栈 (1) - 定义 -->
+    <section class="slide" data-title="什么是栈">
+        <h2>什么是栈 (Stack)？</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="highlight-box">
+                    <p class="mb-0" style="font-size: 40px;">
+                        栈是一种<strong>受限</strong>的线性表，只允许在<strong>同一端</strong>（栈顶）进行插入和删除操作。
+                    </p>
+                </div>
+                <ul>
+                    <li><strong>LIFO (Last In First Out)</strong>：后进者先出，如同洗盘子。</li>
+                    <li><strong>栈顶 (Top)</strong>：允许操作的一端。</li>
+                    <li><strong>栈底 (Bottom)</strong>：封死的一端，最早进来的元素在最底下。</li>
+                </ul>
+            </div>
+            <div class="col-content layout-center">
+                <div style="position: relative; width: 100%; display: flex; flex-direction: column; align-items: center;">
+                    <img src="https://cdn.nlark.com/yuque/0/2025/png/87727/1766144727052-4731b1df-ad85-4efc-8256-6c5682133c8d.png" 
+                         alt="栈示意图"
+                         style="max-width: 90%; max-height: 600px; border-radius: 10px; box-shadow: 0 0 30px rgba(34, 211, 238, 0.2);">
+                    <p style="margin-top: 30px; color: #888; font-size: 32px;">只能从最上面取，不能从中间抽</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P03: 什么是栈 (2) - 为什么受限 -->
+    <section class="slide" data-title="受限的艺术">
+        <h2>为什么需要“受限”？</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="card">
+                    <span class="card-title">思考</span>
+                    <p>数组和链表明明可以在任意位置增删，为什么要创造功能“缩水”的栈？</p>
+                </div>
+                <div class="highlight-box">
+                    <p class="mb-0" style="font-size: 38px;">
+                        “限制意味着更强的<strong>可控性</strong>。”
+                    </p>
+                    <p style="margin-top: 20px; font-size: 32px; color: #aaa;">
+                        当你使用栈时，就是在告诉阅读者：<br>这个数据集的操作顺序是<strong>严格 LIFO</strong> 的。
+                    </p>
+                </div>
+            </div>
+            <div class="col-content layout-center">
+                <!-- 栈的视觉隐喻动画 -->
+                <div style="position: relative;">
+                    <div class="stack-container">
+                        <div class="stack-item" style="opacity: 0.6">Plate 1</div>
+                        <div class="stack-item" style="opacity: 0.8">Plate 2</div>
+                        <div class="stack-item">Plate 3 (Top)</div>
+                    </div>
+                    <div style="position: absolute; top: 40px; right: -220px; text-align: left;">
+                        <div style="margin-bottom: 30px;">
+                            <i class="fas fa-arrow-left text-accent" style="font-size: 40px;"></i>
+                            <span style="font-size: 30px; margin-left: 10px; color: var(--accent-color);">Push (入栈)</span>
+                        </div>
+                        <div>
+                            <i class="fas fa-arrow-right text-op" style="font-size: 40px;"></i>
+                            <span style="font-size: 30px; margin-left: 10px; color: var(--secondary-color);">Pop (出栈)</span>
+                        </div>
+                    </div>
+                </div>
+                <p style="margin-top: 30px; color: #888;">防止从中间“抽盘子”导致崩塌</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- P04: 实现对比：数组 vs 链表 -->
+    <section class="slide" data-title="实现对比">
+        <h2>实现选择：数组 vs 链表</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="card">
+                    <span class="card-title">为什么优先选数组？</span>
+                    <ul style="font-size: 32px;">
+                        <li><strong>内存更紧凑</strong>：不需要额外存储指针 (`next`)，节省空间。</li>
+                        <li><strong>缓存更友好</strong>：数据在内存中连续存放，CPU 缓存命中率高，遍历更快。</li>
+                        <li><strong>常数更小</strong>：数据只在尾部操作，数组也可以做到 O(1)，但没有节点分配销毁的开销。</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="col-content">
+                <div class="highlight-box">
+                    <span class="card-title" style="color: var(--secondary-color); margin-bottom: 20px; display: block;">长度不确定怎么办？</span>
+                    <p style="font-size: 36px; margin-bottom: 20px;">
+                        <i class="fas fa-check-circle text-accent"></i> <strong>使用动态数组</strong>
+                    </p>
+                    <ul style="font-size: 28px; color: #ccc;">
+                        <li>当空间满了，自动申请更大的新数组（通常扩容 2 倍）并搬运数据。</li>
+                        <li><strong>均摊复杂度</strong> 依然是 O(1)。</li>
+                    </ul>
+                </div>
+                
+                <!-- 内存对比微型图 -->
+                <div style="margin-top: 30px; display: flex; flex-direction: column; gap: 15px; padding: 20px; border: 1px dashed rgba(255,255,255,0.2); border-radius: 10px;">
+                    <div style="display: flex; align-items: center;">
+                        <span style="width: 100px; color: var(--accent-color); font-weight: bold;">数组</span>
+                        <div style="display: flex; border: 2px solid var(--accent-color);">
+                            <div style="width: 50px; height: 50px; background: rgba(34, 211, 238, 0.2); border-right: 1px solid var(--accent-color);"></div>
+                            <div style="width: 50px; height: 50px; background: rgba(34, 211, 238, 0.2); border-right: 1px solid var(--accent-color);"></div>
+                            <div style="width: 50px; height: 50px; background: rgba(34, 211, 238, 0.2);"></div>
+                        </div>
+                        <span style="margin-left: 15px; font-size: 24px; color: #888;">紧凑</span>
+                    </div>
+                    <div style="display: flex; align-items: center;">
+                        <span style="width: 100px; color: var(--secondary-color); font-weight: bold;">链表</span>
+                        <div style="display: flex; align-items: center; gap: 5px;">
+                            <div style="width: 60px; height: 50px; border: 2px solid var(--secondary-color); display: flex;">
+                                <div style="width: 30px;"></div><div style="width: 30px; border-left: 1px solid var(--secondary-color); background: #333;"></div>
+                            </div>
+                            <div>→</div>
+                            <div style="width: 60px; height: 50px; border: 2px solid var(--secondary-color); display: flex;">
+                                <div style="width: 30px;"></div><div style="width: 30px; border-left: 1px solid var(--secondary-color); background: #333;"></div>
+                            </div>
+                        </div>
+                        <span style="margin-left: 15px; font-size: 24px; color: #888;">松散</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P05: 基本操作 API -->
+    <section class="slide" data-title="基本操作">
+        <h2>栈的核心操作 (API)</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <p>无论底层用数组还是链表实现，栈对外暴露的接口是统一的，时间复杂度均为 <strong>O(1)</strong>。</p>
+                <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.2);">
+                        <td class="text-accent" style="padding: 20px; font-size: 36px; font-weight: bold;">push(x)</td>
+                        <td style="padding: 20px; font-size: 32px;">压栈：把元素 x 放到栈顶</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.2);">
+                        <td class="text-secondary" style="padding: 20px; font-size: 36px; font-weight: bold;">pop()</td>
+                        <td style="padding: 20px; font-size: 32px;">弹栈：移除并返回栈顶元素</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.2);">
+                        <td style="padding: 20px; font-size: 36px; color: #888;">peek()</td>
+                        <td style="padding: 20px; font-size: 32px;">查看：只看一眼栈顶（不删除）</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 20px; font-size: 36px; color: #888;">isEmpty()</td>
+                        <td style="padding: 20px; font-size: 32px;">判空：检查栈里有没有元素</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 20px; font-size: 36px; color: #888;">size()</td>
+                        <td style="padding: 20px; font-size: 32px;">计数：返回当前元素个数</td>
+                    </tr>
+                </table>
+                
+                <div class="highlight-box" style="margin-top: 30px; padding: 20px 30px;">
+                    <p class="mb-0" style="font-size: 30px;">
+                        约定：<code>top</code> 指向<strong>当前</strong>栈顶元素<br>
+                        栈空时 <code>top = -1</code>
+                    </p>
+                </div>
+            </div>
+            <div class="col-content">
+                <div class="code-block"><span class="code-keyword">typedef struct</span> Stack { <span class="code-comment">// 结构定义</span>
+    <span class="code-type">int</span> data[MAX]; 
+    <span class="code-type">int</span> top;
+} Stack;
+
+<span class="code-type">void</span> <span class="code-func">initStack</span>(Stack *s) {
+    s->top = -1;
+}
+
+<span class="code-type">bool</span> <span class="code-func">isEmpty</span>(Stack *s) {
+    <span class="code-keyword">return</span> s->top == -1;
+}
+
+<span class="code-type">int</span> <span class="code-func">size</span>(Stack *s) {
+    <span class="code-keyword">return</span> s->top + 1;
+}</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P05: 数组实现原理 -->
+    <section class="slide" data-title="数组实现">
+        <h2>push、pop、peek</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="code-block" style="font-size: 24px;">
+<span class="code-type">bool</span> <span class="code-func">push</span>(Stack *s, <span class="code-type">int</span> x) {
+    <span class="code-keyword">if</span> (s->top == MAX - 1) <span class="code-keyword">return false</span>;
+    s->data[++s->top] = x; <span class="code-comment">// 栈顶上移并存值</span>
+    <span class="code-keyword">return true</span>;
+}
+
+<span class="code-type">bool</span> <span class="code-func">pop</span>(Stack *s, <span class="code-type">int</span> *val) {
+    <span class="code-keyword">if</span> (isEmpty(s)) <span class="code-keyword">return false</span>;
+    *val = s->data[s->top--]; <span class="code-comment">// 弹栈并返回</span>
+    <span class="code-keyword">return true</span>;
+}
+
+<span class="code-type">bool</span> <span class="code-func">peek</span>(Stack *s, <span class="code-type">int</span> *val) {
+    <span class="code-keyword">if</span> (isEmpty(s)) <span class="code-keyword">return false</span>;
+    *val = s->data[s->top];   <span class="code-comment">// 关键：只读不移</span>
+    <span class="code-keyword">return true</span>;
+}</div>
+            </div>
+            <div class="col-content layout-center">
+                <div class="card" style="width: 100%;">
+                    <div class="card-title text-center">图解内存变化</div>
+                    <div class="array-stack-visual" style="justify-content: center;">
+                        <div class="top-pointer" style="left: 200px;">
+                            <span style="display:block; margin-bottom:5px;">top</span>
+                            <i class="fas fa-caret-down"></i>
+                        </div>
+                        <div class="array-cell"><span style="color:#666; font-size:24px;">0</span><div class="array-index">0</div></div>
+                        <div class="array-cell"><span style="color:#666; font-size:24px;">1</span><div class="array-index">1</div></div>
+                        <div class="array-cell">A<div class="array-index">2</div></div>
+                        <div class="array-cell" style="border-style: dashed; opacity: 0.5;">
+                            <span style="font-size: 20px; color: #888;">(空)</span>
+                            <div class="array-index">3</div>
+                        </div>
+                        <div class="array-cell" style="border-style: dashed; opacity: 0.5;">...</div>
+                    </div>
+                    <div style="margin-top: 60px; text-align: center;">
+                        <p style="font-size: 32px;">
+                            <strong class="text-accent">Push(B)</strong>：先 <code>top++</code> (移到3)，再写入 B<br>
+                            <strong class="text-op">Pop()</strong>：读出 A，再 <code>top--</code> (移回1)
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+
+    <!-- P06: 应用 - 括号匹配原理 -->
+    <section class="slide" data-title="应用：括号匹配原理">
+        <h2>典型应用 1：括号匹配 (原理)</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <p>编译器如何知道你写的 <code>{ [ ( ) ] }</code> 是否闭合？</p>
+                <div class="highlight-box">
+                    <p class="mb-0" style="font-size: 36px;">规则：<br>
+                    1. 遇到<strong>左括号</strong> → 入栈 (等待匹配)<br>
+                    2. 遇到<strong>右括号</strong> → 检查栈顶<br>
+                       &nbsp;&nbsp;&nbsp;&nbsp;• 匹配？弹栈 (消消乐)<br>
+                       &nbsp;&nbsp;&nbsp;&nbsp;• 不匹配/空栈？报错！
+                    </p>
+                </div>
+            </div>
+            <div class="col-content layout-center">
+                <div class="card" style="width: 80%; padding: 40px 60px;">
+                    <div style="font-size: 40px; margin-bottom: 40px; text-align: center; letter-spacing: 10px;">
+                        { [ ( ) ] }
+                    </div>
+                    <!-- 动态演示图 -->
+                    <div class="stack-container" style="height: 360px; width: 200px;">
+                        <div class="stack-item" style="background: var(--accent-color); color: #000;"> { </div>
+                        <div class="stack-item" style="background: var(--secondary-color); color: #fff;"> [ </div>
+                        <div class="stack-item" style="background: var(--text-color); color: var(--bg-color);"> ( </div>
+                    </div>
+                    <div style="text-align: center; margin-top: 30px; font-size: 30px; color: #888;">
+                        最近进来的左括号，<br>必须最先被消除
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P07: 应用 - 括号匹配推演 (新增) -->
+    <section class="slide" data-title="应用：括号匹配推演">
+        <h2>典型应用 1：括号匹配 (推演)</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                 <div class="card">
+                    <span class="card-title">演示用例</span>
+                    <p style="font-size: 40px; font-family: monospace; margin-bottom: 0;">{ [ ] }</p>
+                </div>
+                <div class="code-block" style="font-size: 28px; padding: 30px; height: auto;">
+<span class="code-comment">// 初始：栈空</span>
+1. 读 <span class="code-string">'{'</span> → push <span class="code-string">'{'</span>    栈: [ { ]
+2. 读 <span class="code-string">'['</span> → push <span class="code-string">'['</span>    栈: [ {, [ ]
+3. 读 <span class="code-string">']'</span> → pop check?  
+   栈顶是 <span class="code-string">'['</span>, 匹配!     栈: [ { ]
+4. 读 <span class="code-string">'}'</span> → pop check?
+   栈顶是 <span class="code-string">'{'</span>, 匹配!     栈: [ ]
+5. 结束且栈空 → <span class="text-success">Success</span></div>
+            </div>
+            <div class="col-content layout-center">
+                 <div class="highlight-box">
+                    <p style="font-size: 36px;">
+                        <strong>核心逻辑：</strong><br><br>
+                        右括号出现时，<br>
+                        如果不匹配栈顶，<br>
+                        或者栈为空，<br>
+                        说明语法错误。
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P08: 应用 - 括号匹配代码 -->
+    <section class="slide" data-title="应用：括号匹配代码">
+        <h2>括号匹配：代码实现</h2>
+        <div class="col-content" style="height: 100%; justify-content: start;">
+            <div class="code-block" style="height: 800px; font-size: 22px;">
+<span class="code-comment">// 判断左右括号是否匹配</span>
+<span class="code-type">bool</span> <span class="code-func">isMatchingPair</span>(<span class="code-type">char</span> left, <span class="code-type">char</span> right) {
+    <span class="code-keyword">return</span> (left == '(' && right == ')') ||
+           (left == '[' && right == ']') ||
+           (left == '{' && right == '}');
+}
+
+<span class="code-type">bool</span> <span class="code-func">isValidBrackets</span>(<span class="code-keyword">const char</span> *str) {
+    Stack s;
+    <span class="code-func">initStack</span>(&s);
+    
+    <span class="code-keyword">for</span> (<span class="code-type">int</span> i = 0; str[i] != '\0'; i++) {
+        <span class="code-type">char</span> ch = str[i];
+        
+        <span class="code-comment">// 遇到左括号，入栈</span>
+        <span class="code-keyword">if</span> (ch == '(' || ch == '[' || ch == '{') {
+            <span class="code-func">push</span>(&s, ch);
+        }
+        <span class="code-comment">// 遇到右括号，尝试匹配</span>
+        <span class="code-keyword">else if</span> (ch == ')' || ch == ']' || ch == '}') {
+            <span class="code-type">int</span> topVal;
+            <span class="code-keyword">if</span> (isEmpty(&s)) <span class="code-keyword">return false</span>;  <span class="code-comment">// 右括号多余</span>
+            
+            <span class="code-func">pop</span>(&s, &topVal);
+            <span class="code-keyword">if</span> (!isMatchingPair((<span class="code-type">char</span>)topVal, ch)) {
+                <span class="code-keyword">return false</span>;  <span class="code-comment">// 类型不匹配</span>
+            }
+        }
+    }
+    
+    <span class="code-comment">// 最后栈必须为空</span>
+    <span class="code-keyword">return</span> isEmpty(&s);
+}
+
+<span class="code-type">int</span> <span class="code-func">main</span>() {
+    <span class="code-keyword">const char</span> *str = "abc(d[e]f)[g{h}i]{jkl}";
+    <span class="code-type">bool</span> valid = isValidBrackets(str);
+    <span class="code-func">printf</span>("%-20s → %s\n", str, valid ? "匹配成功" : "匹配失败");
+    <span class="code-keyword">return</span> 0;
+}</div>
+        </div>
+    </section>
+
+    <!-- P09: 应用 - 后缀表达式求值 -->
+    <section class="slide" data-title="应用：后缀表达式求值">
+        <h2>典型应用 2：后缀表达式求值</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <p>计算机不喜欢括号和优先级，它喜欢<strong>后缀表达式</strong> (RPN)。</p>
+                <div class="card">
+                    <p style="font-size: 32px; margin-bottom: 10px;">中缀 (人类)：<code>3 + 5 * 2</code></p>
+                    <p style="font-size: 32px; color: var(--accent-color);">后缀 (机器)：<code>3 5 2 * +</code></p>
+                </div>
+                <div class="highlight-box">
+                    <p style="font-size: 30px; margin-bottom: 10px;"><strong>后缀求值算法：</strong></p>
+                    <ol style="font-size: 30px;">
+                        <li>遇到数字 → 入栈</li>
+                        <li>遇到符号 → 弹出两个数计算，结果入栈</li>
+                    </ol>
+                </div>
+            </div>
+            <div class="col-content layout-center">
+                <!-- 简单的求值步骤图 -->
+                <div style="display: flex; gap: 30px; align-items: flex-end;">
+                    <!-- Step 1 -->
+                    <div style="text-align: center;">
+                        <div class="stack-container" style="height: 200px; width: 140px;">
+                            <div class="stack-item" style="height: 40px; font-size: 24px;">3</div>
+                            <div class="stack-item" style="height: 40px; font-size: 24px;">5</div>
+                            <div class="stack-item" style="height: 40px; font-size: 24px;">2</div>
+                        </div>
+                        <p style="font-size: 24px; margin-top: 10px;">1. 入栈 3, 5, 2</p>
+                    </div>
+                    <i class="fas fa-arrow-right" style="font-size: 30px; margin-bottom: 80px; color: #666;"></i>
+                    
+                    <!-- Step 2 -->
+                    <div style="text-align: center;">
+                        <div class="stack-container" style="height: 200px; width: 140px;">
+                            <div class="stack-item" style="height: 40px; font-size: 24px;">3</div>
+                            <div class="stack-item" style="height: 40px; font-size: 24px; background: var(--secondary-color); color: #fff;">10</div>
+                        </div>
+                        <p style="font-size: 24px; margin-top: 10px;">2. 遇 *, 5×2=10</p>
+                    </div>
+                    <i class="fas fa-arrow-right" style="font-size: 30px; margin-bottom: 80px; color: #666;"></i>
+
+                    <!-- Step 3 -->
+                    <div style="text-align: center;">
+                        <div class="stack-container" style="height: 200px; width: 140px;">
+                            <div class="stack-item" style="height: 40px; font-size: 24px; background: var(--accent-color); color: #000;">13</div>
+                        </div>
+                        <p style="font-size: 24px; margin-top: 10px;">3. 遇 +, 3+10=13</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P10: 应用 - 后缀求值代码 -->
+    <section class="slide" data-title="应用：后缀求值代码">
+        <h2>后缀求值：代码实现</h2>
+        <div class="col-content" style="height: 100%; justify-content: start;">
+            <div class="code-block" style="height: 800px; font-size: 22px;">
+<span class="code-comment">// 工具函数：执行运算</span>
+<span class="code-type">int</span> <span class="code-func">applyOperator</span>(<span class="code-type">int</span> a, <span class="code-type">int</span> b, <span class="code-type">char</span> op) {
+    <span class="code-keyword">switch</span> (op) {
+        <span class="code-keyword">case</span> '+': <span class="code-keyword">return</span> a + b;
+        <span class="code-keyword">case</span> '-': <span class="code-keyword">return</span> a - b;
+        <span class="code-keyword">case</span> '*': <span class="code-keyword">return</span> a * b;
+        <span class="code-keyword">case</span> '/': <span class="code-keyword">return</span> a / b;
+    }
+    <span class="code-keyword">return</span> 0;
+}
+
+<span class="code-type">int</span> <span class="code-func">evaluatePostfix</span>(<span class="code-keyword">const char</span> *expr) {
+    Stack s;
+    <span class="code-func">initStack</span>(&s);
+
+    <span class="code-keyword">for</span> (<span class="code-type">int</span> i = 0; expr[i] != '\0'; i++) {
+        <span class="code-type">char</span> c = expr[i];
+
+        <span class="code-keyword">if</span> (c == ' ') <span class="code-keyword">continue</span>;
+
+        <span class="code-comment">// 如果是数字</span>
+        <span class="code-keyword">if</span> (<span class="code-func">isdigit</span>(c)) {
+            <span class="code-func">push</span>(&s, c - '0');
+        }
+        <span class="code-comment">// 如果是运算符</span>
+        <span class="code-keyword">else if</span> (<span class="code-func">isOperator</span>(c)) {
+            <span class="code-type">int</span> a, b;
+            <span class="code-func">pop</span>(&s, &b); <span class="code-comment">// 先出栈的是右操作数</span>
+            <span class="code-func">pop</span>(&s, &a); <span class="code-comment">// 后出栈的是左操作数</span>
+            <span class="code-type">int</span> result = <span class="code-func">applyOperator</span>(a, b, c);
+            <span class="code-func">push</span>(&s, result);
+        }
+    }
+    
+    <span class="code-type">int</span> finalResult;
+    <span class="code-func">pop</span>(&s, &finalResult);
+    <span class="code-keyword">return</span> finalResult;
+}</div>
+        </div>
+    </section>
+
+    <!-- P11: 应用 - 中缀转后缀原理 -->
+    <section class="slide" data-title="应用：中缀转后缀原理">
+        <h2>算法：中缀转后缀 (Shunting Yard)</h2>
+        <div class="layout-2col" style="gap: 40px;">
+            <div class="col-content" style="flex: 0.8;">
+                <div class="highlight-box" style="padding: 20px;">
+                    <p class="mb-0" style="font-size: 28px;">
+                        利用<strong>符号栈</strong>暂存运算符，调整顺序。
+                    </p>
+                </div>
+                <table class="shunting-yard" style="font-size: 24px;">
+                    <tr><th>遇到...</th><th>操作</th></tr>
+                    <tr><td>数字</td><td>直接输出</td></tr>
+                    <tr><td>(</td><td>入栈</td></tr>
+                    <tr><td>)</td><td>弹栈直到 (</td></tr>
+                    <tr><td>运算符</td><td>弹 <strong>优先级 >= 自己</strong> 的，再入栈</td></tr>
+                </table>
+            </div>
+            <div class="col-content layout-center" style="flex: 1.2;">
+                 <div class="card" style="width: 100%; padding: 30px;">
+                    <span class="card-title" style="font-size: 32px; margin-bottom: 20px; font-family: monospace;">9 + ( 3 - 1 ) * 5 + 4 / 2</span>
+                    
+                    <!-- 滚动表格容器 -->
+                    <div style="max-height: 600px; overflow-y: auto; width: 100%; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; background: rgba(0,0,0,0.2);">
+                        <table class="shunting-yard" style="margin-top: 0; font-size: 22px; width: 100%;">
+                            <thead style="position: sticky; top: 0; background: var(--bg-color); z-index: 2; box-shadow: 0 2px 5px rgba(0,0,0,0.5);">
+                                <tr>
+                                    <th style="width: 10%; text-align: center;">Char</th>
+                                    <th style="width: 40%;">Action</th>
+                                    <th style="width: 15%;">Stack</th>
+                                    <th style="width: 35%;">Output</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td align="center">9</td><td>数字：直接输出</td><td></td><td>9</td></tr>
+                                <tr><td align="center">+</td><td>栈空，入栈</td><td>+</td><td>9</td></tr>
+                                <tr><td align="center">(</td><td>左括号，入栈</td><td>+ (</td><td>9</td></tr>
+                                <tr><td align="center">3</td><td>数字：直接输出</td><td>+ (</td><td>9 3</td></tr>
+                                <tr><td align="center">-</td><td>栈顶 (，入栈</td><td>+ ( -</td><td>9 3</td></tr>
+                                <tr><td align="center">1</td><td>数字：直接输出</td><td>+ ( -</td><td>9 3 1</td></tr>
+                                <tr><td align="center">)</td><td>弹栈直到 (</td><td>+</td><td>9 3 1 -</td></tr>
+                                <tr><td align="center">*</td><td>优先级 * > +，入栈</td><td>+ *</td><td>9 3 1 -</td></tr>
+                                <tr><td align="center">5</td><td>数字：直接输出</td><td>+ *</td><td>9 3 1 - 5</td></tr>
+                                <tr><td align="center">+</td><td>弹 *，弹 +，新 + 入栈</td><td>+</td><td>9 3 1 - 5 * +</td></tr>
+                                <tr><td align="center">4</td><td>数字：直接输出</td><td>+</td><td>9 3 1 - 5 * + 4</td></tr>
+                                <tr><td align="center">/</td><td>优先级 / > +，入栈</td><td>+ /</td><td>9 3 1 - 5 * + 4</td></tr>
+                                <tr><td align="center">2</td><td>数字：直接输出</td><td>+ /</td><td>9 3 1 - 5 * + 4 2</td></tr>
+                                <tr style="background: rgba(34, 211, 238, 0.1); font-weight: bold;"><td align="center">End</td><td>清空栈</td><td>(Empty)</td><td>9 3 1 - 5 * + 4 2 / +</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P12: 应用 - 中缀转后缀代码 -->
+    <section class="slide" data-title="应用：中缀转后缀代码">
+        <h2>中缀转后缀：代码实现</h2>
+        <div class="col-content" style="height: 100%; justify-content: start;">
+            <div class="code-block" style="height: 800px; font-size: 22px;">
+<span class="code-comment">// 辅助：获取优先级 (* / > + -)</span>
+<span class="code-type">int</span> <span class="code-func">getPriority</span>(<span class="code-type">char</span> op) {
+    <span class="code-keyword">if</span> (op == '*' || op == '/') <span class="code-keyword">return</span> 2;
+    <span class="code-keyword">if</span> (op == '+' || op == '-') <span class="code-keyword">return</span> 1;
+    <span class="code-keyword">return</span> 0; <span class="code-comment">// '(' 优先级最低</span>
+}
+
+<span class="code-type">void</span> <span class="code-func">infixToPostfix</span>(<span class="code-keyword">const char</span>* infix, <span class="code-type">char</span>* postfix) {
+    Stack s; <span class="code-func">initStack</span>(&s);
+    <span class="code-type">int</span> j = 0; <span class="code-comment">// postfix 写入位置</span>
+    
+    <span class="code-keyword">for</span> (<span class="code-type">int</span> i = 0; infix[i] != '\0'; i++) {
+        <span class="code-type">char</span> c = infix[i];
+        <span class="code-keyword">if</span> (c == ' ') <span class="code-keyword">continue</span>;
+        
+        <span class="code-comment">// 1. 数字：直接输出</span>
+        <span class="code-keyword">if</span> (<span class="code-func">isdigit</span>(c)) {
+            postfix[j++] = c;
+        } 
+        <span class="code-comment">// 2. 左括号：入栈待命</span>
+        <span class="code-keyword">else if</span> (c == '(') {
+            <span class="code-func">push</span>(&s, c);
+        } 
+        <span class="code-comment">// 3. 右括号：弹栈直到 '('</span>
+        <span class="code-keyword">else if</span> (c == ')') {
+            <span class="code-type">int</span> topVal;
+            <span class="code-func">peek</span>(&s, &topVal);
+            <span class="code-keyword">while</span> (!isEmpty(&s) && topVal != '(') {
+                <span class="code-func">pop</span>(&s, &topVal);
+                postfix[j++] = (<span class="code-type">char</span>)topVal;
+                <span class="code-func">peek</span>(&s, &topVal);
+            }
+            <span class="code-func">pop</span>(&s, &topVal); <span class="code-comment">// 丢弃 '('</span>
+        } 
+        <span class="code-comment">// 4. 运算符：维护优先级单调性</span>
+        <span class="code-keyword">else</span> { 
+            <span class="code-type">int</span> topVal;
+            <span class="code-keyword">while</span> (!isEmpty(&s)) {
+                <span class="code-func">peek</span>(&s, &topVal);
+                <span class="code-comment">// 栈顶 < 当前：直接入栈</span>
+                <span class="code-keyword">if</span> (topVal == '(' || getPriority(topVal) < getPriority(c)) 
+                    <span class="code-keyword">break</span>;
+                
+                <span class="code-comment">// 栈顶 >= 当前：弹出栈顶</span>
+                <span class="code-func">pop</span>(&s, &topVal);
+                postfix[j++] = (<span class="code-type">char</span>)topVal;
+            }
+            <span class="code-func">push</span>(&s, c);
+        }
+    }
+    
+    <span class="code-comment">// 5. 收尾：弹出剩余符号</span>
+    <span class="code-keyword">while</span> (!isEmpty(&s)) {
+        <span class="code-type">int</span> topVal;
+        <span class="code-func">pop</span>(&s, &topVal);
+        postfix[j++] = (<span class="code-type">char</span>)topVal;
+    }
+    postfix[j] = '\0';
+}</div>
+        </div>
+    </section>
+
+    <!-- P13: 更多应用 -->
+    <section class="slide" data-title="更多应用">
+        <h2>更多应用场景</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="highlight-box">
+                    <p class="mb-0" style="font-size: 34px;">
+                        凡是符合<strong>“最后做的事要先被撤回 / 先被处理”</strong> 或 
+                        <strong>“先走到底，再一层层往回退”</strong>
+                        的问题，本质上都适合用栈来解决。
+                    </p>
+                </div>
+                <ul style="font-size: 30px; margin-top: 20px;">
+                    <li><strong>深度优先搜索 (DFS)</strong>：<br><span style="font-size: 26px; color: #aaa;">利用栈“先走到最深，再按相反顺序回退”，逐层展开并回溯。</span></li>
+                    <li><strong>回溯算法</strong>：<br><span style="font-size: 26px; color: #aaa;">保存决策路径，失败时快速撤销最近一次选择。</span></li>
+                    <li><strong>递归显式实现</strong>：<br><span style="font-size: 26px; color: #aaa;">手动保存函数状态，模拟系统调用栈。</span></li>
+                </ul>
+            </div>
+            <div class="col-content">
+                 <div class="card">
+                    <span class="card-title" style="font-size: 32px; color: var(--secondary-color);">系统与工程应用</span>
+                    <ul style="font-size: 30px;">
+                        <li><strong>OS 函数调用栈</strong>：<br><span style="font-size: 26px; color: #aaa;">保证函数按“后调用、先返回”顺序执行。</span></li>
+                        <li><strong>浏览器前进/后退</strong>：<br><span style="font-size: 26px; color: #aaa;">通过栈记录访问历史，实现逆序回退。</span></li>
+                        <li><strong>撤销操作 (Undo)</strong>：<br><span style="font-size: 26px; color: #aaa;">按相反顺序回放，优先撤销最近修改。</span></li>
+                    </ul>
+                </div>
+                <div style="text-align: center; margin-top: 30px;">
+                    <i class="fas fa-history text-accent" style="font-size: 80px; opacity: 0.8;"></i>
+                    <p style="color: #888; font-size: 24px; margin-top: 15px;">栈是“历史记录”的管理者</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P14: 总结 -->
+    <section class="slide slide--wrapup" data-title="课堂小结">
+        <h2>课堂小结</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="highlight-box">
+                    <p class="mb-0" style="font-size: 36px; line-height: 1.4;">
+                        栈是一种<strong>“操作受限”</strong>的线性表，
+                        但正是这种限制，赋予了它处理
+                        <span class="text-accent">嵌套关系</span>和<span class="text-accent">回溯问题</span>的强大能力。
+                    </p>
+                </div>
+                <ul style="font-size: 32px; margin-top: 20px;">
+                    <li><strong>核心特性 (LIFO)</strong>：<br>
+                        <span style="font-size: 28px; color: #ccc;">本质上是“只能在尾部插入和删除的数组”。</span>
+                    </li>
+                    <li><strong>常用操作 O(1)</strong>：<br>
+                        <span style="font-size: 28px; color: #ccc;">push, pop, peek, isEmpty</span>
+                    </li>
+                </ul>
+            </div>
+            <div class="col-content layout-center">
+                <div class="card" style="width: 100%;">
+                    <span class="card-title">实现方式对比</span>
+                    <ul style="font-size: 30px;">
+                        <li style="margin-bottom: 25px;">
+                            <strong>基于数组 (顺序栈)</strong><br>
+                            <span style="font-size: 26px; color: #aaa;">简单、高效，但容量固定。</span>
+                        </li>
+                        <li>
+                            <strong>基于链表 (链式栈)</strong><br>
+                            <span style="font-size: 26px; color: #aaa;">不易溢出，但有额外节点开销。</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <div style="margin-top: 60px; width: 100%; text-align: center;">
+                    <p style="font-size: 30px; color: #888; margin-bottom: 20px;">Next Topic</p>
+                    <div style="font-size: 60px; color: var(--secondary-color); font-weight: bold;">
+                        队列 (Queue) <i class="fas fa-walking"></i>
+                    </div>
+                    <p style="font-size: 34px; margin-top: 10px;">先来后到的公平世界 (FIFO)</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 页脚 -->
+    <div class="footer">
+        <span id="page-number">1 / 14</span>
+    </div>
+
+</div>
+
+<script>
+    // 幻灯片逻辑
+    const slides = document.querySelectorAll('.slide');
+    const pageNumberEl = document.getElementById('page-number');
+    const totalSlides = slides.length;
+
+    function getPageFromUrl() {
+        const params = new URLSearchParams(window.location.search);
+        const page = parseInt(params.get('page'));
+        if (!isNaN(page) && page >= 1 && page <= totalSlides) {
+            return page - 1;
+        }
+        return 0;
+    }
+
+    let currentSlide = getPageFromUrl();
+
+    function updateSlide() {
+        slides.forEach((slide, index) => {
+            slide.classList.remove('active');
+            if (index === currentSlide) {
+                slide.classList.add('active');
+            }
+        });
+        pageNumberEl.textContent = `${currentSlide + 1} / ${totalSlides}`;
+        
+        try {
+            const url = new URL(window.location.href);
+            url.searchParams.set('page', currentSlide + 1);
+            window.history.replaceState(null, '', url.href);
+        } catch (e) {
+            console.error('URL update failed:', e);
+        }
+    }
+
+    function nextSlide() {
+        if (currentSlide < totalSlides - 1) {
+            currentSlide++;
+            updateSlide();
+        }
+    }
+
+    function prevSlide() {
+        if (currentSlide > 0) {
+            currentSlide--;
+            updateSlide();
+        }
+    }
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'Enter') {
+            nextSlide();
+        } else if (e.key === 'ArrowLeft') {
+            prevSlide();
+        }
+    });
+
+    function resizeApp() {
+        const app = document.getElementById('app');
+        const windowWidth = window.innerWidth;
+        const windowHeight = window.innerHeight;
+        const scaleX = windowWidth / 1920;
+        const scaleY = windowHeight / 1080;
+        const scale = Math.min(scaleX, scaleY);
+        
+        app.style.transform = `scale(${scale})`;
+    }
+
+    window.addEventListener('resize', resizeApp);
+    
+    // 初始化
+    resizeApp(); 
+    updateSlide();
+</script>
+
+</body>
+</html>

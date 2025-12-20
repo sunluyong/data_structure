@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数据结构与算法第一课</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0B1020;
+            --text-color: #EAF2FF;
+            --accent-color: #22D3EE;
+            --secondary-color: #60A5FA;
+            --highlight-bg: rgba(34, 211, 238, 0.1);
+            --code-bg: #1a202c;
+            --slide-width: 1920px;
+            --slide-height: 1080px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            margin: 0;
+            background-color: #000;
+            color: var(--text-color);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        #app {
+            width: var(--slide-width);
+            height: var(--slide-height);
+            background-color: var(--bg-color);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+        }
+
+        /* 装饰背景元素 */
+        .bg-decoration {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            background-image: 
+                radial-gradient(circle at 10% 10%, rgba(96, 165, 250, 0.05) 0%, transparent 20%),
+                radial-gradient(circle at 90% 90%, rgba(34, 211, 238, 0.05) 0%, transparent 20%);
+            pointer-events: none;
+        }
+        
+        .grid-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-size: 50px 50px;
+            background-image: linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+                              linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+            z-index: 0;
+        }
+
+        /* 幻灯片容器 */
+        .slide {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+            padding: 80px 100px;
+            flex-direction: column;
+            z-index: 1;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+
+        .slide.active {
+            display: flex;
+            opacity: 1;
+        }
+
+        /* 通用排版 */
+        h1 {
+            font-size: 140px;
+            font-weight: 800;
+            line-height: 1.1;
+            margin-bottom: 40px;
+            background: linear-gradient(135deg, #fff 0%, var(--secondary-color) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        h2 {
+            font-size: 72px;
+            margin-bottom: 60px;
+            color: var(--accent-color);
+            border-bottom: 4px solid var(--accent-color);
+            padding-bottom: 20px;
+            display: inline-block;
+        }
+
+        h3 {
+            font-size: 48px;
+            margin-bottom: 30px;
+            color: var(--secondary-color);
+        }
+
+        p, li {
+            font-size: 38px;
+            line-height: 1.5;
+            margin-bottom: 25px;
+            color: #d1d5db;
+        }
+
+        strong {
+            color: var(--accent-color);
+            font-weight: 700;
+        }
+
+        ul {
+            list-style: none;
+        }
+
+        ul li {
+            position: relative;
+            padding-left: 50px;
+            margin-bottom: 35px;
+        }
+
+        ul li::before {
+            content: "•";
+            color: var(--accent-color);
+            position: absolute;
+            left: 0;
+            font-size: 1.2em;
+        }
+
+        /* 布局辅助 */
+        .layout-center {
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        .layout-2col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 80px;
+            height: 100%;
+            align-content: center;
+        }
+
+        .col-content {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 40px;
+            margin-bottom: 30px;
+        }
+
+        .card-title {
+            font-size: 42px;
+            color: var(--accent-color);
+            margin-bottom: 20px;
+            display: block;
+            font-weight: bold;
+        }
+
+        .highlight-box {
+            background: var(--highlight-bg);
+            border-left: 8px solid var(--accent-color);
+            padding: 40px;
+            margin: 40px 0;
+            border-radius: 0 20px 20px 0;
+        }
+        
+        .formula {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 80px;
+            text-align: center;
+            margin: 60px 0;
+            color: #fff;
+            background: rgba(0,0,0,0.3);
+            padding: 40px;
+            border-radius: 20px;
+            border: 2px dashed var(--secondary-color);
+        }
+
+        /* 表格样式 */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 32px;
+            margin-top: 20px;
+        }
+
+        th, td {
+            padding: 20px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+        }
+
+        th {
+            color: var(--accent-color);
+            font-size: 36px;
+            border-bottom: 3px solid var(--accent-color);
+        }
+        
+        td:first-child {
+            font-weight: bold;
+            color: var(--secondary-color);
+            width: 30%;
+        }
+
+        /* 图标大尺寸 */
+        .icon-large {
+            font-size: 120px;
+            color: var(--secondary-color);
+            margin-bottom: 30px;
+            display: block;
+        }
+
+        /* 页脚 */
+        .footer {
+            position: absolute;
+            bottom: 30px;
+            right: 40px;
+            font-size: 24px;
+            color: rgba(255, 255, 255, 0.4);
+            z-index: 2;
+        }
+
+        /* 代码块 */
+        .code-block {
+            font-family: 'Courier New', monospace;
+            background: var(--code-bg);
+            padding: 30px;
+            border-radius: 15px;
+            border: 1px solid #333;
+            font-size: 30px;
+            color: #a5b3ce;
+        }
+
+        /* 实用类 */
+        .text-huge { font-size: 70px; }
+        .text-center { text-align: center; }
+        .mb-0 { margin-bottom: 0; }
+        .mt-20 { margin-top: 40px; }
+        .color-accent { color: var(--accent-color); }
+        
+        .flex-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+        
+        .app-icon-item {
+            text-align: center;
+            width: 22%;
+            background: rgba(255,255,255,0.03);
+            padding: 30px 10px;
+            border-radius: 15px;
+        }
+        .app-icon-item i {
+            font-size: 80px;
+            margin-bottom: 20px;
+            color: var(--accent-color);
+        }
+        .app-icon-item div {
+            font-size: 30px;
+            font-weight: bold;
+        }
+        .app-icon-item span {
+            display: block;
+            font-size: 24px;
+            color: #888;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <div class="bg-decoration"></div>
+    <div class="grid-overlay"></div>
+    
+    <!-- P01: 封面 -->
+    <section class="slide active layout-center">
+        <div style="text-align: center;">
+            <i class="fas fa-cubes icon-large" style="font-size: 220px; color: var(--accent-color); margin-bottom: 60px;"></i>
+            <h1>数据结构与算法</h1>
+            <p class="text-huge" style="color: var(--secondary-color);">Day 1：程序 = 数据结构 + 算法</p>
+        </div>
+    </section>
+
+    <!-- P02: 常见的误解 -->
+    <section class="slide">
+        <h2>常见的误解</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="card">
+                    <span class="card-title"><i class="fas fa-times-circle" style="color: #ef4444;"></i> 误解一</span>
+                    <p>算法是遥不可及的数学理论，日常用不上</p>
+                </div>
+                <div class="card">
+                    <span class="card-title"><i class="fas fa-times-circle" style="color: #ef4444;"></i> 误解二</span>
+                    <p>数据结构是面试时用来刁难人的八股文</p>
+                </div>
+            </div>
+            <div class="col-content layout-center">
+                <i class="fas fa-brain icon-large" style="margin-bottom: 40px;"></i>
+                <p class="text-huge color-accent">让我们打破这些误解</p>
+                <p>它们不是“屠龙之术”，而是你代码的<br><strong>基石与灵魂</strong></p>
+            </div>
+        </div>
+    </section>
+
+    <!-- P03: 什么是算法 -->
+    <section class="slide">
+        <h2>什么是算法 (Algorithm)？</h2>
+        <div class="highlight-box">
+            <p class="text-huge"><strong>算法</strong>是完成一项任务或解决一个问题的<strong>明确、有限的步骤和流程</strong>。</p>
+        </div>
+        <div style="margin-top: 60px;">
+            <h3>算法无处不在：</h3>
+            <ul class="flex-row">
+                <li class="app-icon-item" style="width: 30%;">
+                    <i class="fas fa-map-marked-alt"></i>
+                    <div>旅行计划</div>
+                    <span>制定路线的步骤</span>
+                </li>
+                <li class="app-icon-item" style="width: 30%;">
+                    <i class="fas fa-utensils"></i>
+                    <div>烹饪食谱</div>
+                    <span>做菜的流程</span>
+                </li>
+                <li class="app-icon-item" style="width: 30%;">
+                    <i class="fas fa-book"></i>
+                    <div>查字典</div>
+                    <span>找字的策略</span>
+                </li>
+            </ul>
+        </div>
+    </section>
+
+    <!-- P04: 直观对比 -->
+    <section class="slide">
+        <h2>直观对比：如何查字典？</h2>
+        <div style="display: grid; grid-template-columns: 25% 1fr; gap: 60px; height: 100%; align-items: center;">
+            <div class="col-content layout-center">
+                <img src="https://cdn.nlark.com/yuque/0/2025/png/87727/1765672786698-1ddfe4d0-7852-4e51-bd5f-27a09e226622.png?x-oss-process=image%2Fformat%2Cwebp" 
+                     style="width: 100%; border-radius: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1);">
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 50px;">
+                <div class="card" style="border-color: #ef4444; height: 100%; display: flex; flex-direction: column; justify-content: center;">
+                    <span class="card-title" style="color: #ef4444;">❌ 方式 A：无算法</span>
+                    <p>从第一页开始，一页一页往后翻，直到找到那个字。</p>
+                    <p style="font-size: 28px; color: #888; margin-top: 20px;">
+                        // 效率极低<br>
+                        // 假如字典有 2000 页，可能要翻 2000 次
+                    </p>
+                </div>
+
+                <div class="card" style="border-color: var(--accent-color); height: 100%; display: flex; flex-direction: column; justify-content: center;">
+                    <span class="card-title">✅ 方式 B：高效算法</span>
+                    <ul>
+                        <li><strong>快速定位</strong>：根据拼音索引快速定位大致范围</li>
+                        <li><strong>折半查找</strong>：每次翻一半，决定是往前还是往后</li>
+                    </ul>
+                    <p style="font-size: 28px; color: #888; margin-top: 20px;">
+                        // 效率极高<br>
+                        // 2000 页最多只需要翻 11 次
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P05: 什么是数据结构 -->
+    <section class="slide">
+        <h2>什么是数据结构 (Data Structure)？</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <p><strong>思考一个问题：</strong></p>
+                <p>如果报纸散落一地（乱序），你还能用“折半查找”快速找到某条新闻吗？</p>
+                <p class="color-accent text-huge" style="margin-top: 40px;">不能！</p>
+                <p>只能从头看到尾（退化为暴力查找）。</p>
+            </div>
+            <div class="col-content">
+                <div class="highlight-box">
+                    <p><strong>数据结构</strong>是算法高效运行的<strong>前提</strong>。</p>
+                    <p style="margin-top: 20px; font-size: 32px;">它是特意设计的数据存储和组织方式。</p>
+                </div>
+                <ul>
+                    <li><strong>数据结构</strong> = 字典排版（拼音排序、索引）</li>
+                    <li><strong>算法</strong> = 查字典方法（二分查找）</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <!-- P06: 核心公式 -->
+    <section class="slide layout-center">
+        <div style="width: 80%;">
+            <i class="fas fa-quote-left" style="font-size: 60px; color: var(--secondary-color); margin-bottom: 20px;"></i>
+            <p style="font-size: 42px;">只有将数据精心组织（构建结构），高效的算法才有施展的舞台。</p>
+            
+            <div class="formula">
+                Program = Data Structure + Algorithm
+            </div>
+            
+            <p style="text-align: right; font-size: 32px; color: #888;">—— Niklaus Wirth (图灵奖得主)</p>
+            
+            <div style="margin-top: 60px; font-size: 36px;">
+                <p>程序 = <span style="color: var(--secondary-color);">特定的数据结构</span> + <span style="color: var(--accent-color);">解决问题的步骤</span></p>
+            </div>
+        </div>
+    </section>
+
+    <!-- P07: 隐形巨人 (1) -->
+    <section class="slide">
+        <h2>数据结构与算法无处不在</h2>
+        <p>每一个顺滑的 App 功能背后，都有特定的数据结构在支撑。</p>
+        
+        <div class="layout-2col mt-20">
+            <div class="col-content">
+                <div class="card">
+                    <div style="display: flex; align-items: center; margin-bottom: 20px;">
+                        <i class="fas fa-users" style="font-size: 50px; color: var(--accent-color); margin-right: 20px;"></i>
+                        <span class="card-title mb-0">朋友圈 / 社交网络</span>
+                    </div>
+                    <p>为什么能算出“共同好友”？</p>
+                    <div class="highlight-box" style="margin: 20px 0; padding: 20px;">
+                        <p class="mb-0">核心结构：<strong>图 (Graph)</strong></p>
+                    </div>
+                    <p style="font-size: 28px; color: #888;">人是节点，关系是连线。</p>
+                </div>
+            </div>
+            
+            <div class="col-content">
+                <div class="card">
+                    <div style="display: flex; align-items: center; margin-bottom: 20px;">
+                        <i class="fas fa-arrow-left" style="font-size: 50px; color: var(--accent-color); margin-right: 20px;"></i>
+                        <span class="card-title mb-0">浏览器“后退”</span>
+                    </div>
+                    <p>为什么总是回到上一个页面？</p>
+                    <div class="highlight-box" style="margin: 20px 0; padding: 20px;">
+                        <p class="mb-0">核心结构：<strong>栈 (Stack)</strong></p>
+                    </div>
+                    <p style="font-size: 28px; color: #888;">先进后出 (LIFO) 的容器。</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P08: 隐形巨人 (2) -->
+    <section class="slide">
+        <h2>数据结构与算法无处不在</h2>
+        
+        <div class="flex-row" style="margin-top: 40px;">
+            <div class="app-icon-item">
+                <i class="fas fa-address-book"></i>
+                <div style="color: #fff;">手机通讯录</div>
+                <div style="color: var(--accent-color); margin-top: 10px;">树 (Tree)</div>
+                <span style="font-size: 24px;">按字母快速分组排序</span>
+            </div>
+            
+            <div class="app-icon-item">
+                <i class="fas fa-route"></i>
+                <div style="color: #fff;">地图导航</div>
+                <div style="color: var(--accent-color); margin-top: 10px;">最短路径算法</div>
+                <span style="font-size: 24px;">在图结构上计算权值</span>
+            </div>
+            
+            <div class="app-icon-item">
+                <i class="fas fa-shopping-bag"></i>
+                <div style="color: #fff;">购物推荐</div>
+                <div style="color: var(--accent-color); margin-top: 10px;">哈希表 (Hash)</div>
+                <span style="font-size: 24px;">基于特征的高效匹配</span>
+            </div>
+            
+            <div class="app-icon-item">
+                <i class="fas fa-layer-group"></i>
+                <div style="color: #fff;">任务调度</div>
+                <div style="color: var(--accent-color); margin-top: 10px;">队列 (Queue)</div>
+                <span style="font-size: 24px;">先来后到，公平处理</span>
+            </div>
+        </div>
+        
+        <div style="text-align: center; margin-top: 80px;">
+            <p class="text-huge">如果不学这些，你也许能写出功能...</p>
+            <p>但永远写不出<strong>处理海量数据</strong>时依然<strong>快、省、稳</strong>的代码。</p>
+        </div>
+    </section>
+
+    <!-- P09: 我们将学什么 -->
+    <section class="slide">
+        <h2>数据结构与算法将学什么？</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <h3>计算机对数据的核心操作：</h3>
+                <ul style="font-size: 48px;">
+                    <li><strong>增 (Insert)</strong></li>
+                    <li><strong>删 (Delete)</strong></li>
+                    <li><strong>改 (Update)</strong></li>
+                    <li style="color: var(--accent-color);"><strong>查 (Search)</strong></li>
+                </ul>
+            </div>
+            <div class="col-content">
+                <div class="card">
+                    <span class="card-title">课程三大模块</span>
+                    <ol style="margin-left: 40px; font-size: 36px; line-height: 1.8;">
+                        <li><strong>构建 (数据结构)</strong><br><span style="color:#888; font-size: 28px;">线性表、栈、队列、树、图</span></li>
+                        <li><strong>治理 (排序算法)</strong><br><span style="color:#888; font-size: 28px;">让无序变有序，为高效铺路</span></li>
+                        <li><strong>检索 (查找算法)</strong><br><span style="color:#888; font-size: 28px;">在特定结构中，精准定位目标</span></li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P10: 学习方法 -->
+    <section class="slide layout-center">
+        <h2>学习方法论：像工程师一样实战</h2>
+        <div style="width: 80%; margin-top: 40px;">
+            <div class="highlight-box" style="border-left-color: var(--secondary-color);">
+                <p class="mb-0">❌ 死记硬背 ADT (抽象数据类型) 定义和算法复杂度数学推导</p>
+            </div>
+            <div class="highlight-box">
+                <p class="mb-0">✅ <strong>每学一个数据结构，就解决一个真实问题</strong></p>
+            </div>
+            <p style="margin-top: 60px;">亲眼见证运用数据结构+算法化腐朽为神奇。</p>
+        </div>
+    </section>
+
+    <!-- P11: 实战项目预览 -->
+    <section class="slide">
+        <h2>课程实战项目预览</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>数据结构</th>
+                    <th>现实挑战项目</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>数组 & 链表</td>
+                    <td><strong>极简音乐播放器</strong><br><span style="color: #888; font-size: 24px;">实现歌单的随时插入、删除、播放下一首</span></td>
+                </tr>
+                <tr>
+                    <td>栈 (Stack)</td>
+                    <td><strong>智能表达式求值器</strong><br><span style="color: #888; font-size: 24px;">计算带多重括号的算式 3*(2+[4-1])</span></td>
+                </tr>
+                <tr>
+                    <td>队列 (Queue)</td>
+                    <td><strong>医院/餐厅叫号系统</strong><br><span style="color: #888; font-size: 24px;">处理高并发排队，保证公平</span></td>
+                </tr>
+                <tr>
+                    <td>树 / 前缀树</td>
+                    <td><strong>搜索框自动补全</strong><br><span style="color: #888; font-size: 24px;">仿 Google，输入 "alg" 毫秒级联想出 "algorithm"</span></td>
+                </tr>
+                <tr>
+                    <td>图 (Graph)</td>
+                    <td><strong>地图导航</strong><br><span style="color: #888; font-size: 24px;">计算从宿舍到食堂的最佳路线</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <!-- P12: 小结 -->
+    <section class="slide">
+        <h2>编程能力的“分水岭”</h2>
+        <div class="layout-2col" style="height: 60%;">
+            <div class="col-content">
+                <div class="card" style="border-left: 8px solid #94a3b8;">
+                    <span class="card-title" style="color: #cbd5e1;">Yesterday</span>
+                    <p>你掌握了 C 语言或 Python 语法。</p>
+                    <div style="margin-top: 30px; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 20px;">
+                        <p>但这就像建筑师只学会了<strong>砌砖</strong>。</p>
+                        <p style="font-size: 30px; color: #d1d5db;">你也许能搭一个简易的平房，但面对摩天大楼（海量数据/高并发）时，会轰然倒塌。</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-content">
+                <div class="card" style="border-left: 8px solid var(--accent-color); background: rgba(34, 211, 238, 0.05);">
+                    <span class="card-title">Tomorrow</span>
+                    <p>数据结构与算法，是计算机的<strong>建筑学</strong>。</p>
+                    <ul style="margin-top: 30px;">
+                        <li><strong>数据结构</strong>：设计稳固的地基。</li>
+                        <li><strong>算法</strong>：规划最优的动线。</li>
+                    </ul>
+                    <p style="margin-top: 30px; font-weight: bold; color: var(--accent-color); font-size: 42px;">从 Coder 进化为 Engineer</p>
+                </div>
+            </div>
+        </div>
+
+        <div style="text-align: center; margin-top: auto; padding-bottom: 40px;">
+            <p style="font-size: 56px; font-weight: bold; color: #fff; letter-spacing: 2px;">
+                <i class="fas fa-rocket" style="color: var(--accent-color); margin-right: 20px;"></i>
+                准备好了吗？课程正式开始
+            </p>
+        </div>
+    </section>
+
+    <!-- 页脚 -->
+    <div class="footer">
+        <span id="page-number">1 / 12</span>
+    </div>
+
+</div>
+
+<script>
+    // 幻灯片逻辑
+    const slides = document.querySelectorAll('.slide');
+    const pageNumberEl = document.getElementById('page-number');
+    const totalSlides = slides.length;
+
+    // 从 URL 获取页码 (page=1 对应 index 0)
+    function getPageFromUrl() {
+        const params = new URLSearchParams(window.location.search);
+        const page = parseInt(params.get('page'));
+        if (!isNaN(page) && page >= 1 && page <= totalSlides) {
+            return page - 1;
+        }
+        return 0;
+    }
+
+    let currentSlide = getPageFromUrl();
+
+    function updateSlide() {
+        slides.forEach((slide, index) => {
+            slide.classList.remove('active');
+            if (index === currentSlide) {
+                slide.classList.add('active');
+            }
+        });
+        pageNumberEl.textContent = `${currentSlide + 1} / ${totalSlides}`;
+        
+        // 更新 URL 参数 (使用更兼容的方式)
+        try {
+            const url = new URL(window.location.href);
+            url.searchParams.set('page', currentSlide + 1);
+            window.history.replaceState(null, '', url.href);
+        } catch (e) {
+            console.error('URL update failed:', e);
+        }
+    }
+
+    function nextSlide() {
+        if (currentSlide < totalSlides - 1) {
+            currentSlide++;
+            updateSlide();
+        }
+    }
+
+    function prevSlide() {
+        if (currentSlide > 0) {
+            currentSlide--;
+            updateSlide();
+        }
+    }
+
+    // 键盘控制
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'Enter') {
+            nextSlide();
+        } else if (e.key === 'ArrowLeft') {
+            prevSlide();
+        }
+    });
+
+    // 响应式缩放
+    function resizeApp() {
+        const app = document.getElementById('app');
+        const windowWidth = window.innerWidth;
+        const windowHeight = window.innerHeight;
+        const scaleX = windowWidth / 1920;
+        const scaleY = windowHeight / 1080;
+        const scale = Math.min(scaleX, scaleY);
+        
+        app.style.transform = `scale(${scale})`;
+    }
+
+    window.addEventListener('resize', resizeApp);
+    
+    // 初始化
+    resizeApp(); 
+    updateSlide();
+</script>
+
+</body>
+</html>

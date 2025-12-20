@@ -1,0 +1,1373 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>01 链表：内存的散居游民</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0B1020;
+            --text-color: #EAF2FF;
+            --accent-color: #22D3EE;
+            --secondary-color: #60A5FA;
+            --highlight-bg: rgba(34, 211, 238, 0.1);
+            --code-bg: #1a202c;
+            --slide-width: 1920px;
+            --slide-height: 1080px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            margin: 0;
+            background-color: #000;
+            color: var(--text-color);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        #app {
+            width: var(--slide-width);
+            height: var(--slide-height);
+            background-color: var(--bg-color);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+        }
+
+        /* 装饰背景元素 */
+        .bg-decoration {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            background-image: 
+                radial-gradient(circle at 10% 10%, rgba(96, 165, 250, 0.05) 0%, transparent 20%),
+                radial-gradient(circle at 90% 90%, rgba(34, 211, 238, 0.05) 0%, transparent 20%);
+            pointer-events: none;
+        }
+        
+        .grid-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-size: 50px 50px;
+            background-image: linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+                              linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+            z-index: 0;
+        }
+
+        /* 幻灯片容器 */
+        .slide {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+            padding: 80px 100px;
+            flex-direction: column;
+            z-index: 1;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+
+        .slide.active {
+            display: flex;
+            opacity: 1;
+        }
+
+        /* 通用排版 */
+        h1 {
+            font-size: 150px;
+            font-weight: 800;
+            line-height: 1.1;
+            margin-bottom: 40px;
+            background: linear-gradient(135deg, #fff 0%, var(--secondary-color) 100%);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        h2 {
+            font-size: 72px;
+            margin-bottom: 60px;
+            color: var(--accent-color);
+            border-bottom: 4px solid var(--accent-color);
+            padding-bottom: 20px;
+            display: inline-block;
+        }
+
+        h3 {
+            font-size: 48px;
+            margin-bottom: 30px;
+            color: var(--secondary-color);
+        }
+
+        p, li {
+            font-size: 38px;
+            line-height: 1.5;
+            margin-bottom: 25px;
+            color: #d1d5db;
+        }
+
+        strong {
+            color: var(--accent-color);
+            font-weight: 700;
+        }
+
+        ul, ol {
+            list-style: none;
+        }
+
+        ul li {
+            position: relative;
+            padding-left: 50px;
+            margin-bottom: 35px;
+        }
+
+        ul li::before {
+            content: "•";
+            color: var(--accent-color);
+            position: absolute;
+            left: 0;
+            font-size: 1.2em;
+        }
+
+        /* 布局辅助 */
+        .layout-center {
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        .layout-2col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 80px;
+            height: 100%;
+            align-content: center;
+        }
+
+        .col-content {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        /* 单页微调：避免内容溢出被裁切（#app overflow:hidden） */
+        .slide--search-weak h2 {
+            margin-bottom: 36px;
+        }
+        .slide--search-weak .layout-2col {
+            gap: 60px;
+            /* 让内容区占满标题以下的剩余高度，便于右侧图示垂直居中 */
+            flex: 1;
+            height: auto;
+            align-content: stretch;
+            grid-template-rows: 1fr;
+        }
+        .slide--search-weak .col-content {
+            justify-content: flex-start;
+        }
+        .slide--search-weak .col-content.layout-center {
+            justify-content: center;
+            align-items: center;
+        }
+        .slide--search-weak .card {
+            padding: 28px;
+            margin-bottom: 22px;
+        }
+        .slide--search-weak .card-title {
+            font-size: 40px;
+            margin-bottom: 14px;
+        }
+        .slide--search-weak .card p {
+            font-size: 36px;
+            line-height: 1.35;
+            margin-bottom: 14px;
+        }
+        .slide--search-weak .code-block {
+            font-size: 28px;
+            padding: 22px;
+            line-height: 1.5;
+        }
+        .slide--search-weak .list-visual {
+            margin: 0;
+            /* 右侧需要放下 0→…→5 的演示，适度缩放保证不换行但仍可投屏清晰 */
+            transform: scale(0.86);
+            transform-origin: center;
+            /* 关键：让节点方块按“顶部”对齐（否则带说明文字的节点会被整体居中导致上下不齐） */
+            align-items: flex-start;
+        }
+        .slide--search-weak .node-group {
+            align-items: center;
+        }
+        .slide--search-weak .node-arrow {
+            /* 让箭头对齐到 80px 节点方块的垂直中线： (80-40)/2 ≈ 20px */
+            margin-top: 20px;
+        }
+
+        /* 单页微调：双向链表 */
+        .slide--doubly .list-visual {
+            align-items: flex-start;
+        }
+        .slide--doubly .node-arrow {
+            margin-top: 22px;
+        }
+
+        /* 修复 P03 箭头对齐问题 */
+        .slide--code-def .list-visual {
+            align-items: flex-start;
+        }
+        .slide--code-def .node-arrow {
+            margin-top: 22px;
+        }
+        
+        /* 单页微调：课堂小结（内容较多，避免被 #app overflow:hidden 裁切） */
+        .slide--wrapup {
+            padding-top: 72px;
+            padding-bottom: 66px;
+        }
+        .slide--wrapup h2 {
+            margin-bottom: 40px;
+        }
+        .slide--wrapup h3 {
+            margin-bottom: 18px;
+        }
+        .slide--wrapup .layout-2col {
+            /* 关键：不要用 height:100%（会把标题的高度也叠加进去导致溢出） */
+            height: auto;
+            flex: 1;
+            gap: 60px;
+            align-content: start;
+        }
+        .slide--wrapup .col-content {
+            justify-content: flex-start;
+        }
+        .slide--wrapup .col-content.layout-center {
+            justify-content: flex-start;
+            align-items: center;
+            text-align: left;
+        }
+        .slide--wrapup .highlight-box {
+            padding: 28px 32px;
+            margin: 18px 0 18px;
+        }
+        .slide--wrapup .card {
+            padding: 28px 32px;
+            margin-bottom: 18px;
+        }
+        .slide--wrapup ul li {
+            margin-bottom: 22px;
+        }
+        .slide--wrapup .wrapup-compare {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 14px;
+            margin-top: 14px;
+        }
+        .slide--wrapup .wrapup-next {
+            margin-top: 18px;
+            width: 92%;
+        }
+        .slide--wrapup .wrapup-next .next-caption {
+            font-size: 30px;
+            color: #8aa0c8;
+            margin-bottom: 10px;
+        }
+        .slide--wrapup .wrapup-next .next-title {
+            font-size: 52px;
+            font-weight: bold;
+            color: var(--secondary-color);
+            line-height: 1.15;
+        }
+        .slide--wrapup .wrapup-next .next-desc {
+            font-size: 30px;
+            color: #a7b6d9;
+            margin-top: 10px;
+            line-height: 1.35;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 40px;
+            margin-bottom: 30px;
+        }
+
+        .card-title {
+            font-size: 42px;
+            color: var(--accent-color);
+            margin-bottom: 20px;
+            display: block;
+            font-weight: bold;
+        }
+
+        .highlight-box {
+            background: var(--highlight-bg);
+            border-left: 8px solid var(--accent-color);
+            padding: 40px;
+            margin: 40px 0;
+            border-radius: 0 20px 20px 0;
+        }
+        
+        .formula {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 60px;
+            text-align: center;
+            margin: 40px 0;
+            color: #fff;
+            background: rgba(0,0,0,0.3);
+            padding: 30px;
+            border-radius: 20px;
+            border: 2px dashed var(--secondary-color);
+        }
+
+        /* 表格样式 */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 32px;
+            margin-top: 20px;
+        }
+
+        th, td {
+            padding: 20px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+        }
+
+        th {
+            color: var(--accent-color);
+            font-size: 36px;
+            border-bottom: 3px solid var(--accent-color);
+        }
+        
+        td:first-child {
+            font-weight: bold;
+            color: var(--secondary-color);
+        }
+
+        /* 图标大尺寸 */
+        .icon-large {
+            font-size: 120px;
+            color: var(--secondary-color);
+            margin-bottom: 30px;
+            display: block;
+        }
+
+        /* 页脚 */
+        .footer {
+            position: absolute;
+            bottom: 30px;
+            right: 40px;
+            font-size: 24px;
+            color: rgba(255, 255, 255, 0.4);
+            z-index: 2;
+        }
+
+        /* 代码块 */
+        .code-block {
+            font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+            background: var(--code-bg);
+            padding: 30px;
+            border-radius: 15px;
+            border: 1px solid #333;
+            font-size: 26px;
+            line-height: 1.6;
+            color: #a5b3ce;
+            white-space: pre;
+            overflow-x: auto;
+        }
+        
+        .code-keyword { color: #c678dd; }
+        .code-type { color: #e5c07b; }
+        .code-string { color: #98c379; }
+        .code-comment { color: #5c6370; font-style: italic; }
+        .code-number { color: #d19a66; }
+        .code-func { color: #61afef; }
+
+        /* 链表节点可视化 */
+        .list-visual {
+            display: flex;
+            align-items: center;
+            margin: 40px 0;
+            justify-content: center;
+        }
+        .node-group {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            margin-right: 10px;
+        }
+        .list-node {
+            display: flex;
+            border: 2px solid var(--accent-color);
+            border-radius: 8px;
+            overflow: hidden;
+            background: rgba(34, 211, 238, 0.1);
+        }
+        .node-data {
+            padding: 20px;
+            width: 80px;
+            height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            white-space: nowrap;
+            font-size: 36px;
+            font-weight: bold;
+            border-right: 2px solid var(--accent-color);
+            color: #fff;
+        }
+        .node-next {
+            padding: 20px;
+            width: 80px;
+            height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.1);
+            font-size: 16px;
+            color: #ccc;
+        }
+        .node-arrow {
+            font-size: 40px;
+            color: var(--secondary-color);
+            margin: 0 20px;
+        }
+        .node-addr {
+            font-size: 20px;
+            color: #888;
+            margin-top: 10px;
+            font-family: monospace;
+        }
+
+        /* 实用类 */
+        .text-huge { font-size: 60px; }
+        .text-center { text-align: center; }
+        .mb-0 { margin-bottom: 0; }
+        .mt-20 { margin-top: 40px; }
+        .color-accent { color: var(--accent-color); }
+        /* 课堂投影避免红色：用紫色表达“提醒/代价” */
+        .color-warn { color: #ef4444; }
+        .color-success { color: #10b981; }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <div class="bg-decoration"></div>
+    <div class="grid-overlay"></div>
+    
+    <!-- P01: 封面 -->
+    <section class="slide active layout-center" data-title="封面">
+        <div style="text-align: center;">
+            <i class="fas fa-share-alt icon-large" style="font-size: 220px; color: var(--accent-color); margin-bottom: 60px;"></i>
+            <h1>数据结构与算法</h1>
+            <p class="text-huge" style="color: var(--secondary-color); font-size: 80px;">链表：内存的散居游民</p>
+        </div>
+    </section>
+
+    <!-- P01.5: 内存藏宝图 -->
+    <section class="slide" data-title="内存藏宝图">
+        <h2>链表：内存里的藏宝图</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="card">
+                    <span class="card-title">数组的困境.</span>
+                    <p>数组要求大家“整齐排队”（连续内存），但如果内存里没有足够大的连续空地怎么办？</p>
+                </div>
+                <div class="highlight-box">
+                    <p class="mb-0"><strong>链表 (Linked List)</strong> 化身为一张藏宝图。</p>
+                    <p style="margin-top: 20px; font-size: 32px;">数据分散在各个角落，每个节点既有<strong>奖励 (Data)</strong>，又有指向下一站的<strong>线索 (Pointer)</strong>。</p>
+                </div>
+            </div>
+            <div class="col-content layout-center">
+                <img src="https://cdn.nlark.com/yuque/0/2025/png/87727/1765953450324-9e5f63d1-04b2-48c2-ba9f-2486902af250.png" 
+                     style="width:700px; border-radius: 20px; box-shadow: 0 0 30px rgba(34, 211, 238, 0.2); border: 2px solid rgba(34, 211, 238, 0.3);">
+                <p style="margin-top: 20px; color: #888; font-size: 28px;">顺着线索，串联所有数据</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- P02: 核心概念 -->
+    <section class="slide" data-title="什么是链表">
+        <h2>什么是链表 (Linked List)？</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="highlight-box">
+                    <p class="mb-0">链表是一组<strong>零散</strong>的内存块（节点），通过<strong>指针</strong>串联在一起的数据结构。</p>
+                </div>
+                <ul>
+                    <li><strong>节点 (Node)</strong>：既存数据，也存线索。</li>
+                    <li><strong>离散存储</strong>：无需连续内存，走到哪住到哪。</li>
+                    <li><strong>逻辑连续</strong>：通过指针“手拉手”形成链条。</li>
+                </ul>
+            </div>
+            <div class="col-content layout-center">
+                <div class="card" style="width: 100%; padding: 20px;">
+                    <span class="card-title" style="margin-bottom: 40px;">节点结构 (Node)</span>
+                    <div class="list-visual" style="margin: 60px 0;">
+                        <div class="list-node" style="transform: scale(1.6);">
+                            <div class="node-data" style="width: 100px;">Data</div>
+                            <div class="node-next" style="width: 200px; font-size: 20px;">Next Pointer</div>
+                        </div>
+                    </div>
+                    <p class="text-center" style="font-size: 32px; color: #888; margin-top: 50px; line-height: 1.8;">
+                        Data: 真正要存的值，
+                        Next: 下一站的地址
+                    </p>
+                </div>
+                <img src="https://cdn.nlark.com/yuque/0/2025/png/87727/1766142659329-dc2df637-44c0-4368-b890-6af6a51a9fb1.png?x-oss-process=image%2Fformat%2Cwebp" 
+                     style="width: 100%; border-radius: 20px; box-shadow: 0 0 30px rgba(34, 211, 238, 0.2); border: 2px solid rgba(34, 211, 238, 0.3);">
+                <p class="text-center" style="font-size: 32px; color: #888; margin-top: 30px;">
+                    节点在内存中是<strong>分散</strong>的，全靠<strong>引用(指针)</strong>维系
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- P03: 代码定义 -->
+    <section class="slide slide--code-def" data-title="代码定义">
+        <h2>代码实现：定义节点</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="code-block">
+<span class="code-keyword">typedef</span> <span class="code-keyword">struct</span> Node {
+    <span class="code-type">int</span> data;                <span class="code-comment">// 数据域</span>
+    <span class="code-keyword">struct</span> Node* next;       <span class="code-comment">// 指针域</span>
+} Node;
+
+<span class="code-comment">// 创建新节点</span>
+<span class="code-type">Node*</span> <span class="code-func">createNode</span>(<span class="code-type">int</span> value) {
+    Node* newNode = <span class="code-func">malloc</span>(<span class="code-keyword">sizeof</span>(Node));
+    newNode->data = value;
+    newNode->next = <span class="code-keyword">NULL</span>;
+    <span class="code-keyword">return</span> newNode;
+}</div>
+            </div>
+            <div class="col-content">
+                <div class="list-visual" style="flex-wrap: nowrap;">
+                    <!-- Node 1 -->
+                    <div class="node-group">
+                        <div class="list-node">
+                            <div class="node-data">10</div>
+                            <div class="node-next">0x2A</div>
+                        </div>
+                        <div class="node-addr">Addr: 0x10</div>
+                    </div>
+                    
+                    <i class="fas fa-long-arrow-alt-right node-arrow"></i>
+                    
+                    <!-- Node 2 -->
+                    <div class="node-group">
+                        <div class="list-node">
+                            <div class="node-data">20</div>
+                            <div class="node-next">0x5F</div>
+                        </div>
+                        <div class="node-addr">Addr: 0x2A</div>
+                    </div>
+
+                    <i class="fas fa-long-arrow-alt-right node-arrow"></i>
+
+                    <!-- Node 3 -->
+                    <div class="node-group">
+                        <div class="list-node">
+                            <div class="node-data">30</div>
+                            <div class="node-next">NULL</div>
+                        </div>
+                        <div class="node-addr">Addr: 0x5F</div>
+                    </div>
+                </div>
+                <div class="highlight-box" style="margin-top: 50px;">
+                    <p class="mb-0" style="font-size: 32px;">注意内存地址 0x10, 0x2A, 0x5F 是<strong>完全不连续</strong>的。</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P04-1: 链表插入图示 -->
+    <section class="slide" data-title="链表插入图示">
+        <h2>链表的高光时刻：插入 O(1)</h2>
+        <div class="layout-center">
+          <p>相比数组的“搬家式”插入，链表只需要“修改指针”即可完成。</p>
+            <!-- 容器水平居中：margin: 20px auto -->
+            <div style="position: relative; width: 1200px; height: 500px; margin: 20px auto;">
+                
+                <!-- Head -->
+                <div style="position: absolute; left: 60px; top: 0;">
+                    <span style="font-size: 28px; color: #888; display: block; text-align: center; margin-bottom: 10px;">Head</span>
+                    <i class="fas fa-arrow-down" style="font-size: 32px; color: var(--secondary-color); display: block; margin: 0 auto;"></i>
+                </div>
+
+                <!-- A -->
+                <div class="node-group" style="position: absolute; left: 60px; top: 80px;">
+                    <div class="list-node">
+                        <div class="node-data">A</div>
+                        <div class="node-next">Next</div>
+                    </div>
+                </div>
+
+                <i class="fas fa-long-arrow-alt-right" style="position: absolute; left: 230px; top: 102px; font-size: 40px; color: var(--secondary-color);"></i>
+
+                <!-- B -->
+                <div class="node-group" style="position: absolute; left: 290px; top: 80px;">
+                     <div style="position: absolute; top: -40px; width: 100%; text-align: center; color: #888; font-size: 24px; white-space: nowrap;">Given Node</div>
+                    <div class="list-node">
+                        <div class="node-data">B</div>
+                        <div class="node-next" style="background: #2d3748;"></div>
+                    </div>
+                </div>
+
+                <!-- Arrow B -> C (Crossed) -->
+                 <div style="position: absolute; left: 520px; top: 110px;">
+                    <i class="fas fa-long-arrow-alt-right" style="font-size: 40px; color: #666; opacity: 0.3;"></i>
+                    <i class="fas fa-times" style="position: absolute; left: 4px; top: -6px; font-size: 50px; color: #ef4444;"></i>
+                </div>
+
+                <!-- C -->
+                <div class="node-group" style="position: absolute; left: 640px; top: 80px;">
+                    <div class="list-node">
+                        <div class="node-data">C</div>
+                        <div class="node-next">Next</div>
+                    </div>
+                </div>
+
+                <i class="fas fa-long-arrow-alt-right" style="position: absolute; left: 810px; top: 102px; font-size: 40px; color: var(--secondary-color);"></i>
+
+                <!-- D -->
+                <div class="node-group" style="position: absolute; left: 870px; top: 80px;">
+                    <div class="list-node">
+                        <div class="node-data">D</div>
+                        <div class="node-next">Next</div>
+                    </div>
+                </div>
+
+                <!-- New Node E -->
+                <!-- 调整位置以配合曲线 -->
+                <div class="node-group" style="position: absolute; left: 470px; top: 280px;">
+                    <div class="list-node" style="border-color: var(--accent-color); box-shadow: 0 0 20px rgba(34, 211, 238, 0.15);">
+                        <div class="node-data" style="background: rgba(34, 211, 238, 0.15);">E</div>
+                        <div class="node-next">Next</div>
+                    </div>
+                    <div style="font-size: 28px; margin-top: 15px; text-align: center; color: var(--accent-color);">New Node</div>
+                </div>
+
+                <!-- Lines -->
+                <svg style="position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible;">
+                    <defs>
+                        <!-- 优化：更饱满的内凹箭头，视觉更扎实 -->
+                        <marker id="arrow-blue" markerUnits="userSpaceOnUse" markerWidth="20" markerHeight="20" refX="2" refY="6" orient="auto">
+                            <!-- 长12宽12，内凹2，显得更敦实有力 -->
+                            <path d="M0,0 L12,6 L0,12 L2,6 z" fill="#22D3EE" />
+                        </marker>
+                    </defs>
+                    
+                    <!-- B -> E -->
+                    <!-- B Next Center: 410, Y = 120 -->
+                    <!-- E 左移到 470, 目标尖端 469 (贴近 E 470) => path终点 459 -->
+                    <path d="M 410 140 Q 410 320 459 320" stroke="#22D3EE" stroke-width="4" fill="none" marker-end="url(#arrow-blue)" />
+
+                    <!-- E -> C -->
+                    <!-- E Next Center: 470+120=590, Y = 320 -->
+                    <!-- C 左移到 640, 目标尖端 639 (贴近 C 640) => path终点 629 -->
+                    <!-- Q x=590, y=120 保持用户喜欢的弧度 -->
+                    <path d="M 590 300 Q 590 120 629 120" stroke="#22D3EE" stroke-width="4" fill="none" marker-end="url(#arrow-blue)" />
+                </svg>
+
+            </div>
+            
+            <div class="highlight-box" style="margin-top: 20px; padding: 20px 40px;">
+                 <p class="mb-0" style="font-size: 32px;">
+                     关键两步：1. <strong style="color:var(--accent-color)">New</strong> 指向 <strong style="color:var(--accent-color)">C</strong> &nbsp;&nbsp;→&nbsp;&nbsp; 2. <strong style="color:var(--secondary-color)">B</strong> 指向 <strong style="color:var(--accent-color)">New</strong>
+                 </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- P04-2: 优势 - 增删原理 -->
+    <section class="slide" data-title="增删优势：原理">
+        <h2>链表插入：代码实现</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="card" style="border-color: var(--accent-color); margin-top: 30px;">
+                    <span class="card-title">在 A 和 B 之间插入 New</span>
+                    <ol style="font-size: 32px; line-height: 1.8; margin-left: 20px;">
+                        <li>让 New 指向 B (<code>New->next = A->next</code>)</li>
+                        <li>让 A 指向 New (<code>A->next = New</code>)</li>
+                    </ol>
+                    <div class="highlight-box" style="padding: 20px; margin-top: 30px;">
+                        <p class="mb-0" style="font-size: 28px;">无需移动任何其他节点！</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-content">
+                 <div class="code-block" style="font-size: 28px;">
+<span class="code-type">void</span> <span class="code-func">insert</span>(Node* A, Node* New) {
+    <span class="code-comment">// 1. 先连后方 (New -> B)</span>
+    New->next = A->next; 
+
+    <span class="code-comment">// 2. 再断前缘 (A -> New)</span>
+    A->next = New;       
+}</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P04-3: 链表删除图示 -->
+    <section class="slide" data-title="链表删除图示">
+        <h2>链表的高光时刻：删除 O(1)</h2>
+        <div class="layout-center">
+            <p>删除节点同样只需“修改指针”，让前驱直接指向后继。</p>
+            <div style="position: relative; width: 1200px; height: 400px; margin: 40px auto;">
+                
+                <!-- Current Node (A) -->
+                <div class="node-group" style="position: absolute; left: 100px; top: 120px;">
+                    <div style="position: absolute; top: -40px; width: 100%; text-align: center; color: #888; font-size: 24px;">Current</div>
+                    <div class="list-node">
+                        <div class="node-data">A</div>
+                        <div class="node-next">Next</div>
+                    </div>
+                </div>
+
+                <!-- Original Arrow A -> B -->
+                <div style="position: absolute; left: 310px; top: 142px; display: flex; align-items: center; justify-content: center;">
+                     <i class="fas fa-long-arrow-alt-right" style="font-size: 40px; color: #666; opacity: 0.3;"></i>
+                     <i class="fas fa-times" style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 50px; color: #ef4444;"></i>
+                </div>
+
+                <!-- Node to Delete (B) -->
+                <div class="node-group" style="position: absolute; left: 400px; top: 120px; opacity: 0.6;">
+                    <div style="position: absolute; top: -40px; width: 100%; text-align: center; color: #ef4444; font-size: 24px;">To Delete</div>
+                    <div class="list-node" style="border-color: #ef4444; border-style: dashed;">
+                        <div class="node-data" style="color: #ef4444;">B</div>
+                        <div class="node-next" style="color: #ef4444;">Next</div>
+                    </div>
+                </div>
+
+                <!-- Arrow B -> C -->
+                <i class="fas fa-long-arrow-alt-right" style="position: absolute; left: 610px; top: 142px; font-size: 40px; color: #666; opacity: 0.3;"></i>
+
+                <!-- Node C -->
+                <div class="node-group" style="position: absolute; left: 700px; top: 120px;">
+                    <div class="list-node">
+                        <div class="node-data">C</div>
+                        <div class="node-next">Next</div>
+                    </div>
+                </div>
+
+                <!-- SVG for New Link (A -> C) -->
+                <svg style="position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible;">
+                    <defs>
+                        <marker id="arrow-blue-del" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+                            <path d="M0,0 L0,6 L9,3 z" fill="#22D3EE" />
+                        </marker>
+                    </defs>
+                    
+                    <!-- Curve from A.Next to C.Data -->
+                    <!-- A.Next Center approx: 100 + 80 + 40 = 220, Y=160 -->
+                    <!-- C Left: 700, Y=160 -->
+                    <!-- Curve going over B -->
+                    <path d="M 220 160 Q 450 20 700 160" stroke="#22D3EE" stroke-width="4" fill="none" marker-end="url(#arrow-blue-del)" />
+                </svg>
+            </div>
+            
+            <div class="highlight-box" style="margin-top: 20px; padding: 20px 40px;">
+                 <p class="mb-0" style="font-size: 32px;">
+                     关键一步：<strong style="color:var(--secondary-color)">A</strong> 绕过 B，直接指向 <strong style="color:var(--accent-color)">C</strong>
+                 </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- P04-4: 删除代码 -->
+    <section class="slide" data-title="删除代码实现">
+        <h2>链表删除：代码实现</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="card" style="border-color: var(--accent-color);">
+                    <span class="card-title">删除 Current 的后继节点</span>
+                    <ol style="font-size: 30px; line-height: 1.8; margin-left: 20px;">
+                        <li><strong>定位</strong>：标记要删的节点 (<code>toDelete</code>)</li>
+                        <li><strong>旁路</strong>：让当前节点指向下下个节点</li>
+                        <li><strong>释放</strong>：归还内存 (<code>free</code>)</li>
+                    </ol>
+                    <div class="highlight-box" style="padding: 20px; margin-top: 30px;">
+                        <p class="mb-0" style="font-size: 28px;">无需搬移数据，效率 O(1)</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-content">
+                <div class="code-block" style="font-size: 24px;">
+<span class="code-type">void</span> <span class="code-func">deleteNextNode</span>(Node* currentNode) {
+    <span class="code-keyword">if</span> (currentNode->next != <span class="code-keyword">NULL</span>) {
+        <span class="code-comment">// 1. 找到要删除的节点</span>
+        Node* toDelete = currentNode->next;
+        
+        <span class="code-comment">// 2. 旁路：当前指向下下个</span>
+        currentNode->next = toDelete->next;
+
+        <span class="code-comment">// 3. 释放内存</span>
+        <span class="code-func">free</span>(toDelete);
+    }
+}</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P05: 劣势 - 查找 -->
+    <section class="slide slide--search-weak" data-title="查找劣势">
+        <h2>链表的软肋：读取 O(n)</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="card">
+                    <span class="card-title"><i class="fas fa-times-circle"></i> 没有下标访问</span>
+                    <p>内存不连续，无法通过公式计算地址。</p>
+                    <p>想找<strong style="color: #EAF2FF;">下标为 5</strong> 的节点？</p>
+                    <p style="color: #888;">必须从头节点开始，顺着 next 指针跳 5 次。</p>
+                </div>
+                <div class="code-block">
+<span class="code-type">Node*</span> <span class="code-func">get</span>(Node* head, <span class="code-type">int</span> k) {
+    <span class="code-type">int</span> i = <span class="code-number">0</span>;
+    <span class="code-keyword">while</span> (head && i < k) {
+        head = head->next;
+        i++;
+    }
+    <span class="code-keyword">return</span> head;
+}</div>
+            </div>
+            <div class="col-content layout-center">
+                <div style="display:flex; flex-direction:column; align-items:center; gap: 18px; width: 100%;">
+                    <div class="list-visual" style="flex-wrap: nowrap; width: 100%;">
+                        <div class="node-group" style="opacity: 0.55;">
+                            <div class="list-node"><div class="node-data">0</div></div>
+                            <div class="node-addr" style="text-align:center; width:100%;">head</div>
+                        </div>
+                        <i class="fas fa-arrow-right node-arrow" style="opacity: 0.55;"></i>
+
+                        <div class="node-group" style="opacity: 0.65;">
+                            <div class="list-node"><div class="node-data">1</div></div>
+                        </div>
+                        <i class="fas fa-arrow-right node-arrow" style="opacity: 0.65;"></i>
+
+                        <div class="node-group" style="opacity: 0.75;">
+                            <div class="list-node"><div class="node-data">2</div></div>
+                        </div>
+                        <i class="fas fa-arrow-right node-arrow" style="opacity: 0.75;"></i>
+
+                        <div class="node-group" style="opacity: 0.85;">
+                            <div class="list-node"><div class="node-data">3</div></div>
+                        </div>
+                        <i class="fas fa-arrow-right node-arrow" style="opacity: 0.85;"></i>
+
+                        <div class="node-group" style="opacity: 0.92;">
+                            <div class="list-node"><div class="node-data">4</div></div>
+                        </div>
+                        <i class="fas fa-arrow-right node-arrow" style="opacity: 0.92;"></i>
+
+                        <div class="node-group">
+                            <div class="list-node">
+                                <div class="node-data">5</div>
+                            </div>
+                            <div class="node-addr" style="text-align:center; width:100%; color:#22c55e;">目标</div>
+                        </div>
+                    </div>
+
+                    <div class="highlight-box" style="display:inline-block; padding: 18px 22px;">
+                        <p class="mb-0" style="font-size: 34px; color: #EAF2FF;">
+                            走法：从 <strong class="color-accent">head</strong> 出发，沿 <strong style="color: var(--secondary-color);">next</strong> 连跳 <strong>5</strong> 次
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P06-1: 常见变体 - 双向链表 -->
+    <section class="slide slide--doubly" data-title="变体：双向链表">
+        <h2>常见变体：双向链表</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="card" style="margin-top: 10px;">
+                    <span class="card-title">核心改动：多一个 Prev 指针</span>
+                    <p style="font-size: 34px;">每个节点有两个指针：<strong>Prev</strong> 指向前驱，<strong>Next</strong> 指向后继。</p>
+                    <ul style="font-size: 28px; line-height: 1.6;">
+                        <li style="font-size: 28px; line-height: 1.6;"><strong>能双向遍历</strong>：从任意节点向前/向后走。</li>
+                        <li style="font-size: 28px; line-height: 1.6;"><strong>删除更舒服</strong>：已知要删的节点时，不必先找“前驱”。</li>
+                    </ul>
+                    <div class="highlight-box" style="margin-top: 30px;">
+                        <p class="mb-0" style="font-size: 32px;">代价：每个节点多存一个指针，空间开销变大</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-content layout-center">
+                <div class="list-visual" style="flex-wrap: nowrap; transform: scale(1.15); transform-origin: center; margin: 10px 0 0;">
+                    <div class="node-group" style="align-items: center; margin-right: 0;">
+                        <div class="list-node">
+                            <div class="node-next" style="border-right: 2px solid var(--accent-color); font-size: 18px;">Prev</div>
+                            <div class="node-data">A</div>
+                            <div class="node-next" style="font-size: 18px;">Next</div>
+                        </div>
+                        <div class="node-addr" style="font-size: 22px; margin-top: 12px; text-align: center; width: 100%;">节点 A</div>
+                    </div>
+
+                    <i class="fas fa-exchange-alt node-arrow" aria-hidden="true"></i>
+
+                    <div class="node-group" style="align-items: center; margin-right: 0;">
+                        <div class="list-node" style="border-color: var(--secondary-color); box-shadow: 0 0 30px rgba(96, 165, 250, 0.25);">
+                            <div class="node-next" style="border-right: 2px solid var(--secondary-color); font-size: 18px;">Prev</div>
+                            <div class="node-data" style="border-right: 2px solid var(--secondary-color);">B</div>
+                            <div class="node-next" style="font-size: 18px;">Next</div>
+                        </div>
+                        <div class="node-addr" style="font-size: 22px; margin-top: 12px; text-align: center; width: 100%;">节点 B</div>
+                    </div>
+
+                    <i class="fas fa-exchange-alt node-arrow" aria-hidden="true"></i>
+
+                    <div class="node-group" style="align-items: center; margin-right: 0;">
+                        <div class="list-node">
+                            <div class="node-next" style="border-right: 2px solid var(--accent-color); font-size: 18px;">Prev</div>
+                            <div class="node-data">C</div>
+                            <div class="node-next" style="font-size: 18px;">Next</div>
+                        </div>
+                        <div class="node-addr" style="font-size: 22px; margin-top: 12px; text-align: center; width: 100%;">节点 C</div>
+                    </div>
+                </div>
+                <div class="highlight-box" style="margin-top: 60px; padding: 28px 30px;">
+                    <p class="mb-0" style="font-size: 34px; text-align: center;">
+                        口诀：<strong class="color-accent">多一根线</strong>，换来<strong>更灵活的操作</strong>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P06-2: 常见变体 - 循环链表 -->
+    <section class="slide" data-title="变体：循环链表">
+        <h2>常见变体：循环链表</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="card" style="margin-top: 20px;">
+                    <span class="card-title">核心改动：尾节点 Next 指回头节点</span>
+                    <p style="font-size: 34px;">把“<strong>NULL 结尾</strong>”改成“<strong>首尾相连</strong>”，形成一个环。</p>
+                    <ul>
+                        <li style="font-size: 28px; line-height: 1.6;"><strong>适合轮询/循环</strong>：Round-Robin 调度、约瑟夫问题。</li>
+                        <li style="font-size: 28px; line-height: 1.6;"><strong>结束条件变化</strong>：不能靠 NULL，要靠“回到起点”（或计数）。</li>
+                    </ul>
+                    <div class="highlight-box" style="margin-top: 30px;">
+                        <p class="mb-0" style="font-size: 32px;">关键提醒：遍历时要防止“死循环”</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-content layout-center">
+                <!-- 恢复为 DOM 结构布局，与双向链表页风格一致 -->
+                <div style="position: relative; width: 800px; height: 360px; transform: scale(0.8); transform-origin: center;">
+                    
+                    <!-- 1. 节点层 (DOM) - 使用绝对定位确保与 SVG 对齐 -->
+                    <!-- 节点尺寸：Data(80)+Next(80)=160px宽，84px高 -->
+                    
+                    <!-- Node A (Head) -->
+                    <div class="node-group" style="position: absolute; left: 60px; top: 120px; z-index: 2;">
+                        <div class="list-node">
+                            <div class="node-data">A</div>
+                            <div class="node-next" style="font-size: 18px;">Next</div>
+                        </div>
+                        <div class="node-addr" style="font-size: 22px; margin-top: 12px; text-align: center; width: 100%;">head</div>
+                    </div>
+
+                    <!-- Node B -->
+                    <div class="node-group" style="position: absolute; left: 400px; top: 120px; z-index: 2;">
+                        <div class="list-node">
+                            <div class="node-data">B</div>
+                            <div class="node-next" style="font-size: 18px;">Next</div>
+                        </div>
+                    </div>
+
+                    <!-- Node C (Tail) -->
+                    <div class="node-group" style="position: absolute; left: 740px; top: 120px; z-index: 2;">
+                        <div class="list-node">
+                            <div class="node-data">C</div>
+                            <div class="node-next" style="font-size: 18px;">Next</div>
+                        </div>
+                        <div class="node-addr" style="font-size: 22px; margin-top: 12px; text-align: center; width: 100%;">tail</div>
+                    </div>
+
+                    <!-- 1.5 连线 (图标) - 替代 SVG 直线，保持风格一致 -->
+                    <!-- A -> B: A结束220, B开始400, 中点310. Y中线162. -->
+                    <i class="fas fa-long-arrow-alt-right" 
+                       style="position: absolute; left: 250px; top: 132px; width: 120px; text-align: center; font-size: 60px; color: #60A5FA; z-index: 2;"></i>
+
+                    <!-- B -> C: B结束560, C开始740, 中点650. -->
+                    <i class="fas fa-long-arrow-alt-right" 
+                       style="position: absolute; left: 590px; top: 132px; width: 120px; text-align: center; font-size: 60px; color: #60A5FA; z-index: 2;"></i>
+
+                    <!-- 2. 连线层 (SVG) -->
+                    <svg style="position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; z-index: 1;">
+                        <defs>
+                            <!-- 模仿 fa-long-arrow-alt-right 的粗箭头风格，使用 userSpaceOnUse 确保尺寸固定 -->
+                            <marker id="arrow-blue-bold" markerUnits="userSpaceOnUse" markerWidth="40" markerHeight="40" refX="36" refY="20" orient="auto">
+                                <path d="M0,0 L0,40 L36,20 z" fill="#60A5FA"></path>
+                            </marker>
+                        </defs>
+                        
+                        <!-- C -> A (回环：从 C 的 Next 出来，绕到底部，回到 A 的 Data) -->
+                        <!-- 风格调整：线宽减细至 10px，配合合适的箭头尺寸 -->
+                        <path d="M 904 162 
+                                 C 960 162, 960 300, 900 300 
+                                 L 40 300 
+                                 C -40 300, -40 162, 10 162 
+                                 L 60 162"
+                              stroke="#60A5FA" stroke-width="10" fill="none" marker-end="url(#arrow-blue-bold)"
+                              stroke-linecap="round" stroke-linejoin="round" />
+
+                        <!-- 说明文字 -->
+                        <g transform="translate(500, 300)">
+                            <rect x="-180" y="-20" width="360" height="40" rx="20" fill="#0B1020" />
+                            <text x="0" y="8" text-anchor="middle" font-size="24" fill="#ef4444" font-weight="bold">尾节点 Next 指回 Head</text>
+                        </g>
+
+                    </svg>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P07: 总结对比 -->
+    <section class="slide" data-title="对比总结">
+        <h2>巅峰对决：数组 vs 链表</h2>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 20%;">特性</th>
+                    <th style="width: 40%;">数组 (Array)</th>
+                    <th style="width: 40%;">链表 (Linked List)</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>内存结构</td>
+                    <td><strong style="color: #fff;">连续</strong>，利用 CPU 缓存</td>
+                    <td><strong style="color: #fff;">离散</strong>，指针连接</td>
+                </tr>
+                <tr>
+                    <td>随机访问</td>
+                    <td class="color-success"><i class="fas fa-check"></i> O(1) 秒级定位</td>
+                    <td class="color-warn"><i class="fas fa-times"></i> O(n) 只能遍历</td>
+                </tr>
+                <tr>
+                    <td>插入/删除</td>
+                    <td class="color-warn"><i class="fas fa-times"></i> O(n) 需要搬移数据</td>
+                    <td class="color-success"><i class="fas fa-check"></i> O(1) 仅改指针</td>
+                </tr>
+                <tr>
+                    <td>空间效率</td>
+                    <td>固定大小 (或需扩容)</td>
+                    <td>动态申请 (但有指针开销)</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="highlight-box" style="margin-top: 60px;">
+            <p class="mb-0 text-center" style="font-size: 42px;">
+                选数组：为了<strong>查得快</strong> &nbsp;&nbsp;|&nbsp;&nbsp; 选链表：为了<strong>插得快</strong>
+            </p>
+        </div>
+    </section>
+
+    <!-- P08: 小结 -->
+    <section class="slide slide--wrapup" data-title="课堂小结">
+        <h2>课堂小结</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <h3><i class="fas fa-bullseye"></i> 一句话抓住链表</h3>
+                <div class="highlight-box">
+                    <p class="mb-0" style="font-size: 42px; line-height: 1.25;">
+                        链表<strong>巧妙牺牲随机访问</strong>，换取<strong>动态性</strong>与<strong>插入/删除的极致效率</strong>
+                    </p>
+                </div>
+
+                <div class="card" style="border-left: 8px solid var(--secondary-color);">
+                    <p class="mb-0" style="font-size: 36px; line-height: 1.35;">
+                        它与数组<strong>互补</strong>：数组追求<strong>“快读”</strong>，链表擅长<strong>“快插快删”</strong>
+                    </p>
+                </div>
+
+                <div class="card">
+                    <span class="card-title" style="font-size: 34px;"><i class="fas fa-lightbulb"></i> 记忆口诀</span>
+                    <ul style="font-size: 34px; line-height: 1.35;">
+                        <li><strong>指针连接</strong> → <strong>非连续灵活</strong>（优势）</li>
+                        <li><strong>顺序遍历</strong> → <strong>无随机访问</strong>（代价）</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="col-content layout-center">
+                <div class="card" style="width: 92%; border-color: rgba(34, 211, 238, 0.35);">
+                    <span class="card-title" style="font-size: 34px;"><i class="fas fa-scale-balanced"></i> 优势 vs 代价</span>
+                    <div class="wrapup-compare">
+                        <div class="card" style="margin: 0; border-left: 10px solid #22c55e;">
+                            <p class="mb-0" style="font-size: 36px; line-height: 1.35;">
+                                <span class="color-success"><i class="fas fa-check"></i> 优势</span>：知道位置后，插入/删除几乎<strong>只改指针</strong>
+                            </p>
+                        </div>
+                        <div class="card" style="margin: 0; border-left: 10px solid #ef4444;">
+                            <p class="mb-0" style="font-size: 36px; line-height: 1.35;">
+                                <span style="color: #ef4444;"><i class="fas fa-times"></i> 代价</span>：找位置要<strong>从头走</strong>，读取是 O(n)
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="wrapup-next" style="padding-top: 20px;">
+                    <p class="next-caption">Next</p>
+                    <div class="next-title">
+                        栈与队列 <i class="fas fa-layer-group"></i>
+                    </div>
+                    <p class="next-desc">
+                        受限的线性表：
+                        要么只能从头进，要么只能从尾出
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 页脚 -->
+    <div class="footer">
+        <span id="page-number">1 / 13</span>
+    </div>
+
+</div>
+
+<script>
+    // 幻灯片逻辑
+    const slides = document.querySelectorAll('.slide');
+    const pageNumberEl = document.getElementById('page-number');
+    const totalSlides = slides.length;
+
+    // 从 URL 获取页码 (page=1 对应 index 0)
+    function getPageFromUrl() {
+        const params = new URLSearchParams(window.location.search);
+        const page = parseInt(params.get('page'));
+        if (!isNaN(page) && page >= 1 && page <= totalSlides) {
+            return page - 1;
+        }
+        return 0;
+    }
+
+    let currentSlide = getPageFromUrl();
+
+    function updateSlide() {
+        slides.forEach((slide, index) => {
+            slide.classList.remove('active');
+            if (index === currentSlide) {
+                slide.classList.add('active');
+            }
+        });
+        pageNumberEl.textContent = `${currentSlide + 1} / ${totalSlides}`;
+        
+        // 更新 URL 参数
+        try {
+            const url = new URL(window.location.href);
+            url.searchParams.set('page', currentSlide + 1);
+            window.history.replaceState(null, '', url.href);
+        } catch (e) {
+            console.error('URL update failed:', e);
+        }
+
+        // 进入特定页时，初始化动画布局（基于真实 DOM 位置计算箭头落点）
+        initInsertAnimIfNeeded();
+    }
+
+    function nextSlide() {
+        if (currentSlide < totalSlides - 1) {
+            currentSlide++;
+            updateSlide();
+        }
+    }
+
+    function prevSlide() {
+        if (currentSlide > 0) {
+            currentSlide--;
+            updateSlide();
+        }
+    }
+
+    // 键盘控制
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'Enter') {
+            nextSlide();
+        } else if (e.key === 'ArrowLeft') {
+            prevSlide();
+        }
+    });
+
+    // 响应式缩放
+    function resizeApp() {
+        const app = document.getElementById('app');
+        const windowWidth = window.innerWidth;
+        const windowHeight = window.innerHeight;
+        const scaleX = windowWidth / 1920;
+        const scaleY = windowHeight / 1080;
+        const scale = Math.min(scaleX, scaleY);
+        
+        app.style.transform = `scale(${scale})`;
+
+        // 缩放/窗口变化后重算一次箭头落点
+        initInsertAnimIfNeeded(true);
+    }
+
+    window.addEventListener('resize', resizeApp);
+    
+    // 初始化
+    resizeApp(); 
+    updateSlide();
+
+    function getAppScale() {
+        const app = document.getElementById('app');
+        if (!app) return 1;
+        const r = app.getBoundingClientRect();
+        const scale = r.width / 1920;
+        return scale && isFinite(scale) && scale > 0 ? scale : 1;
+    }
+
+    function getLocalRect(containerEl, el) {
+        // 注意：#app 使用 transform: scale(...) 进行投影适配
+        // getBoundingClientRect() 拿到的是“缩放后的”像素坐标，必须除以 scale 回到 1920×1080 的设计坐标系
+        const scale = getAppScale();
+        const c = containerEl.getBoundingClientRect();
+        const r = el.getBoundingClientRect();
+        return {
+            x: (r.left - c.left) / scale,
+            y: (r.top - c.top) / scale,
+            w: r.width / scale,
+            h: r.height / scale,
+        };
+    }
+
+    function center(rect) {
+        return { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 };
+    }
+
+    function leftCenter(rect, pad = 0) {
+        return { x: rect.x + pad, y: rect.y + rect.h / 2 };
+    }
+
+    function rightCenter(rect, pad = 0) {
+        return { x: rect.x + rect.w - pad, y: rect.y + rect.h / 2 };
+    }
+
+    function setLine(pathEl, a, b) {
+        pathEl.setAttribute('d', `M ${a.x.toFixed(1)} ${a.y.toFixed(1)} L ${b.x.toFixed(1)} ${b.y.toFixed(1)}`);
+    }
+
+    function animateDraw(pathEl, delayMs) {
+        const len = pathEl.getTotalLength();
+        pathEl.style.opacity = '0';
+        pathEl.style.strokeDasharray = `${len} ${len}`;
+        pathEl.style.strokeDashoffset = `${len}`;
+        // force reflow
+        pathEl.getBoundingClientRect();
+        setTimeout(() => {
+            pathEl.style.opacity = '1';
+            pathEl.style.transition = 'stroke-dashoffset 900ms ease, opacity 200ms ease';
+            pathEl.style.strokeDashoffset = '0';
+        }, delayMs);
+    }
+
+    function fadeIn(el, delayMs) {
+        el.style.opacity = '0';
+        el.style.transition = 'none';
+        el.getBoundingClientRect();
+        setTimeout(() => {
+            el.style.transition = 'opacity 250ms ease';
+            el.style.opacity = '1';
+        }, delayMs);
+    }
+
+    let lastInsertAnimSlideIndex = null;
+    function initInsertAnimIfNeeded(isResize = false) {
+        const slide = slides[currentSlide];
+        if (!slide) return;
+        if (slide.dataset.title !== '增删优势：动画') return;
+
+        const stage = slide.querySelector('[data-insert-anim]');
+        if (!stage) return;
+
+        // 避免每次 updateSlide 都重复播放；resize 时只重算不重播
+        const shouldReplay = !isResize && lastInsertAnimSlideIndex !== currentSlide;
+        lastInsertAnimSlideIndex = currentSlide;
+
+        const nodeA = stage.querySelector('.node-a');
+        const nodeB = stage.querySelector('.node-b');
+        const nodeNew = stage.querySelector('.node-new');
+
+        const aNextEl = nodeA.querySelector('.node-next');
+        const bDataEl = nodeB.querySelector('.node-data');
+        const bNextEl = nodeB.querySelector('.node-next');
+        const newDataEl = nodeNew.querySelector('.node-data');
+        const newNextEl = nodeNew.querySelector('.node-next');
+
+        const aNext = center(getLocalRect(stage, aNextEl));
+        const bDataLeft = leftCenter(getLocalRect(stage, bDataEl), 2);  // 贴边一点点
+        const bNextCenter = center(getLocalRect(stage, bNextEl));
+        const newDataLeft = leftCenter(getLocalRect(stage, newDataEl), 2);
+        const newNext = center(getLocalRect(stage, newNextEl));
+
+        const pathBNext = stage.querySelector('#insert-path-bnext');
+        const pathStep1 = stage.querySelector('#insert-path-step1');
+        const pathStep2 = stage.querySelector('#insert-path-step2');
+
+        // B -> ... (向右延伸)
+        const farRight = { x: stage.clientWidth - 30, y: bNextCenter.y };
+        setLine(pathBNext, bNextCenter, farRight);
+
+        // 按你红线：New.next -> B.data(左边缘中点)，A.next -> New.data(左边缘中点)
+        setLine(pathStep1, newNext, bDataLeft);
+        setLine(pathStep2, aNext, newDataLeft);
+
+        // 重置（resize 时也要，避免线条被拉伸）
+        pathStep1.style.transition = 'none';
+        pathStep2.style.transition = 'none';
+        pathStep1.style.opacity = '0';
+        pathStep2.style.opacity = '0';
+        pathStep1.style.strokeDasharray = 'none';
+        pathStep2.style.strokeDasharray = 'none';
+        pathStep1.style.strokeDashoffset = '0';
+        pathStep2.style.strokeDashoffset = '0';
+
+        const step1Text = stage.querySelector('.insert-steps .step1');
+        const step2Text = stage.querySelector('.insert-steps .step2');
+        if (step1Text) step1Text.style.opacity = '0';
+        if (step2Text) step2Text.style.opacity = '0';
+
+        if (shouldReplay) {
+            animateDraw(pathStep1, 900);
+            animateDraw(pathStep2, 2400);
+            if (step1Text) fadeIn(step1Text, 900);
+            if (step2Text) fadeIn(step2Text, 2400);
+        } else if (isResize) {
+            // resize 下保持当前可见状态（如果之前已经画出来）
+            // 这里不额外处理，用户翻页回来会重播
+        }
+    }
+</script>
+
+</body>
+</html>
