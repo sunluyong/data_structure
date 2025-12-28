@@ -1,0 +1,1231 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>04 队列：先来后到的秩序守护者</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0B1020;
+            --text-color: #EAF2FF;
+            --accent-color: #22D3EE;
+            --secondary-color: #60A5FA;
+            --highlight-bg: rgba(34, 211, 238, 0.1);
+            --code-bg: #1a202c;
+            --slide-width: 1920px;
+            --slide-height: 1080px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            margin: 0;
+            background-color: #000;
+            color: var(--text-color);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        #app {
+            width: var(--slide-width);
+            height: var(--slide-height);
+            background-color: var(--bg-color);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+        }
+
+        /* 装饰背景元素 */
+        .bg-decoration {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            background-image: 
+                radial-gradient(circle at 10% 10%, rgba(96, 165, 250, 0.05) 0%, transparent 20%),
+                radial-gradient(circle at 90% 90%, rgba(34, 211, 238, 0.05) 0%, transparent 20%);
+            pointer-events: none;
+        }
+        
+        .grid-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-size: 50px 50px;
+            background-image: linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+                              linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+            z-index: 0;
+        }
+
+        /* 幻灯片容器 */
+        .slide {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+            padding: 80px 100px;
+            flex-direction: column;
+            z-index: 1;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+
+        .slide.active {
+            display: flex;
+            opacity: 1;
+        }
+
+        /* 通用排版 */
+        h1 {
+            font-size: 150px;
+            font-weight: 800;
+            line-height: 1.1;
+            margin-bottom: 40px;
+            background: linear-gradient(135deg, #fff 0%, var(--secondary-color) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        h2 {
+            font-size: 72px;
+            margin-bottom: 60px;
+            color: var(--accent-color);
+            border-bottom: 4px solid var(--accent-color);
+            padding-bottom: 20px;
+            display: inline-block;
+        }
+
+        h3 {
+            font-size: 48px;
+            margin-bottom: 30px;
+            color: var(--secondary-color);
+        }
+
+        p, li {
+            font-size: 38px;
+            line-height: 1.5;
+            margin-bottom: 25px;
+            color: #d1d5db;
+        }
+
+        strong {
+            color: var(--accent-color);
+            font-weight: 700;
+        }
+
+        ul, ol {
+            list-style: none;
+        }
+
+        ul li {
+            position: relative;
+            padding-left: 50px;
+            margin-bottom: 35px;
+        }
+
+        ul li::before {
+            content: "•";
+            color: var(--accent-color);
+            position: absolute;
+            left: 0;
+            font-size: 1.2em;
+        }
+
+        /* 布局辅助 */
+        .layout-center {
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        .layout-2col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 80px;
+            flex: 1;
+            min-height: 0;
+            align-content: center;
+        }
+
+        .col-content {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 40px;
+            margin-bottom: 30px;
+        }
+
+        .card-title {
+            font-size: 42px;
+            color: var(--accent-color);
+            margin-bottom: 20px;
+            display: block;
+            font-weight: bold;
+        }
+
+        .highlight-box {
+            background: var(--highlight-bg);
+            border-left: 8px solid var(--accent-color);
+            padding: 40px;
+            margin: 40px 0;
+            border-radius: 0 20px 20px 0;
+        }
+        
+        .formula {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 60px;
+            text-align: center;
+            margin: 40px 0;
+            color: #fff;
+            background: rgba(0,0,0,0.3);
+            padding: 30px;
+            border-radius: 20px;
+            border: 2px dashed var(--secondary-color);
+        }
+
+        /* 表格样式 */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 32px;
+            margin-top: 20px;
+        }
+
+        th, td {
+            padding: 20px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+        }
+
+        th {
+            color: var(--accent-color);
+            font-size: 36px;
+            border-bottom: 3px solid var(--accent-color);
+        }
+        
+        td:first-child {
+            font-weight: bold;
+            color: var(--secondary-color);
+        }
+
+        /* 图标大尺寸 */
+        .icon-large {
+            font-size: 120px;
+            color: var(--secondary-color);
+            margin-bottom: 30px;
+            display: block;
+        }
+
+        /* 页脚 */
+        .footer {
+            position: absolute;
+            bottom: 30px;
+            right: 40px;
+            font-size: 24px;
+            color: rgba(255, 255, 255, 0.4);
+            z-index: 2;
+        }
+
+        /* 代码块 */
+        .code-block {
+            font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+            background: var(--code-bg);
+            padding: 30px;
+            border-radius: 15px;
+            border: 1px solid #333;
+            font-size: 28px;
+            line-height: 1.6;
+            color: #a5b3ce;
+            white-space: pre;
+            overflow-x: auto;
+        }
+        
+        .code-keyword { color: #c678dd; }
+        .code-type { color: #e5c07b; }
+        .code-string { color: #98c379; }
+        .code-comment { color: #5c6370; font-style: italic; }
+        .code-number { color: #d19a66; }
+
+        /* 数组/队列可视化 */
+        .queue-visual {
+            display: flex;
+            align-items: center;
+            margin: 40px 0;
+            gap: 10px;
+        }
+        .queue-cell {
+            width: 100px;
+            height: 100px;
+            border: 3px solid var(--accent-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 40px;
+            font-weight: bold;
+            color: #fff;
+            position: relative;
+            background: rgba(34, 211, 238, 0.1);
+            border-radius: 10px;
+        }
+        .queue-label {
+            position: absolute;
+            bottom: -40px;
+            font-size: 24px;
+            color: #888;
+            white-space: nowrap;
+        }
+        .arrow-path {
+            color: var(--secondary-color);
+            font-size: 40px;
+            margin: 0 20px;
+        }
+
+        /* 实用类 */
+        .text-huge { font-size: 60px; }
+        .text-center { text-align: center; }
+        .mb-0 { margin-bottom: 0; }
+        .mt-20 { margin-top: 40px; }
+        .color-accent { color: var(--accent-color); }
+        .color-warn { color: #ef4444; }
+        .color-success { color: #10b981; }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <div class="bg-decoration"></div>
+    <div class="grid-overlay"></div>
+    
+    <!-- P01: 封面 -->
+    <section class="slide active layout-center" data-title="封面">
+        <div style="text-align: center;">
+            <i class="fas fa-people-line icon-large" style="font-size: 220px; color: var(--accent-color); margin-bottom: 60px;"></i>
+            <h1>数据结构与算法</h1>
+            <p class="text-huge" style="color: var(--secondary-color); font-size: 80px;">队列：先来后到的秩序守护者</p>
+        </div>
+    </section>
+
+    <!-- P02: 什么是队列 -->
+    <section class="slide" data-title="什么是队列">
+        <h2>什么是队列 (Queue)？</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="highlight-box">
+                    <p class="mb-0"><strong>先进先出 (FIFO, First In First Out)</strong><br>就像食堂打饭、地铁安检，<strong>禁止插队</strong>，先来的先服务。</p>
+                </div>
+                <ul>
+                    <li><strong>入队 (Enqueue)</strong>：新来的只能排在<strong>队尾 (Rear)</strong>。</li>
+                    <li><strong>出队 (Dequeue)</strong>：离开的永远是<strong>队头 (Front)</strong>。</li>
+                    <li><strong>双端操作</strong>：一端只进，另一端只出。</li>
+                </ul>
+            </div>
+            <div class="col-content layout-center">
+                <div style="position: relative; width: 100%; height: 300px; display: flex; align-items: center; justify-content: center;">
+                    <!-- 队列管道示意 -->
+                    <div style="border-top: 4px solid #666; border-bottom: 4px solid #666; height: 140px; width: 600px; position: absolute; display: flex; align-items: center; padding: 0 20px;">
+                        <div class="queue-cell" style="margin-right: 10px;">A</div>
+                        <div class="queue-cell" style="margin-right: 10px;">B</div>
+                        <div class="queue-cell" style="margin-right: 10px;">C</div>
+                        <div class="queue-cell" style="border-style: dashed; opacity: 0.5;">...</div>
+                    </div>
+                    
+                    <!-- 入队箭头 -->
+                    <div style="position: absolute; right: -50px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; align-items: center;">
+                        <span style="font-size: 30px; color: var(--success-color); margin-bottom: 10px;">Enqueue</span>
+                        <i class="fas fa-arrow-left" style="font-size: 60px; color: var(--accent-color);"></i>
+                    </div>
+
+                    <!-- 出队箭头 -->
+                    <div style="position: absolute; left: -50px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; align-items: center;">
+                        <span style="font-size: 30px; color: var(--warn-color); margin-bottom: 10px;">Dequeue</span>
+                        <i class="fas fa-arrow-left" style="font-size: 60px; color: #ef4444;"></i>
+                    </div>
+                    
+                    <div style="position: absolute; bottom: 0; width: 600px; display: flex; justify-content: space-between; font-size: 30px; color: #888;">
+                        <span>Front (队头)</span>
+                        <span>Rear (队尾)</span>
+                    </div>
+                </div>
+                <p class="text-center" style="margin-top: 60px; font-style: italic;">"维护秩序的公平守护者"</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- P03: 核心操作 -->
+    <section class="slide" data-title="队列的核心操作">
+        <h2>队列的核心操作</h2>
+        <p>定义“队列”本质上是在做<strong>减法</strong>：禁止随机访问、禁止插队，从而降低出错概率。</p>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th>操作 API</th>
+                    <th>时间复杂度</th>
+                    <th>说明</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>enqueue(x)</td>
+                    <td class="color-success"><strong>O(1)</strong></td>
+                    <td>将元素 x 加入队尾</td>
+                </tr>
+                <tr>
+                    <td>dequeue()</td>
+                    <td class="color-success"><strong>O(1)</strong></td>
+                    <td>移除并返回队头元素</td>
+                </tr>
+                <tr>
+                    <td>peek()</td>
+                    <td class="color-success"><strong>O(1)</strong></td>
+                    <td>查看队头元素 (不移除)</td>
+                </tr>
+                <tr>
+                    <td>isEmpty()</td>
+                    <td class="color-success"><strong>O(1)</strong></td>
+                    <td>判断队列是否为空</td>
+                </tr>
+                <tr>
+                    <td>size()</td>
+                    <td class="color-success"><strong>O(1)</strong></td>
+                    <td>获取队列当前元素个数</td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <!-- P04: 如何实现队列 -->
+    <section class="slide" data-title="如何实现队列？">
+        <h2>如何实现队列？</h2>
+        
+        <!-- 上半部分：两种方案对比 -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 60px; margin-bottom: 40px;">
+            <div class="card" style="margin-bottom: 0; display: flex; flex-direction: column; justify-content: center;">
+                <span class="card-title">1. 直觉：用链表实现？</span>
+                <p style="margin-bottom: 10px;">出队入队 O(1)，但<strong>缓存不友好</strong>。</p>
+                <p style="font-size: 28px; color: #888;">节点散落在内存各处，CPU 无法预取，性能不如数组。</p>
+                <div style="margin-top: 20px; display: flex; justify-content: center; gap: 15px;">
+                    <div class="queue-cell" style="width: 50px; height: 50px; border-radius: 50%; font-size: 16px;">0x1</div>
+                    <div class="queue-cell" style="width: 50px; height: 50px; border-radius: 50%; font-size: 16px;">0x9</div>
+                    <div class="queue-cell" style="width: 50px; height: 50px; border-radius: 50%; font-size: 16px;">0x4</div>
+                </div>
+            </div>
+
+            <div class="card" style="margin-bottom: 0;">
+                <span class="card-title">2. 现实：用数组实现？</span>
+                <p style="margin-bottom: 10px;">缓存友好，但<strong>出队是 O(n)</strong>。</p>
+                <div style="margin-top: 20px; background: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px;">
+                    <div style="display: flex; gap: 5px; justify-content: center; margin-bottom: 10px;">
+                         <div class="queue-cell" style="width: 50px; height: 50px; font-size: 20px; border-style: dashed; opacity: 0.5; color: #666;">del</div>
+                         <div class="queue-cell" style="width: 50px; height: 50px; font-size: 20px;">B</div>
+                         <div class="queue-cell" style="width: 50px; height: 50px; font-size: 20px;">C</div>
+                         <div class="queue-cell" style="width: 50px; height: 50px; font-size: 20px;">D</div>
+                    </div>
+                    <div style="text-align: center;">
+                         <p style="color: #ef4444; font-size: 20px; margin: 0;"><i class="fas fa-arrow-left"></i> 必须整体前移</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 下半部分：目标 -->
+        <div class="highlight-box" style="margin-top: 30px; padding: 20px 40px;">
+            <div style="display: flex; align-items: center; justify-content: center; gap: 60px;">
+                <p style="font-size: 48px; margin-bottom: 0; font-weight: bold; color: var(--text-color); white-space: nowrap;">
+                    我们的目标：
+                </p>
+                <div style="text-align: left;">
+                    <p style="font-size: 38px; margin-bottom: 10px;">✅ 像数组一样<strong>连续存储</strong> <span style="font-size: 28px; color: #888;">(Cache Friendly)</span></p>
+                    <p style="font-size: 38px; margin-bottom: 0;">✅ 像链表一样<strong>O(1) 出队</strong> <span style="font-size: 28px; color: #888;">(No Shifting)</span></p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P05: 什么是循环队列 (New) -->
+    <section class="slide" data-title="什么是循环队列">
+        <h2>什么是循环队列 (Circular Queue)？</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <p><strong>循环队列</strong>本质上是基于<strong>固定长度数组</strong>实现的。</p>
+                <p>通过<strong>取模运算</strong>，在逻辑上将数组的末尾与开头相连，形成一个环形结构，从而复用数组空间。</p>
+                
+                <div class="highlight-box" style="margin-top: 20px; padding: 30px;">
+                    <span class="card-title" style="font-size: 32px; margin-bottom: 15px;">核心变量状态</span>
+                    <ul style="font-size: 30px; margin-bottom: 0;">
+                        <li><strong>Front (头指针)</strong>：指向队列第一个有效元素的位置</li>
+                        <li><strong>Rear (尾指针)</strong>：指向下一个即将插入数据的空位</li>
+                        <li><strong>Capacity (容量)</strong>：数组的总长度</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="col-content layout-center">
+                <!-- 模仿原文的图：左边线性，右边环形 -->
+                <div style="display: flex; flex-direction: column; align-items: center; width: 100%;">
+                    
+                    <!-- 1. 线性视图 -->
+                    <div style="width: 100%; margin-bottom: 40px; position: relative;">
+                         <div style="text-align: left; color: #888; font-size: 24px; margin-bottom: 10px;">Physical View (物理存储)</div>
+                         <div style="display: flex; gap: 4px; justify-content: center;">
+                             <!-- 8个格子 -->
+                             <div class="queue-cell" style="width: 80px; height: 70px; font-size: 28px;">1</div>
+                             <div class="queue-cell" style="width: 80px; height: 70px; font-size: 28px;">2</div>
+                             <div class="queue-cell" style="width: 80px; height: 70px; font-size: 28px;">3</div>
+                             <div class="queue-cell" style="width: 80px; height: 70px; font-size: 28px;">4</div>
+                             <div class="queue-cell" style="width: 80px; height: 70px; font-size: 28px;">5</div>
+                             <div class="queue-cell" style="width: 80px; height: 70px; font-size: 28px; opacity: 0.3; border-style: dashed;"></div>
+                             <div class="queue-cell" style="width: 80px; height: 70px; font-size: 28px; opacity: 0.3; border-style: dashed;"></div>
+                             <div class="queue-cell" style="width: 80px; height: 70px; font-size: 28px; opacity: 0.3; border-style: dashed;"></div>
+                         </div>
+                    </div>
+
+                    <!-- 2. 环形视图 -->
+                    <div style="position: relative; width: 600px; height: 600px;">
+                        <div style="position: absolute; top: 0; left: 0; color: #888; font-size: 24px;">Logical View (逻辑结构)</div>
+                        
+                        <svg viewBox="-170 -170 340 340" style="width: 100%; height: 100%;">
+                            <!-- 外圈 -->
+                            <circle cx="0" cy="0" r="100" stroke="#444" stroke-width="2" fill="none" />
+                            <!-- 内圈 -->
+                            <circle cx="0" cy="0" r="50" stroke="#444" stroke-width="2" fill="none" />
+                            
+                            <!-- 分割线 (8份) -->
+                            <g stroke="#444" stroke-width="2">
+                                <line y1="-50" y2="-100" transform="rotate(22.5)" />
+                                <line y1="-50" y2="-100" transform="rotate(67.5)" />
+                                <line y1="-50" y2="-100" transform="rotate(112.5)" />
+                                <line y1="-50" y2="-100" transform="rotate(157.5)" />
+                                <line y1="-50" y2="-100" transform="rotate(202.5)" />
+                                <line y1="-50" y2="-100" transform="rotate(247.5)" />
+                                <line y1="-50" y2="-100" transform="rotate(292.5)" />
+                                <line y1="-50" y2="-100" transform="rotate(337.5)" />
+                            </g>
+                            
+                            <!-- 重新放置文字 -->
+                            <g font-size="28" font-weight="bold" fill="#fff" text-anchor="middle" dominant-baseline="middle">
+                                <!-- 1: -135deg -> x = 75*cos(-135) = -53, y = -53 -->
+                                <text x="-53" y="-53">1</text>
+                                <!-- 2: -90deg -> x=0, y=-75 -->
+                                <text x="0" y="-75">2</text>
+                                <!-- 3: -45deg -> x=53, y=-53 -->
+                                <text x="53" y="-53">3</text>
+                                <!-- 4: 0deg -> x=75, y=0 -->
+                                <text x="75" y="0">4</text>
+                                <!-- 5: 45deg -> x=53, y=53 -->
+                                <text x="53" y="53">5</text>
+                            </g>
+
+                            <!-- 手画 Front 指针 (指向 Index 1, -135度) -->
+                            <!-- 向量 (-1, -1) 方向 -->
+                            <g>
+                                <!-- 箭头杆 -->
+                                <line x1="-85" y1="-85" x2="-115" y2="-115" stroke="var(--secondary-color)" stroke-width="4" />
+                                <!-- 箭头头 (手动绘制三角形) -->
+                                <path d="M-85,-85 L-98,-82 L-82,-98 Z" fill="var(--secondary-color)" stroke="var(--secondary-color)" stroke-width="2" />
+                                <!-- 文字 -->
+                                <text x="-120" y="-120" text-anchor="end" fill="var(--secondary-color)" font-size="16">Front</text>
+                            </g>
+
+                            <!-- 手画 Rear 指针 (指向 Index 6, 90度, 正下方) -->
+                            <g>
+                                <!-- 箭头杆 -->
+                                <line x1="0" y1="110" x2="0" y2="145" stroke="var(--accent-color)" stroke-width="4" />
+                                <!-- 箭头头 (指向圆) -->
+                                <path d="M0,110 L-8,125 L8,125 Z" fill="var(--accent-color)" stroke="var(--accent-color)" stroke-width="2" />
+                                <!-- 文字 -->
+                                <text x="0" y="160" text-anchor="middle" fill="var(--accent-color)" font-size="16">Rear</text>
+                            </g>
+
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P06: 循环数组的核心原理 -->
+    <section class="slide" data-title="循环数组的核心原理">
+        <h2>使用循环数组实现队列</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                                
+                <div style="position: relative; width: 400px; height: 400px; margin: 0 auto;">
+                    <svg viewBox="-20 -20 140 140" style="width: 100%; height: 100%; scale: 1.3;">
+                        <defs>
+                            <marker id="arrow-cyan" markerWidth="6" markerHeight="4.2" refX="9" refY="3.5" orient="auto" viewBox="0 0 10 7">
+                                <polygon points="0 0, 10 3.5, 0 7" fill="var(--accent-color)" />
+                            </marker>
+                            <marker id="arrow-blue" markerWidth="6" markerHeight="4.2" refX="9" refY="3.5" orient="auto" viewBox="0 0 10 7">
+                                <polygon points="0 0, 10 3.5, 0 7" fill="var(--secondary-color)" />
+                            </marker>
+                        </defs>
+
+                        <!-- 环形轨道背景 -->
+                        <circle cx="50" cy="50" r="35" stroke="#333" stroke-width="10" fill="none" />
+                        
+                        <!-- 索引刻度线 (修正范围，旋转 22.5 度以错开文字) -->
+                        <g stroke="#111" stroke-width="1">
+                            <line x1="50" y1="10" x2="50" y2="20" transform="rotate(22.5, 50, 50)" />   <!-- Between 0-1 -->
+                            <line x1="50" y1="10" x2="50" y2="20" transform="rotate(67.5, 50, 50)" />  <!-- Between 1-2 -->
+                            <line x1="50" y1="10" x2="50" y2="20" transform="rotate(112.5, 50, 50)" /> <!-- Between 2-3 -->
+                            <line x1="50" y1="10" x2="50" y2="20" transform="rotate(157.5, 50, 50)" /> <!-- Between 3-4 -->
+                            <line x1="50" y1="10" x2="50" y2="20" transform="rotate(202.5, 50, 50)" /> <!-- Between 4-5 -->
+                            <line x1="50" y1="10" x2="50" y2="20" transform="rotate(247.5, 50, 50)" /> <!-- Between 5-6 -->
+                            <line x1="50" y1="10" x2="50" y2="20" transform="rotate(292.5, 50, 50)" /> <!-- Between 6-7 -->
+                            <line x1="50" y1="10" x2="50" y2="20" transform="rotate(337.5, 50, 50)" /> <!-- Between 7-0 -->
+                        </g>
+
+                        <!-- 索引数字 (修正分布，确保在格子内) -->
+                        <g font-size="5" fill="#666" text-anchor="middle" dominant-baseline="middle">
+                            <!-- 0: Top -->
+                            <text x="50" y="15" fill="#fff" font-weight="bold">0</text>
+                            <!-- 1: Top-Right -->
+                            <text x="75" y="25">1</text>
+                            <!-- 2: Right -->
+                            <text x="85" y="50">2</text>
+                            <!-- 3: Bottom-Right -->
+                            <text x="75" y="75">3</text>
+                            <!-- 4: Bottom -->
+                            <text x="50" y="85">4</text>
+                            <!-- 5: Bottom-Left -->
+                            <text x="25" y="75">5</text>
+                            <!-- 6: Left -->
+                            <text x="15" y="50">6</text>
+                            <!-- 7: Top-Left -->
+                            <text x="25" y="25">7</text>
+                        </g>
+
+                        <!-- Rear 指针 (在 7, 左上) -->
+                        <line x1="12" y1="12" x2="22" y2="22" stroke="var(--accent-color)" stroke-width="1.5" marker-end="url(#arrow-cyan)" />
+                        <text x="10" y="10" fill="var(--accent-color)" font-size="5" text-anchor="end">Rear(7)</text>
+
+                        <!-- New Rear 指针 (在 0, 正上) -->
+                        <line x1="50" y1="-10" x2="50" y2="8" stroke="var(--accent-color)" stroke-width="1.5" stroke-dasharray="1,1" opacity="0.7" marker-end="url(#arrow-cyan)" />
+                        <text x="50" y="-12" fill="var(--accent-color)" font-size="4" text-anchor="middle" opacity="0.7">New(0)</text>
+
+                        <!-- Front 指针 (在 2, 正右) -->
+                        <line x1="100" y1="50" x2="90" y2="50" stroke="var(--secondary-color)" stroke-width="1.5" marker-end="url(#arrow-blue)" />
+                        <text x="102" y="50" fill="var(--secondary-color)" font-size="5" text-anchor="start" dominant-baseline="middle">Front(2)</text>
+                        
+                        <!-- 中心说明 -->
+                        <text x="50" y="50" text-anchor="middle" fill="#fff" font-size="4">Capacity = 8</text>
+                        <text x="50" y="56" text-anchor="middle" fill="#888" font-size="3">Index 0~7</text>
+                    </svg>
+                </div>
+                <div class="highlight-box" style="margin-bottom: 0px;padding: 10px 20px 0;">
+                    <div class="formula" style="font-size: 36px; padding: 15px; margin: 15px 0;">
+                        Rear = (Rear + 1) % Cap
+                    </div>
+                    <div style="font-family: monospace; font-size: 26px; color: #888; background: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px;">
+                        <span style="line-height: 1.5;color: var(--accent-color)">Current Rear = 7</span><br>
+                        Capacity = 8<br>
+                        Next = (7 + 1) % 8 = <span style="color: #fff; font-weight: bold;">0</span>
+                    </div>
+                    <p style="font-size: 24px; color: var(--accent-color); margin-top: 10px; text-align: center;">
+                        <i class="fas fa-check-circle"></i> 成功回到开头！
+                    </p>
+                </div>
+            </div>
+            <div class="col-content">
+                <div style="background: #1e1e1e; padding: 15px; border-radius: 15px; margin-bottom: 25px; border-left: 5px solid var(--accent-color);">
+                    <p style="font-size: 28px; margin-bottom: 15px; color: #fff;"><strong>入队操作 (Enqueue)</strong></p>
+                    <div class="code-block" style="font-size: 24px; padding: 15px; background: #000;"><span class="code-keyword">if</span> (队满) {
+    触发扩容;
+} <span class="code-keyword">else</span> {
+    buffer[rear] = x;
+    <span style="color: var(--accent-color);">rear = (rear + 1) % capacity;</span>
+}</div>
+                </div>
+
+                <div style="background: #1e1e1e; padding: 15px; border-radius: 15px; border-left: 5px solid var(--secondary-color);">
+                    <p style="font-size: 28px; margin-bottom: 15px; color: #fff;"><strong># 出队操作 (Dequeue)</strong></p>
+                    <div class="code-block" style="font-size: 24px; padding: 15px; background: #000;"><span class="code-keyword">if</span> (队空) {
+    出队失败 (或返回空);
+} <span class="code-keyword">else</span> {
+    x = buffer[front];
+    <span style="color: var(--secondary-color);">front = (front + 1) % capacity;</span>
+    <span class="code-keyword">return</span> x;
+}</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P06: 解决空满歧义 -->
+    <section class="slide" data-title="解决空满歧义">
+        <h2>难点：空与满的歧义</h2>
+        <div class="layout-2col">
+            <!-- 左栏：展示问题现象 -->
+            <div class="col-content">
+                <div class="highlight-box" style="margin: 0; display: flex; flex-direction: column; justify-content: center; border: 1px solid rgba(255, 255, 255, 0.1); border-left: 8px solid #ef4444; padding: 40px;">
+                    <span class="card-title" style="color: #ef4444; margin-bottom: 30px;">❌ 问题：状态二义性</span>
+                    <p>当 <code>front == rear</code> 时，指针状态完全一致，但物理含义却截然相反：</p>
+                    
+                    <div style="display: flex; flex-direction: row; gap: 20px; margin-top: 20px; justify-content: center; width: 100%;">
+                        <!-- Case 1: Empty -->
+                        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; flex: 1;">
+                            <svg width="350" height="240" viewBox="-260 -120 520 240" style="overflow: visible;">
+                                <defs>
+                                    <marker id="arrow-blue-p7" markerWidth="8" markerHeight="8" refX="10" refY="6" orient="auto" viewBox="0 0 12 12">
+                                        <path d="M2,2 L10,6 L2,10 L2,2" fill="var(--secondary-color)" />
+                                    </marker>
+                                    <marker id="arrow-cyan-p7" markerWidth="8" markerHeight="8" refX="10" refY="6" orient="auto" viewBox="0 0 12 12">
+                                        <path d="M2,2 L10,6 L2,10 L2,2" fill="var(--accent-color)" />
+                                    </marker>
+                                </defs>
+                                <g transform="scale(1.5)">
+                                    <circle cx="0" cy="0" r="90" stroke="#444" stroke-width="2" fill="none" />
+                                    <circle cx="0" cy="0" r="50" stroke="#444" stroke-width="2" fill="none" />
+                                    <path d="M0,-50 L0,-90 M35,-35 L63,-63 M50,0 L90,0 M35,35 L63,63 M0,50 L0,90 M-35,35 L-63,63 M-50,0 L-90,0 M-35,-35 L-63,-63" stroke="#444" stroke-width="2" transform="rotate(22.5)" />
+                                </g>
+                                
+                                <!-- Pointers at 9 o'clock -->
+                                <!-- Front (Blue) -->
+                                <line x1="-180" y1="-15" x2="-120" y2="-15" stroke="var(--secondary-color)" stroke-width="3" marker-end="url(#arrow-blue-p7)" />
+                                <text x="-190" y="-15" fill="var(--secondary-color)" font-size="24" font-weight="bold" text-anchor="end" dominant-baseline="middle">front</text>
+                                
+                                <!-- Rear (Cyan) -->
+                                <line x1="-180" y1="18" x2="-120" y2="15" stroke="var(--accent-color)" stroke-width="3" marker-end="url(#arrow-cyan-p7)" />
+                                <text x="-190" y="18" fill="var(--accent-color)" font-size="24" font-weight="bold" text-anchor="end" dominant-baseline="middle">rear</text>
+                            </svg>
+                            <div style="text-align: center;">
+                                <p style="font-size: 32px; color: #aaa; margin-bottom: 5px;">空队列 (Empty)</p>
+                                <span class="code-keyword" style="font-size: 24px;">front == rear</span>
+                            </div>
+                        </div>
+
+                        <!-- Case 2: Full -->
+                        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; flex: 1;">
+                            <svg width="350" height="240" viewBox="-260 -120 520 240" style="overflow: visible;">
+                                <g transform="scale(1.5)">
+                                    <circle cx="0" cy="0" r="90" stroke="#444" stroke-width="2" fill="none" />
+                                    <circle cx="0" cy="0" r="50" stroke="#444" stroke-width="2" fill="none" />
+                                    <path d="M0,-50 L0,-90 M35,-35 L63,-63 M50,0 L90,0 M35,35 L63,63 M0,50 L0,90 M-35,35 L-63,63 M-50,0 L-90,0 M-35,-35 L-63,-63" stroke="#444" stroke-width="2" transform="rotate(22.5)" />
+                                    
+                                    <!-- Numbers -->
+                                    <g font-size="20" fill="#fff" text-anchor="middle" dominant-baseline="middle">
+                                        <text x="-70" y="0">1</text>
+                                        <text x="-49" y="-49">2</text>
+                                        <text x="0" y="-70">3</text>
+                                        <text x="49" y="-49">4</text>
+                                        <text x="70" y="0">5</text>
+                                        <text x="49" y="49">6</text>
+                                        <text x="0" y="70">7</text>
+                                        <text x="-49" y="49">8</text>
+                                    </g>
+                                </g>
+
+                                <!-- Pointers -->
+                                <!-- Front (Blue) -->
+                                <line x1="-180" y1="-15" x2="-120" y2="-15" stroke="var(--secondary-color)" stroke-width="3" marker-end="url(#arrow-blue-p7)" />
+                                <text x="-190" y="-15" fill="var(--secondary-color)" font-size="24" font-weight="bold" text-anchor="end" dominant-baseline="middle">front</text>
+                                
+                                <!-- Rear (Cyan) -->
+                                <line x1="-180" y1="18" x2="-120" y2="15" stroke="var(--accent-color)" stroke-width="3" marker-end="url(#arrow-cyan-p7)" />
+                                <text x="-190" y="18" fill="var(--accent-color)" font-size="24" font-weight="bold" text-anchor="end" dominant-baseline="middle">rear</text>
+                            </svg>
+                            <div style="text-align: center;">
+                                <p style="font-size: 32px; color: #ef4444; margin-bottom: 5px;">满队列 (Full)</p>
+                                <span class="code-keyword" style="font-size: 24px;">front == rear</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右栏：解决方案 -->
+            <div class="col-content">
+                <div class="card" style="border-color: var(--accent-color); margin-bottom: 0px; padding: 20px;">
+                    <span class="card-title">工程解法：留空法</span>
+                    <p style="font-size: 30px; margin-bottom: 0;">牺牲 1 个数组空间，rear 指向下一个入队地址 <br><strong>(rear + 1) % Cap == front</strong> 为满。</p>
+                </div>
+
+                <table style="font-size: 24px; margin-bottom: 0px;">
+                    <tr>
+                        <td style="padding: 10px;"><strong>判空条件</strong></td>
+                        <td style="padding: 10px;" class="code-keyword">front == rear</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 10px;"><strong>判满条件</strong></td>
+                        <td style="padding: 10px;" class="code-keyword">(rear + 1) % Cap == front</td>
+                    </tr>
+                </table>
+                
+                <div style="text-align: center; margin-top: 10px;">
+                    <svg width="450" height="360" viewBox="-250 -250 500 400">
+                        <defs>
+                            <marker id="arrow-blue-sm" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                                <polygon points="0 0, 10 3.5, 0 7" fill="var(--secondary-color)" />
+                            </marker>
+                            <marker id="arrow-cyan-sm" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                                <polygon points="0 0, 10 3.5, 0 7" fill="var(--accent-color)" />
+                            </marker>
+                        </defs>
+
+                        <!-- 环形背景 (放大半径) -->
+                        <circle cx="0" cy="0" r="130" stroke="#444" stroke-width="2" fill="none" />
+                        <circle cx="0" cy="0" r="80" stroke="#444" stroke-width="2" fill="none" />
+                        
+                        <!-- 分割线 (每 45 度一条，从半径 80 到 130) -->
+                        <g stroke="#444" stroke-width="2">
+                            <line x1="0" y1="-80" x2="0" y2="-130" transform="rotate(247.5)" />
+                            <line x1="0" y1="-80" x2="0" y2="-130" transform="rotate(292.5)" />
+                            <line x1="0" y1="-80" x2="0" y2="-130" transform="rotate(337.5)" />
+                            <line x1="0" y1="-80" x2="0" y2="-130" transform="rotate(22.5)" />
+                            <line x1="0" y1="-80" x2="0" y2="-130" transform="rotate(67.5)" />
+                            <line x1="0" y1="-80" x2="0" y2="-130" transform="rotate(112.5)" />
+                            <line x1="0" y1="-80" x2="0" y2="-130" transform="rotate(157.5)" />
+                            <line x1="0" y1="-80" x2="0" y2="-130" transform="rotate(202.5)" />
+                        </g>
+
+                        <!-- 数据内容 (半径居中位置约 105) -->
+                        <g font-size="28" font-weight="bold" fill="#fff" text-anchor="middle" dominant-baseline="middle">
+                            <!-- Front (F) at 315 deg: 105*0.707 = 74 -->
+                            <text x="74" y="-74">F</text>
+                            
+                            <!-- Rear (NULL) at 270 deg: y = -105 -->
+                            <text x="0" y="-105" fill="#666" font-size="24">空</text>
+                            
+                            <!-- B at 225 deg: -74, -74 -->
+                            <text x="-74" y="-74">B</text>
+                            
+                            <!-- A at 180 deg: -105, 0 -->
+                            <text x="-105" y="0">A</text>
+                            
+                            <!-- Dots -->
+                            <text x="-74" y="74" font-size="24" fill="#666">●</text>
+                            <text x="0" y="105" font-size="24" fill="#666">●</text>
+                            <text x="74" y="74" font-size="24" fill="#666">●</text>
+                            <text x="105" y="0" font-size="24" fill="#666">●</text>
+                        </g>
+
+                        <!-- Front Pointer -->
+                        <line x1="160" y1="-160" x2="110" y2="-110" stroke="var(--secondary-color)" stroke-width="4" marker-end="url(#arrow-blue-sm)" />
+                        <text x="170" y="-170" fill="var(--secondary-color)" font-size="32" font-weight="bold">Front</text>
+
+                        <!-- Rear Pointer -->
+                        <line x1="0" y1="-200" x2="0" y2="-150" stroke="var(--accent-color)" stroke-width="4" marker-end="url(#arrow-cyan-sm)" />
+                        <text x="0" y="-220" fill="var(--accent-color)" font-size="32" font-weight="bold" text-anchor="middle">Rear</text>
+                    </svg>
+                    <p style="font-size: 24px; color: #888; margin-top: 10px;">
+                        Rear 指向空位 (Reserved)，Rear 再走一步撞上 Front，即为满。
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P06: 代码实现-结构与入队 -->
+    <section class="slide" data-title="代码实现：结构与入队">
+        <h2>代码实现：循环队列 (C语言)</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="code-block" style="font-size: 24px;"><span class="code-keyword">#define</span> MAX_SIZE <span class="code-number">128</span>
+
+<span class="code-keyword">typedef</span> <span class="code-keyword">struct</span> {
+    <span class="code-type">int</span> data[MAX_SIZE];
+    <span class="code-type">int</span> front; <span class="code-comment">// 头下标</span>
+    <span class="code-type">int</span> rear;  <span class="code-comment">// 尾下标</span>
+} Queue;
+
+<span class="code-type">bool</span> enqueue(Queue *q, <span class="code-type">int</span> val) {
+    <span class="code-comment">// 1. 判满 (留空法)</span>
+    <span class="code-keyword">if</span> ((q->rear + <span class="code-number">1</span>) % MAX_SIZE == q->front) {
+        <span class="code-keyword">return</span> <span class="code-keyword">false</span>;
+    }
+    <span class="code-comment">// 2. 存数据</span>
+    q->data[q->rear] = val;
+    <span class="code-comment">// 3. 移动指针 (回绕)</span>
+    q->rear = (q->rear + <span class="code-number">1</span>) % MAX_SIZE;
+    <span class="code-keyword">return</span> <span class="code-keyword">true</span>;
+}</div>
+            </div>
+            <div class="col-content">
+                <div class="highlight-box">
+                    <span class="card-title">关键细节</span>
+                    <ul>
+                        <li>不需要 <code>size</code> 变量也能维护状态。</li>
+                        <li><strong>Rear</strong> 指向的是<strong>空位</strong>，所以先存数据，再移指针。</li>
+                        <li>容量上限固定，适合内存敏感或负载可预测的场景。</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P07: 代码实现-出队 -->
+    <section class="slide" data-title="代码实现：出队">
+        <h2>代码实现：出队 (Dequeue)</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="code-block" style="font-size: 24px;">
+<span class="code-type">bool</span> dequeue(Queue *q, <span class="code-type">int</span> *val) {
+    <span class="code-comment">// 1. 判空</span>
+    <span class="code-keyword">if</span> (q->front == q->rear) {
+        <span class="code-keyword">return</span> <span class="code-keyword">false</span>;
+    }
+    
+    <span class="code-comment">// 2. 取数据</span>
+    *val = q->data[q->front];
+    
+    <span class="code-comment">// 3. 移动头指针 (回绕)</span>
+    q->front = (q->front + <span class="code-number">1</span>) % MAX_SIZE;
+    <span class="code-keyword">return</span> <span class="code-keyword">true</span>;
+}</div>
+            </div>
+            <div class="col-content layout-center">
+                <div class="card" style="width: 100%;">
+                    <span class="card-title"><i class="fas fa-magic"></i> O(1) 的秘密</span>
+                    <p>不需要搬移任何数据元素，仅仅是改变了 <code>front</code> 指针的指向。</p>
+                    <p>逻辑上删除了，物理上数据还在（只是被视为无效）。</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P08: 链表实现 -->
+    <section class="slide" data-title="链表实现队列">
+        <h2>另一种选择：链表实现队列</h2>
+        <p>如果无法预估数据量，或者需要频繁扩容，<strong>链表 (Linked List)</strong> 是更好的选择。</p>
+        
+        <div class="layout-2col mt-20">
+            <div class="col-content">
+                <ul style="font-size: 32px;">
+                    <li><strong>无限容量</strong>：仅受内存限制，无 <code>isFull</code>。</li>
+                    <li><strong>头尾指针</strong>：
+                        <ul>
+                            <li><code>front</code> 指向链表头节点 (出队)。</li>
+                            <li><code>rear</code> 指向链表尾节点 (入队)。</li>
+                        </ul>
+                    </li>
+                </ul>
+                <div class="code-block" style="font-size: 22px; margin-top: 20px;"><span class="code-keyword">typedef</span> <span class="code-keyword">struct</span> {
+    Node *front; <span class="code-comment">// 出队口</span>
+    Node *rear;  <span class="code-comment">// 入队口</span>
+} LinkedQueue;</div>
+            </div>
+            <div class="col-content layout-center">
+                <!-- 链表队列图示 -->
+                <div style="display: flex; align-items: center; gap: 20px;">
+                    <div style="display: flex; flex-direction: column; align-items: center;">
+                        <span style="color: var(--accent-color); font-weight: bold; margin-bottom: 10px;">Front</span>
+                        <i class="fas fa-arrow-down" style="color: var(--accent-color);"></i>
+                        <div class="queue-cell" style="width: 80px; height: 80px; border-radius: 50%;">A</div>
+                    </div>
+                    <i class="fas fa-arrow-right color-secondary"></i>
+                    <div class="queue-cell" style="width: 80px; height: 80px; border-radius: 50%;">B</div>
+                    <i class="fas fa-arrow-right color-secondary"></i>
+                    <div style="display: flex; flex-direction: column; align-items: center;">
+                        <span style="color: var(--secondary-color); font-weight: bold; margin-bottom: 10px;">Rear</span>
+                        <i class="fas fa-arrow-down" style="color: var(--secondary-color);"></i>
+                        <div class="queue-cell" style="width: 80px; height: 80px; border-radius: 50%;">C</div>
+                    </div>
+                    <i class="fas fa-arrow-right" style="color: #666; margin-left: 10px;"></i>
+                    <div class="queue-cell" style="width: 80px; height: 80px; border-radius: 50%; border-style: dashed; opacity: 0.5;">New</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P09: 代码实现：链表版本 -->
+    <section class="slide" data-title="代码实现：链表版本">
+        <h2 style="margin-bottom: 20px;">代码实现：链表版本</h2>
+        
+        <!-- 代码区域：改用 flex 布局，自然高度，避免强制拉伸截断 -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 20px;">
+            <div class="code-block" style="font-size: 22px; padding: 25px; line-height: 1.4;"><span class="code-keyword">void</span> enqueue(LinkedQueue *q, <span class="code-type">int</span> val) {
+    Node *n = malloc(<span class="code-keyword">sizeof</span>(Node));
+    n->data = val; n->next = NULL;
+
+    <span class="code-comment">// 特判空队列</span>
+    <span class="code-keyword">if</span> (q->rear == NULL) {
+        q->front = q->rear = n;
+    } <span class="code-keyword">else</span> {
+        q->rear->next = n;
+        q->rear = n;
+    }
+}</div>
+            <div class="code-block" style="font-size: 22px; padding: 25px; line-height: 1.4;"><span class="code-keyword">bool</span> dequeue(LinkedQueue *q, <span class="code-type">int</span> *val) {
+    <span class="code-keyword">if</span> (!q->front) <span class="code-keyword">return false</span>;
+
+    Node *t = q->front;
+    *val = t->data;
+    q->front = q->front->next;
+
+    <span class="code-comment">// 特判队空，重置rear</span>
+    <span class="code-keyword">if</span> (!q->front) q->rear = NULL;
+    
+    free(t);
+    <span class="code-keyword">return true</span>;
+}</div>
+        </div>
+        
+        <!-- 底部对比框 -->
+        <div class="highlight-box" style="margin-top: 30px; padding: 25px 40px; width: 100%;">
+            <div style="display: grid; grid-template-columns: 160px 1fr 1fr; gap: 40px; align-items: center;">
+                <div style="font-size: 34px; font-weight: 800; color: #fff; text-align: center; line-height: 1.2;">
+                    <i class="fas fa-balance-scale" style="font-size: 60px; margin-bottom: 15px; display: block; color: var(--accent-color);"></i>
+                </div>
+                
+                <!-- 数组列 -->
+                <div style="border-right: 1px solid rgba(255,255,255,0.1); padding-right: 20px;">
+                    <p style="font-size: 30px; font-weight: bold; margin-bottom: 20px; color: var(--accent-color); border-bottom: 3px solid var(--accent-color); display: inline-block;">数组实现 (Array)</p>
+                    <ul style="margin-bottom: 0; line-height: 1.5; color: #d1d5db;">
+                        <li style="margin-bottom: 12px; padding-left: 20px; font-size: 30px;"><strong>入队</strong>：需判满 + 取模 <code>(i+1)%N</code>，<br><span style="color: #ef4444;">可能触发扩容 Copy 全量数据</span>。</li>
+                        <li style="margin-bottom: 0; padding-left: 20px; font-size: 30px;"><strong>出队</strong>：仅移动下标，内存不立即回收。</li>
+                    </ul>
+                </div>
+
+                <!-- 链表列 -->
+                <div style="min-width: 0;">
+                    <p style="font-size: 30px; font-weight: bold; margin-bottom: 20px; color: var(--secondary-color); border-bottom: 3px solid var(--secondary-color); display: inline-block;">链表实现 (Linked List)</p>
+                    <ul style="margin-bottom: 0; line-height: 1.5; color: #d1d5db;">
+                        <li style="margin-bottom: 12px; padding-left: 20px; font-size: 30px;"><strong>入队</strong>：队列为空 front 和 rear 指向新节点，否则只更新 rear。</li>
+                        <li style="margin-bottom: 0; padding-left: 20px; font-size: 30px;"><strong>出队</strong>：当队列中只剩一个元素时，手动将 rear 也设为 NULL</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P10: 链表优势场景 -->
+    <section class="slide" data-title="链表实现的优势">
+        <h2 style="margin-bottom: 30px;">什么时候用链表实现队列？</h2>
+        <p style="font-size: 32px; margin-bottom: 30px; line-height: 1.3;">
+            尽管基于循环数组的队列在追求极致吞吐量和缓存亲和性的场景下表现优异，但在并发编程、操作系统内核以及容量波动较大的复杂场景中，链表实现的队列依然拥有不可替代的地位。
+        </p>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 40px; flex: 1; min-height: 0;">
+            <div class="card" style="margin-bottom: 0; padding: 30px; display: flex; flex-direction: column; justify-content: center;">
+                <span class="card-title" style="font-size: 36px;">1. 消除扩容抖动</span>
+                <p style="margin-bottom: 0;">数组扩容会有瞬间的性能尖峰 (Stop-the-World)。链表入队永远是稳定的 <strong>O(1)</strong>，适合<strong>实时系统</strong>。</p>
+            </div>
+            <div class="card" style="margin-bottom: 0; padding: 30px; display: flex; flex-direction: column; justify-content: center;">
+                <span class="card-title" style="font-size: 36px;">2. 并发锁粒度更小</span>
+                <p style="margin-bottom: 0;">数组队列通常需要锁住整个结构。链表队列天然<strong>头尾分离</strong>，入队和出队互不干扰，可实现细粒度锁或无锁队列 (Lock-free)。</p>
+            </div>
+            <div class="card" style="margin-bottom: 0; padding: 30px; display: flex; flex-direction: column; justify-content: center;">
+                <span class="card-title" style="font-size: 36px;">3. 避免内存浪费</span>
+                <p style="margin-bottom: 0;">不需要像数组那样预分配一大块连续内存，对<strong>内存碎片</strong>容忍度高。</p>
+            </div>
+
+            <div class="card" style="margin-bottom: 0; padding: 30px; display: flex; flex-direction: column; justify-content: center;">
+                <span class="card-title" style="font-size: 36px;">4. 大对象传递</span>
+                <p style="margin-bottom: 0;">如果队列存的是很重的对象 (如 PCB)，链表传递指针比数组拷贝整个数据块要快得多。</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- P10: 典型应用 -->
+    <section class="slide" data-title="典型应用场景">
+        <h2>队列无处不在</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="highlight-box">
+                    <span class="card-title"><i class="fas fa-network-wired"></i> 广度优先搜索 (BFS)</span>
+                    <p>层序遍历的基础。比如地图导航找最近路线、社交网络找三度好友。</p>
+                </div>
+                <div class="highlight-box" style="border-color: var(--secondary-color); background: rgba(96, 165, 250, 0.1);">
+                    <span class="card-title" style="color: var(--secondary-color);"><i class="fas fa-microchip"></i> 操作系统调度</span>
+                    <p>CPU 就绪队列。所有进程排队等待 CPU 时间片 (Time Slice)。</p>
+                </div>
+            </div>
+            <div class="col-content">
+                <div class="highlight-box" style="border-color: #10b981; background: rgba(16, 185, 129, 0.1);">
+                    <span class="card-title" style="color: #10b981;"><i class="fas fa-envelope"></i> 消息队列 (MQ)</span>
+                    <p>Kafka / RabbitMQ。用于<strong>削峰填谷</strong>和<strong>系统解耦</strong>。生产者发消息入队，消费者按能力出队处理。</p>
+                </div>
+                <div style="text-align: center; margin-top: 40px;">
+                    <i class="fas fa-buffer" style="font-size: 100px; color: #666;"></i>
+                    <p style="margin-top: 20px; color: #888;">Buffer (缓冲区)</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P12: 课后思考 -->
+    <section class="slide" data-title="课后思考：队列的进化">
+        <h2>🤔 课后思考：队列的进化</h2>
+        <p>普通的 FIFO 队列有时候太“死板”了，现实中常有变种需求：</p>
+        
+        <div class="layout-2col">
+            <div class="card" style="border-left: 8px solid var(--accent-color);">
+                <span class="card-title">1. 如果两头都能进出？</span>
+                <p style="color: var(--accent-color); font-weight: bold; font-size: 36px;">👉 双端队列 (Deque)</p>
+                <ul style="font-size: 28px; margin-top: 20px;">
+                    <li><strong>Double-ended Queue</strong></li>
+                    <li>结合了栈和队列的特性，头部和尾部都支持入队/出队。</li>
+                    <li><i class="fas fa-lightbulb" style="color: #e5c07b;"></i> 算法刷题：滑动窗口最大值。</li>
+                </ul>
+            </div>
+
+            <div class="card" style="border-left: 8px solid var(--accent-color);">
+                <span class="card-title">2. 如果我想插队 (VIP)？</span>
+                <p style="color: var(--accent-color); font-weight: bold; font-size: 36px;">👉 优先队列 (Priority Queue)</p>
+                <ul style="font-size: 28px; margin-top: 20px;">
+                    <li><strong>不再按“先来后到”，而是按“优先级”</strong>。</li>
+                    <li>底层通常用 <strong>堆 (Heap)</strong> 实现，而非简单的数组/链表。</li>
+                    <li><i class="fas fa-lightbulb" style="color: #e5c07b;"></i> 算法刷题：最短路径 (Dijkstra)。</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <!-- P13: 总结 -->
+    <section class="slide" data-title="总结：栈 vs 队列">
+        <h2>栈 (Stack) vs 队列 (Queue)</h2>
+        <div style="flex: 1; display: flex; align-items: center;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>特性</th>
+                        <th>栈 (Stack)</th>
+                        <th>队列 (Queue)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>逻辑结构</td>
+                        <td class="color-warn">LIFO (后进先出)</td>
+                        <td class="color-success">FIFO (先进先出)</td>
+                    </tr>
+                    <tr>
+                        <td>入口</td>
+                        <td>栈顶 (Top)</td>
+                        <td>队尾 (Rear)</td>
+                    </tr>
+                    <tr>
+                        <td>出口</td>
+                        <td>栈顶 (Top)</td>
+                        <td>队头 (Front)</td>
+                    </tr>
+                    <tr>
+                        <td>核心思想</td>
+                        <td>回溯、撤销、深度优先</td>
+                        <td>缓冲、公平、广度优先</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- P14: 下一章预告 -->
+    <section class="slide layout-center" data-title="下一章预告">
+        <div class="layout-center">
+            <p style="font-size: 42px; color: #888; margin-bottom: 30px;">Next Topic</p>
+            <div style="font-size: 100px; font-weight: bold; color: var(--secondary-color); margin-bottom: 40px;">
+                哈希表 (Hash Table) <i class="fas fa-hashtag"></i>
+            </div>
+            <p style="font-size: 48px; color: var(--text-color);">突破线性的束缚，实现 <strong>O(1)</strong> 的查找魔法</p>
+        </div>
+    </section>
+
+    <!-- 页脚 -->
+    <div class="footer">
+        <span id="page-number">1 / 14</span>
+    </div>
+
+</div>
+
+<script>
+    // 幻灯片逻辑
+    const slides = document.querySelectorAll('.slide');
+    const pageNumberEl = document.getElementById('page-number');
+    const totalSlides = slides.length;
+
+    // 从 URL 获取页码 (page=1 对应 index 0)
+    function getPageFromUrl() {
+        const params = new URLSearchParams(window.location.search);
+        const page = parseInt(params.get('page'));
+        if (!isNaN(page) && page >= 1 && page <= totalSlides) {
+            return page - 1;
+        }
+        return 0;
+    }
+
+    let currentSlide = getPageFromUrl();
+
+    function updateSlide() {
+        slides.forEach((slide, index) => {
+            slide.classList.remove('active');
+            if (index === currentSlide) {
+                slide.classList.add('active');
+            }
+        });
+        pageNumberEl.textContent = `${currentSlide + 1} / ${totalSlides}`;
+        
+        // 更新 URL 参数
+        try {
+            const url = new URL(window.location.href);
+            url.searchParams.set('page', currentSlide + 1);
+            window.history.replaceState(null, '', url.href);
+        } catch (e) {
+            console.error('URL update failed:', e);
+        }
+    }
+
+    function nextSlide() {
+        if (currentSlide < totalSlides - 1) {
+            currentSlide++;
+            updateSlide();
+        }
+    }
+
+    function prevSlide() {
+        if (currentSlide > 0) {
+            currentSlide--;
+            updateSlide();
+        }
+    }
+
+    // 键盘控制
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'Enter') {
+            nextSlide();
+        } else if (e.key === 'ArrowLeft') {
+            prevSlide();
+        }
+    });
+
+    // 响应式缩放
+    function resizeApp() {
+        const app = document.getElementById('app');
+        const windowWidth = window.innerWidth;
+        const windowHeight = window.innerHeight;
+        const scaleX = windowWidth / 1920;
+        const scaleY = windowHeight / 1080;
+        const scale = Math.min(scaleX, scaleY);
+        
+        app.style.transform = `scale(${scale})`;
+    }
+
+    window.addEventListener('resize', resizeApp);
+    
+    // 初始化
+    resizeApp(); 
+    updateSlide();
+</script>
+
+</body>
+</html>

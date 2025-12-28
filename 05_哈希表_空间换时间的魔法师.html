@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>05 哈希表：空间换时间的魔法师</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0B1020;
+            --text-color: #EAF2FF;
+            --accent-color: #22D3EE; /* 青色 */
+            --secondary-color: #A78BFA; /* 紫色 */
+            --highlight-bg: rgba(34, 211, 238, 0.1);
+            --code-bg: #1a202c;
+            --slide-width: 1920px;
+            --slide-height: 1080px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            margin: 0;
+            background-color: #000;
+            color: var(--text-color);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        #app {
+            width: var(--slide-width);
+            height: var(--slide-height);
+            background-color: var(--bg-color);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+        }
+
+        /* 装饰背景元素 */
+        .bg-decoration {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            background-image: 
+                radial-gradient(circle at 10% 10%, rgba(167, 139, 250, 0.05) 0%, transparent 20%),
+                radial-gradient(circle at 90% 90%, rgba(34, 211, 238, 0.05) 0%, transparent 20%);
+            pointer-events: none;
+        }
+        
+        .grid-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-size: 50px 50px;
+            background-image: linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+                              linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+            z-index: 0;
+        }
+
+        /* 幻灯片容器 */
+        .slide {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+            padding: 80px 100px;
+            flex-direction: column;
+            z-index: 1;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+
+        .slide.active {
+            display: flex;
+            opacity: 1;
+        }
+
+        /* 通用排版 */
+        h1 {
+            font-size: 150px;
+            font-weight: 800;
+            line-height: 1.1;
+            margin-bottom: 40px;
+            background: linear-gradient(135deg, #fff 0%, var(--secondary-color) 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        h2 {
+            font-size: 72px;
+            margin-bottom: 60px;
+            color: var(--accent-color);
+            border-bottom: 4px solid var(--accent-color);
+            padding-bottom: 20px;
+            display: inline-block;
+        }
+
+        h3 {
+            font-size: 48px;
+            margin-bottom: 30px;
+            color: var(--secondary-color);
+        }
+
+        p, li {
+            font-size: 38px;
+            line-height: 1.5;
+            margin-bottom: 25px;
+            color: #d1d5db;
+        }
+
+        strong {
+            color: var(--accent-color);
+            font-weight: 700;
+        }
+
+        ul, ol {
+            list-style: none;
+        }
+
+        ul li {
+            position: relative;
+            padding-left: 50px;
+            margin-bottom: 35px;
+        }
+
+        ul li::before {
+            content: "•";
+            color: var(--accent-color);
+            position: absolute;
+            left: 0;
+            font-size: 1.2em;
+        }
+
+        /* 布局辅助 */
+        .layout-center {
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        .layout-2col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 80px;
+            height: 100%;
+            align-content: center;
+        }
+
+        .col-content {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 40px;
+            margin-bottom: 30px;
+        }
+
+        .card-title {
+            font-size: 42px;
+            color: var(--accent-color);
+            margin-bottom: 20px;
+            display: block;
+            font-weight: bold;
+        }
+
+        .highlight-box {
+            background: var(--highlight-bg);
+            border-left: 8px solid var(--accent-color);
+            padding: 40px;
+            margin: 40px 0;
+            border-radius: 0 20px 20px 0;
+        }
+        
+        .formula {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 60px;
+            text-align: center;
+            margin: 40px 0;
+            color: #fff;
+            background: rgba(0,0,0,0.3);
+            padding: 30px;
+            border-radius: 20px;
+            border: 2px dashed var(--secondary-color);
+        }
+
+        /* 表格样式 */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 32px;
+            margin-top: 20px;
+        }
+
+        th, td {
+            padding: 20px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+        }
+
+        th {
+            color: var(--accent-color);
+            font-size: 36px;
+            border-bottom: 3px solid var(--accent-color);
+        }
+        
+        td:first-child {
+            font-weight: bold;
+            color: var(--secondary-color);
+        }
+
+        /* 图标大尺寸 */
+        .icon-large {
+            font-size: 120px;
+            color: var(--secondary-color);
+            margin-bottom: 30px;
+            display: block;
+        }
+
+        /* 页脚 */
+        .footer {
+            position: absolute;
+            bottom: 30px;
+            right: 40px;
+            font-size: 24px;
+            color: rgba(255, 255, 255, 0.4);
+            z-index: 2;
+        }
+
+        /* 代码块 */
+        .code-block {
+            font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+            background: var(--code-bg);
+            padding: 30px;
+            border-radius: 15px;
+            border: 1px solid #333;
+            font-size: 28px;
+            line-height: 1.6;
+            color: #a5b3ce;
+            white-space: pre;
+            overflow-x: auto;
+        }
+        
+        .code-keyword { color: #c678dd; }
+        .code-type { color: #e5c07b; }
+        .code-string { color: #98c379; }
+        .code-comment { color: #5c6370; font-style: italic; }
+        .code-number { color: #d19a66; }
+        .code-func { color: #61afef; }
+
+        /* 哈希可视化 */
+        .hash-visual {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            margin: 40px 0;
+        }
+        .hash-node {
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid var(--secondary-color);
+            padding: 20px 40px;
+            border-radius: 10px;
+            font-size: 32px;
+            text-align: center;
+        }
+        .hash-arrow {
+            font-size: 40px;
+            color: var(--accent-color);
+        }
+        .bucket-array {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            border: 2px solid #666;
+            padding: 10px;
+            border-radius: 10px;
+        }
+        .bucket-cell {
+            width: 300px;
+            height: 60px;
+            border: 1px solid #444;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            font-size: 24px;
+            background: rgba(0,0,0,0.3);
+            position: relative;
+        }
+        .bucket-index {
+            position: absolute;
+            left: -40px;
+            color: #888;
+            font-family: monospace;
+        }
+        .chain-node {
+            margin-left: 20px;
+            background: var(--secondary-color);
+            color: #000;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 20px;
+            display: inline-flex;
+            align-items: center;
+        }
+
+        /* 实用类 */
+        .text-huge { font-size: 60px; }
+        .text-center { text-align: center; }
+        .mb-0 { margin-bottom: 0; }
+        .mt-20 { margin-top: 40px; }
+        .color-accent { color: var(--accent-color); }
+        .color-warn { color: #ef4444; }
+        .color-success { color: #10b981; }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <div class="bg-decoration"></div>
+    <div class="grid-overlay"></div>
+    
+    <!-- P01: 封面 -->
+    <section class="slide active layout-center" data-title="封面">
+        <div style="text-align: center;">
+            <i class="fas fa-hashtag icon-large" style="font-size: 220px; color: var(--accent-color); margin-bottom: 60px;"></i>
+            <h1>数据结构与算法</h1>
+            <p class="text-huge" style="color: var(--secondary-color); font-size: 80px;">哈希表：空间换时间的魔法师</p>
+        </div>
+    </section>
+
+    <!-- P02: 引入：数组的超能力与软肋 -->
+    <section class="slide" data-title="引入：数组的超能力与软肋">
+        <h2>数组的超能力 vs 软肋</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="card" style="border-color: var(--accent-color);">
+                    <span class="card-title"><i class="fas fa-bolt"></i> 超能力：下标访问</span>
+                    <p>给定下标 <code>i</code>，瞬间定位。</p>
+                    <div class="formula" style="font-size: 40px;">arr[5] → O(1)</div>
+                    <p class="mb-0">基于内存地址计算，不用遍历。</p>
+                </div>
+            </div>
+            <div class="col-content">
+                <div class="card" style="border-color: #ef4444;">
+                    <span class="card-title" style="color: #ef4444;"><i class="fas fa-search"></i> 软肋：按值查找</span>
+                    <p>给定学号 <code>2021001</code>，找姓名？</p>
+                    <div class="formula" style="font-size: 40px; border-color: #ef4444;">for loop → O(N)</div>
+                    <p class="mb-0">必须从头遍历，效率崩塌。</p>
+                </div>
+            </div>
+        </div>
+        <div class="highlight-box" style="text-align: center;">
+            <p class="mb-0" style="font-size: 42px;"><strong>目标</strong>：能不能像用下标一样，通过“值”瞬间找到数据？</p>
+        </div>
+    </section>
+
+    <!-- P03: 什么是哈希表 -->
+    <section class="slide" data-title="什么是哈希表">
+        <h2>什么是哈希表 (Hash Table)</h2>
+        <p>一种用 <strong>键 (Key)</strong> 快速定位 <strong>值 (Value)</strong> 的数据结构。</p>
+        
+        <div class="hash-visual">
+            <div class="hash-node">Key<br><span style="font-size: 24px; color: #888;">"apple"</span></div>
+            <div class="hash-arrow">→</div>
+            <div class="hash-node" style="border-color: var(--accent-color); color: var(--accent-color);">
+                <i class="fas fa-cogs"></i> Hash函数
+            </div>
+            <div class="hash-arrow">→</div>
+            <div class="hash-node">Index<br><span style="font-size: 24px; color: #888;">2</span></div>
+            <div class="hash-arrow">→</div>
+            <div class="bucket-array">
+                <div class="bucket-cell"><span class="bucket-index">0</span></div>
+                <div class="bucket-cell"><span class="bucket-index">1</span></div>
+                <div class="bucket-cell" style="background: rgba(34, 211, 238, 0.2);"><span class="bucket-index">2</span> Value (Price: 5.0)</div>
+                <div class="bucket-cell"><span class="bucket-index">3</span></div>
+            </div>
+        </div>
+
+        <div class="layout-2col">
+            <div class="col-content">
+                <ul>
+                    <li><strong>Key</strong>: 查找的标识 (如学号)。</li>
+                    <li><strong>Hash Function</strong>: 转换器 (Key → 整数)。</li>
+                </ul>
+            </div>
+            <div class="col-content">
+                <ul>
+                    <li><strong>Bucket</strong>: 存储数据的容器 (数组)。</li>
+                    <li><strong>策略</strong>: 用空间(数组)换时间(计算)。</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <!-- P04: 核心机制 -->
+    <section class="slide" data-title="核心机制：哈希函数">
+        <h2>核心机制：哈希函数</h2>
+        <p>将任意长度的输入，转换为固定长度的输出 (下标)。</p>
+
+        <div class="formula">
+            Index = Hash(Key) % Capacity
+        </div>
+
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="code-block"><span class="code-comment">// 简单的字符串哈希</span>
+<span class="code-type">unsigned int</span> simpleHash(<span class="code-type">char</span> *key, <span class="code-type">int</span> cap) {
+    <span class="code-type">unsigned int</span> hash = <span class="code-number">0</span>;
+    <span class="code-keyword">while</span> (*key) {
+        hash = <span class="code-number">31</span> * hash + *key;<span class="code-comment"> // 31是质数</span>
+        key++;
+    }
+    <span class="code-keyword">return</span> hash % cap;
+}</div>
+            </div>
+            <div class="col-content">
+                <div class="highlight-box">
+                    <p><strong>三步走：</strong></p>
+                    <ol>
+                        <li><strong>转整数</strong>：把字符串变成数字。</li>
+                        <li><strong>取模</strong>：<code>%capacity</code> 确保落在数组范围内。</li>
+                        <li><strong>定位</strong>：拿到合法的数组下标。</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P05: 哈希冲突 -->
+    <section class="slide" data-title="尴尬的相遇：哈希冲突">
+        <h2>尴尬的相遇：哈希冲突 (Collision)</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <h3>鸽巢原理</h3>
+                <p>如果鸽子比巢穴多，肯定有两只鸽子挤在一起。</p>
+                <div class="card" style="margin-top: 40px;">
+                    <p class="mb-0">
+                        Hash("apple") = 2<br>
+                        Hash("banana") = 2
+                    </p>
+                    <p style="color: #ef4444; font-weight: bold; margin-top: 20px;">冲突发生了！</p>
+                </div>
+            </div>
+            <div class="col-content" style="align-items: center;">
+                <div class="bucket-array">
+                    <div class="bucket-cell"><span class="bucket-index">0</span></div>
+                    <div class="bucket-cell"><span class="bucket-index">1</span></div>
+                    <div class="bucket-cell" style="background: rgba(239, 68, 68, 0.2); height: 100px;">
+                        <span class="bucket-index">2</span> 
+                        <div style="display: flex; flex-direction: column;">
+                            <span>🍎 apple</span>
+                            <span style="color: #ef4444;">🍌 banana (???)</span>
+                        </div>
+                    </div>
+                    <div class="bucket-cell"><span class="bucket-index">3</span></div>
+                </div>
+                <p style="margin-top: 20px; font-size: 30px;">同一个坑位，怎么存两个人？</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- P06: 解决方案：拉链法 -->
+    <section class="slide" data-title="解决方案：拉链法">
+        <h2>解决方案：拉链法 (Separate Chaining)</h2>
+        <p>桶里不直接存数据，而是存一个<strong>链表头指针</strong>。</p>
+        
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="bucket-array" style="border: none;">
+                    <div class="bucket-cell" style="width: 100%; overflow: visible; border: none; background: transparent;">
+                        <div style="width: 80px; height: 80px; border: 2px solid #fff; display: flex; align-items: center; justify-content: center;">0</div>
+                        <span style="margin: 0 20px;">→</span> NULL
+                    </div>
+                    <div class="bucket-cell" style="width: 100%; overflow: visible; border: none; background: transparent;">
+                        <div style="width: 80px; height: 80px; border: 2px solid #fff; display: flex; align-items: center; justify-content: center;">1</div>
+                        <span style="margin: 0 20px;">→</span> NULL
+                    </div>
+                    <div class="bucket-cell" style="width: 100%; overflow: visible; border: none; background: transparent;">
+                        <div style="width: 80px; height: 80px; border: 2px solid var(--accent-color); background: rgba(34, 211, 238, 0.1); display: flex; align-items: center; justify-content: center;">2</div>
+                        <span style="margin: 0 20px; color: var(--accent-color);">→</span> 
+                        <div class="chain-node">apple</div> 
+                        <span style="margin: 0 10px;">→</span>
+                        <div class="chain-node">banana</div>
+                        <span style="margin: 0 10px;">→</span> NULL
+                    </div>
+                </div>
+            </div>
+            <div class="col-content">
+                <div class="highlight-box">
+                    <ul>
+                        <li><strong>插入</strong>：计算下标 → 找到链表头 → 头插法/尾插法放入。</li>
+                        <li><strong>查找</strong>：计算下标 → 遍历该位置的链表 → 比对 Key。</li>
+                    </ul>
+                </div>
+                <p>虽然发生了冲突，但数据都在，只是多走几步链表。</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- P07: 代码实现：定义 -->
+    <section class="slide" data-title="代码实现：结构体">
+        <h2>代码实现：定义结构体</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="code-block">
+<span class="code-keyword">typedef</span> <span class="code-keyword">struct</span> Entry {
+    <span class="code-type">char</span> *key;
+    <span class="code-type">int</span> value;
+    <span class="code-keyword">struct</span> Entry *next; <span class="code-comment">// 链表指针</span>
+} Entry;
+
+<span class="code-keyword">typedef</span> <span class="code-keyword">struct</span> {
+    <span class="code-comment">// 指针数组：每个元素是链表头</span>
+    Entry *buckets[TABLE_SIZE]; 
+} HashTable;</div>
+            </div>
+            <div class="col-content">
+                <div class="card">
+                    <span class="card-title">结构解析</span>
+                    <ul>
+                        <li><strong>Entry (节点)</strong>: 存储 Key, Value 和 Next 指针。</li>
+                        <li><strong>HashTable</strong>: 一个数组，数组存的是 <code>Entry*</code>。</li>
+                    </ul>
+                </div>
+                <p>初始化时，要把所有 buckets 置为 <code>NULL</code>。</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- P08: 代码实现：插入 -->
+    <section class="slide" data-title="代码实现：插入 (Put)">
+        <h2>代码实现：插入数据 (Put)</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="code-block" style="font-size: 22px;"><span class="code-type">void</span> put(HashTable *table, <span class="code-type">char</span> *key, <span class="code-type">int</span> val) {
+    <span class="code-type">int</span> idx = hash(key) % TABLE_SIZE;
+    
+    <span class="code-comment">// 1. 遍历链表，检查 Key 是否已存在</span>
+    Entry *cur = table->buckets[idx];
+    <span class="code-keyword">while</span> (cur) {
+        <span class="code-keyword">if</span> (strcmp(cur->key, key) == <span class="code-number">0</span>) {
+            cur->value = val; <span class="code-comment">// 更新</span>
+            <span class="code-keyword">return</span>;
+        }
+        cur = cur->next;
+    }
+
+    <span class="code-comment">// 2. 不存在，头插法插入新节点</span>
+    Entry *new_node = malloc(<span class="code-keyword">sizeof</span>(Entry));
+    new_node->key = strdup(key);
+    new_node->value = val;
+    new_node->next = table->buckets[idx]; <span class="code-comment">// 接旧头</span>
+    table->buckets[idx] = new_node;       <span class="code-comment">// 换新头</span>
+}</div>
+            </div>
+            <div class="col-content">
+                <div class="highlight-box">
+                    <p><strong>逻辑流程：</strong></p>
+                    <ol>
+                        <li>计算 hash(key) 得到数组下标 <strong>i</strong></li>
+                        <li>找到 <strong>table[i]</strong> 对应的链表</li>
+                        <li>遍历链表：</li>
+                        <ul>
+                          <li>如果发现 Key 已经存在，更新 Value</li>
+                          <li>如果遍历完没找到，将新节点添加到链表中</li>
+                        </ul>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P09: 代码实现：查找 -->
+    <section class="slide" data-title="代码实现：查找 (Get)">
+        <h2>代码实现：查找数据 (Get)</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="code-block">
+<span class="code-type">int</span> get(HashTable *table, <span class="code-type">char</span> *key) {
+    <span class="code-type">int</span> idx = hash(key) % TABLE_SIZE;
+    
+    Entry *cur = table->buckets[idx];
+    
+    <span class="code-keyword">while</span> (cur) {
+        <span class="code-keyword">if</span> (strcmp(cur->key, key) == <span class="code-number">0</span>) {
+            <span class="code-keyword">return</span> cur->value; <span class="code-comment">// 找到了</span>
+        }
+        cur = cur->next;
+    }
+    
+    <span class="code-keyword">return</span> <span class="code-number">-1</span>; <span class="code-comment">// 没找到</span>
+}</div>
+            </div>
+            <div class="col-content">
+                <p class="text-huge" style="color: var(--accent-color);">O(1) 的秘密</p>
+                <p>大部分情况下，链表非常短（长度 0 或 1）。</p>
+                <p>所以 while 循环几乎不耗时，瞬间返回。</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- P12: 典型应用 -->
+    <section class="slide" data-title="典型应用">
+        <h2>哈希表的典型应用</h2>
+        <div style="display: flex; justify-content: space-around; margin-top: 60px;">
+            <div class="card" style="width: 30%;">
+                <i class="fas fa-server icon-large"></i>
+                <span class="card-title text-center">缓存 (Cache)</span>
+                <p class="text-center">Redis 核心。<br>键值对极速读写。</p>
+            </div>
+            <div class="card" style="width: 30%;">
+                <i class="fas fa-fingerprint icon-large"></i>
+                <span class="card-title text-center">唯一性 (Set)</span>
+                <p class="text-center">去重、判断是否存在。<br>Set 底层就是 Map。</p>
+            </div>
+            <div class="card" style="width: 30%;">
+                <i class="fas fa-code icon-large"></i>
+                <span class="card-title text-center">算法题</span>
+                <p class="text-center">两数之和 (Two Sum)。<br>用空间换时间。</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- P13: 实战：两数之和 -->
+    <section class="slide" data-title="实战：两数之和">
+        <h2>实战：两数之和 (Two Sum)</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="highlight-box"  style="margin-top:-40px;">
+                    <p class="mb-0"><strong>题目</strong>：给定数组 <code>nums</code> 和目标值 <code>target</code>，找出和为目标值的两个整数下标。</p>
+                    <div style="margin-top: 20px; color: #ccc; border-top: 1px dashed rgba(34, 211, 238, 0.3); padding-top: 15px;">
+                        <p class="mb-0" style="font-family: monospace;font-size:30px; ">Input: nums = [2, 5, 7, 9], target = 12</p>
+                        <p class="mb-0" style="font-family: monospace;font-size:30px; ">Output: [1, 2] <span style="color: #666;">// Because 5 + 7 = 12</span></p>
+                    </div>
+                </div>
+                
+                <div class="card" style="border-color: #ef4444; margin-bottom: 20px;">
+                    <span class="card-title" style="color: #ef4444; font-size: 32px;">暴力解法 (O(n²))</span>
+                    <p style="font-size: 28px;margin-bottom: 0;">两层循环，每个人都去问一遍：“你是我的另一半吗？”</p>
+                </div>
+
+                <div class="card" style="border-color: var(--color-success); margin-bottom: 0;">
+                    <span class="card-title" style="color: var(--color-success); font-size: 32px;">哈希解法 (O(n))</span>
+                    <p style="font-size: 28px;margin-bottom: 0;">每人把自己的需求贴在墙上（哈希表）。<br>路过时看一眼墙上，有没有人正在找我？</p>
+                </div>
+            </div>
+            <div class="col-content">
+                <div class="code-block" style="font-size: 22px;">
+<span class="code-keyword">int</span>* twoSum(<span class="code-type">int</span>* nums, <span class="code-type">int</span> size, <span class="code-type">int</span> target) {
+    <span class="code-comment">// Map: 存 {数值: 下标}</span>
+    HashMap map = createMap();
+    
+    <span class="code-keyword">for</span> (<span class="code-type">int</span> i = <span class="code-number">0</span>; i &lt; size; i++) {
+        <span class="code-type">int</span> need = target - nums[i];
+        
+        <span class="code-comment">// 1. 查表：有人在找我吗？</span>
+        <span class="code-keyword">if</span> (hasKey(map, need)) {
+            <span class="code-keyword">return</span> <span class="code-func">result</span>(get(map, need), i);
+        }
+        
+        <span class="code-comment">// 2. 登记：把我自己和下标存进去</span>
+        put(map, nums[i], i);
+    }
+    <span class="code-keyword">return</span> NULL;
+}</div>
+                <div style="text-align: center; margin-top: 20px;">
+                    <p style="font-size: 24px; color: #888;">一次遍历，查表 O(1)，总耗时 O(n)</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+
+    <!-- P10: 性能分析 -->
+    <section class="slide" data-title="性能分析">
+        <h2>性能分析：天堂到地狱</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>操作</th>
+                    <th>平均情况 (天堂)</th>
+                    <th>最坏情况 (地狱)</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>查找 / 插入 / 删除</td>
+                    <td class="color-success"><strong>O(1)</strong></td>
+                    <td class="color-warn"><strong>O(N)</strong></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="layout-2col mt-20">
+            <div class="col-content">
+                <div class="card" style="border-color: var(--accent-color);">
+                    <span class="card-title">平均情况</span>
+                    <p>哈希函数分布均匀，每个桶里只有寥寥几个元素。</p>
+                </div>
+            </div>
+            <div class="col-content">
+                <div class="card" style="border-color: #ef4444;">
+                    <span class="card-title" style="color: #ef4444;">最坏情况</span>
+                    <p>所有 Key 冲突到同一个桶，退化成<strong>单链表</strong>！</p>
+                    <p style="font-size: 28px; color: #888;">(例如：攻击者构造 HashDoS 攻击)</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P11: 进阶：扩容与树化 -->
+    <section class="slide" data-title="进阶：防线">
+        <h2>当链表太长怎么办？两道防线</h2>
+        
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="highlight-box">
+                    <span class="card-title">防线一：扩容 (Rehashing)</span>
+                    <p>当 <strong>元素总数 > 数组容量 × 0.75</strong> 时：</p>
+                    <ol>
+                        <li>数组大小翻倍。</li>
+                        <li>所有元素<strong>重新计算 Hash</strong>，分散到新家。</li>
+                    </ol>
+                    <p style="color: var(--secondary-color);">效果：链表变短，恢复 O(1)。</p>
+                </div>
+            </div>
+            <div class="col-content">
+                <div class="highlight-box" style="border-color: var(--secondary-color);">
+                    <span class="card-title">防线二：树化 (Treeification)</span>
+                    <p>如果扩容了，某个桶的链表还是很长（HashDoS 攻击）：</p>
+                    <p>将 <strong>链表 → 红黑树</strong> (Red-Black Tree)。</p>
+                    <div class="formula" style="font-size: 32px; padding: 15px;">O(N) → O(log N)</div>
+                    <p style="font-size: 26px; color: #888;">(Java 8 HashMap 策略：链表长度 > 8 时转树)</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P14: 小结与预告 -->
+    <section class="slide" data-title="小结与预告">
+        <h2>课堂小结 & 下节预告</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="highlight-box">
+                    <span class="card-title" style="color: var(--accent-color);">哈希表核心要点</span>
+                    <ul style="margin-top: 30px; font-size: 38px;">
+                        <li><strong>数组</strong>：提供 O(1) 访问的“地基”。</li>
+                        <li><strong>哈希</strong>：将 Key 映射为下标的“导航”。</li>
+                        <li><strong>链表</strong>：解决哈希冲突的“兜底方案”。</li>
+                    </ul>
+                    <div class="formula" style="font-size: 32px; margin: 40px 0; padding: 20px;">
+                        空间(数组) ⇄ 时间(计算)
+                    </div>
+                </div>
+            </div>
+            <div class="col-content">
+                <div class="card" style="border-color: var(--secondary-color); background: rgba(167, 139, 250, 0.05);">
+                    <span class="card-title" style="color: var(--secondary-color);">思考与展望</span>
+                    <p>红黑树是什么？为什么链表变成红黑树后，查询速度就能变成O(log n)？</p>
+                    
+                    <div style="text-align: center; margin-top: 60px;">
+                        <p style="font-size: 36px; margin-bottom: 20px;">下节课，我们将学习</p>
+                        <p style="font-size: 48px; font-weight: bold; color: #fff;">高效的非线性结构：<span style="color: var(--secondary-color);">Tree (树)</span></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 页脚 -->
+    <div class="footer">
+        <span id="page-number">1 / 15</span>
+    </div>
+
+</div>
+
+<script>
+    // 幻灯片逻辑
+    const slides = document.querySelectorAll('.slide');
+    const pageNumberEl = document.getElementById('page-number');
+    const totalSlides = slides.length;
+
+    // 从 URL 获取页码
+    function getPageFromUrl() {
+        const params = new URLSearchParams(window.location.search);
+        const page = parseInt(params.get('page'));
+        if (!isNaN(page) && page >= 1 && page <= totalSlides) {
+            return page - 1;
+        }
+        return 0;
+    }
+
+    let currentSlide = getPageFromUrl();
+
+    function updateSlide() {
+        slides.forEach((slide, index) => {
+            slide.classList.remove('active');
+            if (index === currentSlide) {
+                slide.classList.add('active');
+            }
+        });
+        pageNumberEl.textContent = `${currentSlide + 1} / ${totalSlides}`;
+        
+        try {
+            const url = new URL(window.location.href);
+            url.searchParams.set('page', currentSlide + 1);
+            window.history.replaceState(null, '', url.href);
+        } catch (e) {
+            console.error('URL update failed:', e);
+        }
+    }
+
+    function nextSlide() {
+        if (currentSlide < totalSlides - 1) {
+            currentSlide++;
+            updateSlide();
+        }
+    }
+
+    function prevSlide() {
+        if (currentSlide > 0) {
+            currentSlide--;
+            updateSlide();
+        }
+    }
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'Enter') {
+            nextSlide();
+        } else if (e.key === 'ArrowLeft') {
+            prevSlide();
+        }
+    });
+
+    function resizeApp() {
+        const app = document.getElementById('app');
+        const windowWidth = window.innerWidth;
+        const windowHeight = window.innerHeight;
+        const scaleX = windowWidth / 1920;
+        const scaleY = windowHeight / 1080;
+        const scale = Math.min(scaleX, scaleY);
+        
+        app.style.transform = `scale(${scale})`;
+    }
+
+    window.addEventListener('resize', resizeApp);
+    
+    resizeApp(); 
+    updateSlide();
+</script>
+
+</body>
+</html>

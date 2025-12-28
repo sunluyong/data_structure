@@ -836,11 +836,11 @@
         <h2>链表的软肋：读取 O(n)</h2>
         <div class="layout-2col">
             <div class="col-content">
-                <div class="card">
-                    <span class="card-title"><i class="fas fa-times-circle"></i> 没有下标访问</span>
-                    <p>内存不连续，无法通过公式计算地址。</p>
-                    <p>想找<strong style="color: #EAF2FF;">下标为 5</strong> 的节点？</p>
-                    <p style="color: #888;">必须从头节点开始，顺着 next 指针跳 5 次。</p>
+                <div class="card" >
+                    <span style="font-size: 32px;" class="card-title"><i class="fas fa-times-circle"></i> 没有下标访问</span>
+                    <p style="font-size: 32px;">内存不连续，无法通过公式计算地址。</p>
+                    <p style="font-size: 32px;">想找<strong style="color: #EAF2FF;">下标为 5</strong> 的节点？</p>
+                    <p style="font-size: 32px; color: #888;">必须从头节点开始，顺着 next 指针跳 5 次。</p>
                 </div>
                 <div class="code-block">
 <span class="code-type">Node*</span> <span class="code-func">get</span>(Node* head, <span class="code-type">int</span> k) {
