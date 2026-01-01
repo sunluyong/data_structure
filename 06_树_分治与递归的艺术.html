@@ -880,24 +880,51 @@
             
             <div class="col-visual" style="align-items: stretch;">
                 <!-- 右侧：完整代码 -->
-                <div class="code-block" style="font-size: 24px; line-height: 1.4; height: 100%; white-space: pre; width: 100%;">
-<span class="code-cm">// 数组模拟二叉树 (容量 100)</span>
-<span class="code-kw">const</span> <span class="code-type">int</span> MAX_N = 100;
-<span class="code-type">int</span> tree[MAX_N];  <span class="code-cm">// 默认 -1 表示空</span>
+                <div class="code-block" style="font-size: 22px; line-height: 1.4; height: 100%; white-space: pre; width: 100%; overflow-y: auto; max-height: 700px;"><span class="code-kw">#define</span> MAX_N 100
+<span class="code-type">char</span> tree[MAX_N];  <span class="code-cm">// 0 表示空节点</span>
 
-<span class="code-type">void</span> setRoot(<span class="code-type">int</span> val) {
+<span class="code-cm">// 1. 初始化</span>
+<span class="code-type">void</span> initTree() {
+    <span class="code-kw">for</span>(<span class="code-type">int</span> i=0; i&lt;MAX_N; i++) 
+        tree[i] = 0;
+}
+
+<span class="code-cm">// 2. 设置根节点</span>
+<span class="code-type">void</span> setRoot(<span class="code-type">char</span> val) {
     tree[0] = val;
 }
 
-<span class="code-type">void</span> setLeft(<span class="code-type">int</span> i, <span class="code-type">int</span> val) {
-    <span class="code-cm">// 越界检查</span>
-    <span class="code-kw">if</span> (2*i + 1 < MAX_N)
-        tree[2*i + 1] = val;
+<span class="code-cm">// 3. 设置左孩子 (2*i + 1)</span>
+<span class="code-type">void</span> setLeft(<span class="code-type">int</span> parentIdx, <span class="code-type">char</span> val) {
+    <span class="code-kw">if</span> (tree[parentIdx] == 0) <span class="code-kw">return</span>; <span class="code-cm">// 父不存在</span>
+    
+    <span class="code-type">int</span> idx = 2 * parentIdx + 1;
+    <span class="code-kw">if</span> (idx &lt; MAX_N)
+        tree[idx] = val;
 }
 
-<span class="code-type">void</span> setRight(<span class="code-type">int</span> i, <span class="code-type">int</span> val) {
-    <span class="code-kw">if</span> (2*i + 2 < MAX_N)
-        tree[2*i + 2] = val;
+<span class="code-cm">// 4. 设置右孩子 (2*i + 2)</span>
+<span class="code-type">void</span> setRight(<span class="code-type">int</span> parentIdx, <span class="code-type">char</span> val) {
+    <span class="code-kw">if</span> (tree[parentIdx] == 0) <span class="code-kw">return</span>;
+    
+    <span class="code-type">int</span> idx = 2 * parentIdx + 2;
+    <span class="code-kw">if</span> (idx &lt; MAX_N)
+        tree[idx] = val;
+}
+
+<span class="code-type">int</span> main() {
+    initTree();
+    
+    <span class="code-cm">// 构建图示中的树: A -> B, C</span>
+    setRoot('A');     <span class="code-cm">// tree[0] = 'A'</span>
+    setLeft(0, 'B');  <span class="code-cm">// tree[1] = 'B'</span>
+    setRight(0, 'C'); <span class="code-cm">// tree[2] = 'C'</span>
+    
+    <span class="code-cm">// B -> D, E</span>
+    setLeft(1, 'D');  <span class="code-cm">// tree[3] = 'D'</span>
+    setRight(1, 'E'); <span class="code-cm">// tree[4] = 'E'</span>
+    
+    <span class="code-kw">return</span> 0;
 }</div>
             </div>
         </div>
@@ -962,18 +989,17 @@
             
             <div class="col-visual" style="align-items: stretch;">
                 <!-- 代码块 -->
-                <div class="code-block" style="font-size: 24px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; overflow-y: auto; max-height: 700px;"><span class="code-cm">// C语言实现链式存储</span>
-<span class="code-kw">#include</span> &lt;stdlib.h&gt;
+                <div class="code-block" style="font-size: 24px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; overflow-y: auto; max-height: 700px;"><span class="code-kw">#include</span> &lt;stdlib.h&gt;
 
-<span class="code-cm">// 1. 定义节点结构 (使用 typedef 简化)</span>
+<span class="code-cm">// 1. 定义节点结构</span>
 <span class="code-kw">typedef</span> <span class="code-kw">struct</span> TreeNode {
-    <span class="code-type">int</span> val;
+    <span class="code-type">char</span> val;
     <span class="code-kw">struct</span> TreeNode *left;
     <span class="code-kw">struct</span> TreeNode *right;
 } Node;
 
 <span class="code-cm">// 2. 创建新节点</span>
-Node* createNode(<span class="code-type">int</span> val) {
+Node* createNode(<span class="code-type">char</span> val) {
     <span class="code-cm">// 申请内存</span>
     Node* node = (Node*)malloc(<span class="code-kw">sizeof</span>(Node));
     node->val = val;
@@ -985,9 +1011,9 @@ Node* createNode(<span class="code-type">int</span> val) {
 <span class="code-cm">// 3. 模拟构建过程 (A -> B, C)</span>
 <span class="code-type">void</span> buildTree() {
     <span class="code-cm">// 申请内存空间 (分散的)</span>
-    Node* root = createNode(1);   <span class="code-cm">// Node A</span>
-    Node* nodeB = createNode(2);  <span class="code-cm">// Node B</span>
-    Node* nodeC = createNode(3);  <span class="code-cm">// Node C</span>
+    Node* root = createNode('A');   <span class="code-cm">// Node A</span>
+    Node* nodeB = createNode('B');  <span class="code-cm">// Node B</span>
+    Node* nodeC = createNode('C');  <span class="code-cm">// Node C</span>
 
     <span class="code-cm">// 建立逻辑连接</span>
     root->left = nodeB;
