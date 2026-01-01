@@ -1,0 +1,1122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>06 树：分治与递归的艺术</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0B1020;
+            --text-color: #EAF2FF;
+            --accent-color: #22D3EE;     /* 青色：核心概念 */
+            --secondary-color: #60A5FA;  /* 蓝色：辅助说明 */
+            --tertiary-color: #A78BFA;   /* 紫色：强调/代码 */
+            --warn-color: #F472B6;       /* 粉红：重点/易错 */
+            --code-bg: #1e293b;
+            --slide-width: 1920px;
+            --slide-height: 1080px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background-color: #000;
+            color: var(--text-color);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        #app {
+            width: var(--slide-width);
+            height: var(--slide-height);
+            background-color: var(--bg-color);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+        }
+
+        /* 背景装饰 */
+        .bg-decoration {
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            background-image: 
+                radial-gradient(circle at 15% 15%, rgba(34, 211, 238, 0.03) 0%, transparent 25%),
+                radial-gradient(circle at 85% 85%, rgba(167, 139, 250, 0.03) 0%, transparent 25%);
+            pointer-events: none;
+        }
+        
+        .grid-overlay {
+            position: absolute;
+            inset: 0;
+            background-size: 60px 60px;
+            background-image: linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+                              linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+            z-index: 0;
+        }
+
+        /* 幻灯片通用 */
+        .slide {
+            position: absolute;
+            inset: 0;
+            display: none;
+            padding: 80px 100px;
+            flex-direction: column;
+            z-index: 1;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+
+        .slide.active { display: flex; opacity: 1; }
+
+        /* 排版元素 */
+        h1 {
+            font-size: 140px;
+            font-weight: 800;
+            line-height: 1.1;
+            margin-bottom: 40px;
+            background: linear-gradient(135deg, #fff 0%, var(--secondary-color) 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        h2 {
+            font-size: 72px;
+            margin-bottom: 50px;
+            color: var(--accent-color);
+            border-bottom: 4px solid rgba(34, 211, 238, 0.3);
+            padding-bottom: 20px;
+            display: inline-block;
+        }
+
+        h3 {
+            font-size: 48px;
+            margin-bottom: 30px;
+            color: var(--secondary-color);
+        }
+
+        p, li {
+            font-size: 38px;
+            line-height: 1.5;
+            margin-bottom: 24px;
+            color: #cbd5e1;
+        }
+
+        strong { color: var(--accent-color); font-weight: 700; }
+        em { color: var(--tertiary-color); font-style: normal; font-weight: bold; }
+
+        ul { list-style: none; }
+        ul li { position: relative; padding-left: 50px; }
+        ul li::before {
+            content: "•";
+            color: var(--accent-color);
+            position: absolute;
+            left: 0;
+            font-weight: bold;
+        }
+
+        /* 布局类 */
+        .layout-center {
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        .layout-2col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 60px;
+            flex: 1; /* 自适应剩余高度 */
+            align-content: start; /* 顶部对齐 */
+        }
+        
+        .layout-2col .col-visual {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative; /* 限制绝对定位子元素 */
+        }
+
+        /* 组件 */
+        .card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 24px;
+            padding: 40px;
+            margin-bottom: 30px;
+        }
+        
+        .highlight-box {
+            background: rgba(34, 211, 238, 0.08);
+            border-left: 8px solid var(--accent-color);
+            padding: 30px 40px;
+            border-radius: 0 16px 16px 0;
+            margin: 30px 0;
+        }
+
+        .code-block {
+            font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+            background: var(--code-bg);
+            padding: 30px;
+            border-radius: 16px;
+            border: 1px solid #334155;
+            font-size: 28px;
+            line-height: 1.6;
+            color: #e2e8f0;
+            white-space: pre;
+            overflow-x: auto;
+        }
+        .code-kw { color: #c678dd; } 
+        .code-type { color: #e5c07b; } 
+        .code-cm { color: #64748b; font-style: italic; } 
+
+        /* 树的可视化通用样式 */
+        .tree-node {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: var(--bg-color);
+            border: 3px solid var(--accent-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            font-weight: bold;
+            color: #fff;
+            position: absolute;
+            z-index: 2;
+            box-shadow: 0 0 20px rgba(34, 211, 238, 0.2);
+        }
+        
+        .label-tag {
+            position: absolute;
+            background: rgba(0,0,0,0.6);
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 24px;
+            color: var(--secondary-color);
+            border: 1px solid var(--secondary-color);
+            white-space: nowrap;
+        }
+
+        .footer {
+            position: absolute;
+            bottom: 30px;
+            right: 40px;
+            font-size: 24px;
+            color: rgba(255, 255, 255, 0.3);
+            z-index: 10;
+        }
+
+        .tree-container {
+            position: relative;
+            width: 100%;
+            height: 600px;
+        }
+
+        /* 数组存储格子 */
+        .array-box {
+            display: flex;
+            margin-top: 20px;
+        }
+        .array-cell {
+            width: 80px;
+            height: 80px;
+            border: 2px solid var(--secondary-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255,255,255,0.05);
+            margin-right: 2px;
+        }
+        .cell-index {
+            font-size: 18px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        .cell-val {
+            font-size: 32px;
+            font-weight: bold;
+            color: #fff;
+        }
+
+        /* 树类型小卡片网格 */
+        .tree-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 40px;
+        }
+        .tree-type-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .mini-tree {
+            position: relative;
+            width: 300px;
+            height: 160px;
+            margin-bottom: 15px;
+        }
+        .mini-node {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--bg-color);
+            border: 2px solid var(--accent-color);
+            position: absolute;
+            z-index: 2;
+        }
+        .mini-line {
+            position: absolute;
+            height: 2px;
+            background: rgba(255,255,255,0.3);
+            transform-origin: 0 50%;
+        }
+
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <div class="bg-decoration"></div>
+    <div class="grid-overlay"></div>
+
+    <!-- P01: 封面 -->
+    <section class="slide active layout-center" data-title="封面">
+        <div style="text-align: center;">
+            <!-- Custom SVG Binary Tree Icon -->
+            <svg width="240" height="200" viewBox="0 0 240 200" style="margin-bottom: 60px; filter: drop-shadow(0 0 30px rgba(34,211,238,0.4)); overflow: visible;">
+                <!-- Edges -->
+                <line x1="120" y1="40" x2="60" y2="100" stroke="#22D3EE" stroke-width="6" stroke-linecap="round" />
+                <line x1="120" y1="40" x2="180" y2="100" stroke="#22D3EE" stroke-width="6" stroke-linecap="round" />
+                <line x1="60" y1="100" x2="30" y2="160" stroke="#22D3EE" stroke-width="6" stroke-linecap="round" />
+                <line x1="60" y1="100" x2="90" y2="160" stroke="#22D3EE" stroke-width="6" stroke-linecap="round" />
+                <line x1="180" y1="100" x2="150" y2="160" stroke="#22D3EE" stroke-width="6" stroke-linecap="round" />
+                <line x1="180" y1="100" x2="210" y2="160" stroke="#22D3EE" stroke-width="6" stroke-linecap="round" />
+                
+                <!-- Nodes -->
+                <!-- Root -->
+                <circle cx="120" cy="40" r="18" fill="#0B1020" stroke="#22D3EE" stroke-width="6" />
+                
+                <!-- Level 2 -->
+                <circle cx="60" cy="100" r="15" fill="#0B1020" stroke="#22D3EE" stroke-width="5" />
+                <circle cx="180" cy="100" r="15" fill="#0B1020" stroke="#22D3EE" stroke-width="5" />
+                
+                <!-- Level 3 -->
+                <circle cx="30" cy="160" r="12" fill="#22D3EE" />
+                <circle cx="90" cy="160" r="12" fill="#22D3EE" />
+                <circle cx="150" cy="160" r="12" fill="#22D3EE" />
+                <circle cx="210" cy="160" r="12" fill="#22D3EE" />
+            </svg>
+            <h1>数据结构与算法</h1>
+            <p style="font-size: 60px; color: var(--secondary-color);">树：分治与递归的艺术</p>
+        </div>
+    </section>
+
+    <!-- P01.5: 课程大纲 -->
+    <section class="slide" data-title="课程大纲">
+        <h2>课程全景图：从基础到高阶</h2>
+        <div class="layout-center" style="flex: 1; align-items: stretch; padding-top: 20px;">
+             <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 40px; width: 100%;">
+                <!-- 1. 基础概念 -->
+                <div class="card" style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 30px; border-top: 6px solid var(--accent-color);">
+                    <i class="fas fa-seedling" style="font-size: 60px; color: var(--accent-color); margin-bottom: 20px;"></i>
+                    <h3 style="font-size: 32px; margin-bottom: 10px;">1. 基础概念</h3>
+                    <p style="font-size: 22px; color: #aaa; margin: 0;">节点、边、层级<br>递归定义</p>
+                </div>
+                <!-- 2. 树的遍历 -->
+                <div class="card" style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 30px; border-top: 6px solid var(--secondary-color);">
+                    <i class="fas fa-route" style="font-size: 60px; color: var(--secondary-color); margin-bottom: 20px;"></i>
+                    <h3 style="font-size: 32px; margin-bottom: 10px;">2. 树的遍历</h3>
+                    <p style="font-size: 22px; color: #aaa; margin: 0;">深度优先 (DFS)<br>广度优先 (BFS)</p>
+                </div>
+                <!-- 3. 二叉搜索树 -->
+                 <div class="card" style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 30px; border-top: 6px solid var(--tertiary-color);">
+                    <i class="fas fa-search" style="font-size: 60px; color: var(--tertiary-color); margin-bottom: 20px;"></i>
+                    <h3 style="font-size: 32px; margin-bottom: 10px;">3. 二叉搜索树</h3>
+                    <p style="font-size: 22px; color: #aaa; margin: 0;">BST<br>高效查找与排序</p>
+                </div>
+                <!-- 4. 堆与优先队列 -->
+                 <div class="card" style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 30px; border-top: 6px solid var(--warn-color);">
+                    <i class="fas fa-layer-group" style="font-size: 60px; color: var(--warn-color); margin-bottom: 20px;"></i>
+                    <h3 style="font-size: 32px; margin-bottom: 10px;">4. 堆与优先队列</h3>
+                    <p style="font-size: 22px; color: #aaa; margin: 0;">Heap<br>Top K 问题</p>
+                </div>
+                <!-- 5. 哈夫曼树 -->
+                <div class="card" style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 30px; border-top: 6px solid #F59E0B;">
+                    <i class="fas fa-file-archive" style="font-size: 60px; color: #F59E0B; margin-bottom: 20px;"></i>
+                    <h3 style="font-size: 32px; margin-bottom: 10px;">5. 哈夫曼树</h3>
+                    <p style="font-size: 22px; color: #aaa; margin: 0;">最优二叉树<br>数据压缩核心</p>
+                </div>
+                <!-- 6. 字典树 -->
+                <div class="card" style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 30px; border-top: 6px solid #10B981;">
+                    <i class="fas fa-font" style="font-size: 60px; color: #10B981; margin-bottom: 20px;"></i>
+                    <h3 style="font-size: 32px; margin-bottom: 10px;">6. 字典树</h3>
+                    <p style="font-size: 22px; color: #aaa; margin: 0;">Trie / 前缀树<br>字符串检索</p>
+                </div>
+                <!-- 7. 平衡树 -->
+                 <div class="card" style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 30px; border-top: 6px solid #EC4899;">
+                    <i class="fas fa-balance-scale" style="font-size: 60px; color: #EC4899; margin-bottom: 20px;"></i>
+                    <h3 style="font-size: 32px; margin-bottom: 10px;">7. 平衡树</h3>
+                    <p style="font-size: 22px; color: #aaa; margin: 0;">AVL / 红黑树<br>极致的 $O(\log n)$</p>
+                </div>
+                <!-- 8. B+树 -->
+                 <div class="card" style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 30px; border-top: 6px solid #6366F1;">
+                    <i class="fas fa-database" style="font-size: 60px; color: #6366F1; margin-bottom: 20px;"></i>
+                    <h3 style="font-size: 32px; margin-bottom: 10px;">8. B+树</h3>
+                    <p style="font-size: 22px; color: #aaa; margin: 0;">多路查找树<br>数据库索引原理</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P02: 定义与角色 -->
+    <section class="slide" data-title="定义与角色">
+        <h2>树的定义与角色</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="card">
+                    <h3><i class="fas fa-quote-left"></i> 定义</h3>
+                    <p>树是 $N$ ($N \ge 0$) 个节点的有限集合。</p>
+                    <ul>
+                        <li>$N=0$：<strong>空树</strong>。</li>
+                        <li>$N>0$：有一个特定的<strong>根 (Root)</strong>，其余节点分为 $M$ 个互不相交的集合，每个集合又是一棵树（即<strong>子树 Subtree</strong>）。</li>
+                    </ul>
+                </div>
+                <div class="highlight-box">
+                    <p class="mb-0">核心逻辑：<strong>一对多 (One-to-Many)</strong></p>
+                </div>
+            </div>
+            <div class="col-visual">
+                <div class="tree-container">
+                    <!-- Root -->
+                    <div class="tree-node" style="left: 350px; top: 40px; background: var(--accent-color); border-color: #fff;">A</div>
+                    <div class="label-tag" style="left: 190px; top: 50px; color: var(--accent-color); border-color: var(--accent-color);">Root (根)</div>
+
+                    <!-- Edge -->
+                    <div class="label-tag" style="left: 480px; top: 130px; border-style: dashed; padding: 4px 12px; font-size: 20px;">Edge (边)</div>
+
+                    <!-- B, C -->
+                    <div class="tree-node" style="left: 150px; top: 200px;">B</div>
+                    <div class="tree-node" style="left: 550px; top: 200px;">C</div>
+                    
+                    <!-- Leaf Nodes -->
+                    <div class="tree-node" style="left: 50px; top: 350px; border-color: var(--warn-color); color: var(--warn-color);">D</div>
+                    <div class="tree-node" style="left: 250px; top: 350px; border-color: var(--warn-color); color: var(--warn-color);">E</div>
+                    
+                    <div class="label-tag" style="left: 360px; top: 370px; color: var(--warn-color); border-color: var(--warn-color);">Leaf (叶子)</div>
+                    
+                    <!-- Subtree Circle -->
+                    <div style="position: absolute; left: 20px; top: 180px; width: 340px; height: 280px; border: 2px dashed rgba(255,255,255,0.3); border-radius: 30px;"></div>
+                    <div style="position: absolute; left: 40px; top: 470px; color: #aaa; font-size: 24px;">Subtree (子树)</div>
+
+                    <svg style="position:absolute; width:100%; height:100%; top:0; left:0; pointer-events:none; z-index:0;">
+                        <line x1="390" y1="80" x2="190" y2="240" stroke="rgba(255,255,255,0.6)" stroke-width="4" />
+                        <line x1="390" y1="80" x2="590" y2="240" stroke="rgba(255,255,255,0.6)" stroke-width="4" />
+                        <line x1="190" y1="240" x2="90" y2="390" stroke="rgba(255,255,255,0.4)" stroke-width="3" />
+                        <line x1="190" y1="240" x2="290" y2="390" stroke="rgba(255,255,255,0.4)" stroke-width="3" />
+                    </svg>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P03: 亲缘关系 -->
+    <section class="slide" data-title="亲缘关系">
+        <h2>亲缘关系：树的“家谱”</h2>
+        <div class="layout-2col" style="grid-template-columns: 1.1fr 0.9fr;">
+            <div class="col-content">
+                <ul style="margin-top: 100px">
+                    <li><strong>父 (Parent)</strong>：若 A 有子树 B，则 A 是 B 的父节点</li>
+                    <li><strong>子 (Child)</strong>：B 是 A 的子节点</li>
+                    <li><strong>兄弟 (Sibling)</strong>：共享同一个父节点的节点们</li>
+                    <li><strong>祖先 (Ancestor)</strong>：从根到该节点路径上的所有节点</li>
+                    <li><strong>后代 (Descendant)</strong>：某节点子树中的所有节点</li>
+                </ul>
+            </div>
+            <div class="col-visual">
+                <div class="tree-container" style="height: 500px;">
+                    <!-- A (Parent of B,C) -->
+                    <div class="tree-node" style="left: 350px; top: 20px; background: #0B1020; border-color: rgba(34, 211, 238, 0.5); color: rgba(234, 242, 255, 0.5);">A</div>
+                    <!-- B (Parent of D,E) -->
+                    <div class="tree-node" style="left: 200px; top: 150px; background: #112533;">B</div>
+                    <div class="label-tag" style="left: 50px; top: 160px;">Parent</div>
+
+                    <!-- C -->
+                    <div class="tree-node" style="left: 500px; top: 150px; background: #0B1020; border-color: rgba(34, 211, 238, 0.5); color: rgba(234, 242, 255, 0.5);">C</div>
+
+                    <!-- D, E (Children/Siblings) -->
+                    <div class="tree-node" style="left: 100px; top: 300px; border-color: var(--secondary-color);">D</div>
+                    <div class="tree-node" style="left: 300px; top: 300px; border-color: var(--secondary-color);">E</div>
+                    
+                    <div class="label-tag" style="left: 170px; top: 410px; width: 150px; text-align: center; border-style: dashed;">Siblings</div>
+                    <div class="label-tag" style="left: 420px; top: 320px; border: none; background: none; color: #fff;">Children of B</div>
+
+                    <svg style="position:absolute; width:100%; height:100%; top:0; left:0; pointer-events:none; z-index:0;">
+                        <line x1="390" y1="60" x2="240" y2="190" stroke="rgba(255,255,255,0.2)" stroke-width="3" />
+                        <line x1="390" y1="60" x2="540" y2="190" stroke="rgba(255,255,255,0.2)" stroke-width="3" />
+                        
+                        <line x1="240" y1="190" x2="140" y2="340" stroke="#fff" stroke-width="4" />
+                        <line x1="240" y1="190" x2="340" y2="340" stroke="#fff" stroke-width="4" />
+                        
+                        <path d="M 140 380 Q 220 420 340 380" fill="none" stroke="var(--secondary-color)" stroke-dasharray="5,5" stroke-width="2" />
+                    </svg>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P04: 度与分支 -->
+    <section class="slide" data-title="度与分支">
+        <h2>度 (Degree) 与分支</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="card" style="margin-bottom: 20px; padding: 30px;">
+                    <h3><i class="fas fa-code-branch"></i> 节点的度</h3>
+                    <p>一个节点拥有<strong>子树的个数</strong>。</p>
+                    <p class="color-accent" style="font-size: 32px;">即：它分了几个叉？</p>
+                </div>
+                <div class="card" style="margin-bottom: 20px; padding: 30px;">
+                    <h3><i class="fas fa-tree"></i> 树的度</h3>
+                    <p>树中所有节点度的<strong>最大值</strong>。</p>
+                </div>
+                <div class="highlight-box" style="margin-top: 10px; padding: 25px;">
+                    <p class="mb-0"><strong>二叉树 (Binary Tree)</strong> 的特点就是：<br>树的度 $\le 2$。</p>
+                </div>
+            </div>
+            <div class="col-visual">
+                <div class="tree-container">
+                    <!-- A (Degree 3) -->
+                    <div class="tree-node" style="left: 350px; top: 40px;">A</div>
+                    <div class="label-tag" style="left: 450px; top: 50px;">度 = 3</div>
+
+                    <!-- B, C, D -->
+                    <div class="tree-node" style="left: 150px; top: 200px;">B</div>
+                    <div class="tree-node" style="left: 350px; top: 200px;">C</div>
+                    <div class="tree-node" style="left: 550px; top: 200px;">D</div>
+                    
+                    <div class="label-tag" style="left: 20px; top: 210px;">度 = 2</div>
+                    <div class="label-tag" style="left: 650px; top: 210px;">度 = 0 (Leaf)</div>
+
+                    <!-- E, F -->
+                    <div class="tree-node" style="left: 50px; top: 350px;">E</div>
+                    <div class="tree-node" style="left: 250px; top: 350px;">F</div>
+
+                    <svg style="position:absolute; width:100%; height:100%; top:0; left:0; pointer-events:none; z-index:0;">
+                        <line x1="390" y1="80" x2="190" y2="240" stroke="#fff" stroke-width="3" />
+                        <line x1="390" y1="80" x2="390" y2="240" stroke="#fff" stroke-width="3" />
+                        <line x1="390" y1="80" x2="590" y2="240" stroke="#fff" stroke-width="3" />
+                        
+                        <line x1="190" y1="240" x2="90" y2="390" stroke="#fff" stroke-width="3" />
+                        <line x1="190" y1="240" x2="290" y2="390" stroke="#fff" stroke-width="3" />
+                    </svg>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P05: 层、高度、深度 -->
+    <section class="slide" data-title="层高深">
+        <h2>度量衡：层、高度、深度</h2>
+        <div class="layout-2col" style="grid-template-columns: 40% 60%; align-items: center;">
+            <div class="col-content">
+                <div style="display: flex; flex-direction: column; height: 600px; justify-content: center;">
+                    <!-- Level -->
+                    <div style="background: rgba(255,255,255,0.05); border-radius: 16px; padding: 25px; margin-top: 50px; margin-bottom: 20px; border-left: 6px solid #fff;">
+                        <h3 style="font-size: 32px; color: #fff; margin-bottom: 8px;">层 (Level)</h3>
+                        <p style="font-size: 24px; color: #ccc; margin: 0;">从根开始数，Root 是第 1 层。</p>
+                    </div>
+                    
+                    <!-- Depth -->
+                    <div style="background: rgba(244, 114, 182, 0.1); border-radius: 16px; padding: 25px; margin-bottom: 20px; border-left: 6px solid var(--warn-color);">
+                        <h3 style="font-size: 32px; color: var(--warn-color); margin-bottom: 8px;">深度 (Depth)</h3>
+                        <p style="font-size: 24px; color: #ccc; margin-bottom: 5px;"><strong>从上往下</strong>数。</p>
+                        <p style="font-size: 20px; color: rgba(255,255,255,0.5); font-style: italic; margin: 0;">“这口井有多深？”</p>
+                    </div>
+
+                    <!-- Height -->
+                    <div style="background: rgba(34, 211, 238, 0.1); border-radius: 16px; padding: 25px; margin-bottom: 20px; border-left: 6px solid var(--accent-color);">
+                        <h3 style="font-size: 32px; color: var(--accent-color); margin-bottom: 8px;">高度 (Height)</h3>
+                        <p style="font-size: 24px; color: #ccc; margin-bottom: 5px;"><strong>从下往上</strong>数。</p>
+                        <p style="font-size: 20px; color: rgba(255,255,255,0.5); font-style: italic; margin: 0;">“这栋楼有多高？”</p>
+                    </div>
+                    <!-- Global Note -->
+                    <div style="background: rgba(255,255,255,0.03); border: 1px dashed rgba(255,255,255,0.2); border-radius: 12px; padding: 15px 20px;">
+                      <p style="font-size: 28px; color: #ccc; margin: 0; line-height: 1.5;">
+                          <i class="fas fa-exclamation-circle" style="color: #F59E0B; margin-right: 8px;"></i>
+                          <strong>起始值定义差异 (1 vs 0)：</strong><br>
+                          <span style="color: var(--accent-color); margin-right: 15px;">● 节点派 (Start=1)</span> 国内教材 / 考研 / LeetCode<br>
+                          <span style="color: #999;">● 边派 (Start=0)</span> 国外经典教材 (如 CLRS)
+                      </p>
+                  </div>
+                </div>
+            </div>
+            
+            <div class="col-visual" style="height: 100%; display: flex; align-items: center; justify-content: center;">
+                <div class="tree-container" style="width: 100%; height: 600px; position: relative;">
+                    
+                    <!-- SVG Lines & Rulers -->
+                    <svg style="position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible;">
+                        <!-- Grid Lines for Levels -->
+                        <line x1="50" y1="100" x2="900" y2="100" stroke="rgba(255,255,255,0.25)" stroke-dasharray="5,5" />
+                        <line x1="50" y1="280" x2="900" y2="280" stroke="rgba(255,255,255,0.25)" stroke-dasharray="5,5" />
+                        <line x1="50" y1="460" x2="900" y2="460" stroke="rgba(255,255,255,0.25)" stroke-dasharray="5,5" />
+                        
+                        <!-- Level Labels (Right side) -->
+                        <text x="850" y="110" fill="rgba(255,255,255,0.3)" font-size="20">Level 1</text>
+                        <text x="850" y="290" fill="rgba(255,255,255,0.3)" font-size="20">Level 2</text>
+                        <text x="850" y="470" fill="rgba(255,255,255,0.3)" font-size="20">Level 3</text>
+
+                        <!-- Tree Edges -->
+                        <line x1="390" y1="100" x2="270" y2="280" stroke="#fff" stroke-width="4" />
+                        <line x1="390" y1="100" x2="510" y2="280" stroke="#fff" stroke-width="4" />
+                        <line x1="510" y1="280" x2="440" y2="460" stroke="#fff" stroke-width="4" />
+                        <line x1="510" y1="280" x2="580" y2="460" stroke="#fff" stroke-width="4" />
+
+                        <!-- Depth Arrow (Left side) -->
+                        <line x1="130" y1="100" x2="130" y2="460" stroke="var(--warn-color)" stroke-width="3" marker-end="url(#arrow-down)" />
+                        <!-- Depth Text Group -->
+                        <g transform="translate(90, 280)">
+                            <text x="0" y="0" fill="var(--warn-color)" font-size="24" font-weight="bold" text-anchor="middle" transform="rotate(-90)">Depth 深度</text>
+                        </g>
+                        
+                        <!-- Height Arrow (Right side relative to tree) -->
+                        <line x1="760" y1="460" x2="760" y2="100" stroke="var(--accent-color)" stroke-width="3" marker-end="url(#arrow-up)" />
+                        <!-- Height Text Group -->
+                        <g transform="translate(800, 280)">
+                             <text x="0" y="0" fill="var(--accent-color)" font-size="24" font-weight="bold" text-anchor="middle" transform="rotate(-90)">Height 高度</text>
+                        </g>
+
+                         <defs>
+                            <marker id="arrow-down" markerWidth="10" markerHeight="10" refX="5" refY="5" orient="auto">
+                                <path d="M0,0 L10,5 L0,10 z" fill="var(--warn-color)" />
+                            </marker>
+                            <marker id="arrow-up" markerWidth="10" markerHeight="10" refX="5" refY="5" orient="auto">
+                                <path d="M0,0 L10,5 L0,10 z" fill="var(--accent-color)" />
+                            </marker>
+                        </defs>
+                    </svg>
+
+                    <!-- Nodes -->
+                    <!-- Root (A) -->
+                    <div class="tree-node" style="left: 350px; top: 60px; background: var(--bg-color); z-index: 2;">A</div>
+                    
+                    <!-- Level 2 (B, C) -->
+                    <div class="tree-node" style="left: 230px; top: 240px; background: var(--bg-color); z-index: 2;">B</div>
+                    <div class="tree-node" style="left: 470px; top: 240px; background: var(--bg-color); z-index: 2;">C</div>
+                    
+                    <!-- Level 3 (D, E) -->
+                    <div class="tree-node" style="left: 400px; top: 420px; background: var(--bg-color); z-index: 2;">D</div>
+                    <div class="tree-node" style="left: 540px; top: 420px; background: var(--bg-color); z-index: 2;">E</div>
+
+                    <!-- Node D Info Card (Floating) -->
+                    <div style="position: absolute; left: 180px; top: 400px; background: rgba(30, 41, 59, 0.95); border: 1px solid var(--secondary-color); border-radius: 12px; padding: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); width: 160px;">
+                        <div style="font-size: 20px; font-weight: bold; color: #fff; margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 5px;">Node D</div>
+                        <div style="font-size: 18px; color: rgba(255,255,255,0.8); display: flex; justify-content: space-between;"><span>Level:</span> <span>3</span></div>
+                        <div style="font-size: 18px; color: var(--warn-color); display: flex; justify-content: space-between;"><span>Depth:</span> <span>3</span></div>
+                        <div style="font-size: 18px; color: var(--accent-color); display: flex; justify-content: space-between;"><span>Height:</span> <span>1</span></div>
+                        <!-- Pointer Line (Horizontal right) -->
+                        <div style="position: absolute; right: -30px; top: 40px; width: 30px; height: 1px; background: var(--secondary-color);"></div>
+                        <div style="position: absolute; right: -34px; top: 36px; width: 8px; height: 8px; background: var(--secondary-color); border-radius: 50%;"></div>
+                    </div>
+                    
+                    <!-- Highlight Circle for D -->
+                    <div style="position: absolute; left: 390px; top: 410px; width: 100px; height: 100px; border: 2px dashed var(--secondary-color); border-radius: 50%; animation: pulse 2s infinite;"></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P06: 树的形态 -->
+    <section class="slide" data-title="树的形态">
+        <h2>树的两种基本形态</h2>
+        <div class="layout-2col">
+            <!-- Col 1: 多叉树 -->
+            <div class="col-visual" style="align-items: center; border-right: 1px dashed rgba(255,255,255,0.2);">
+                <h3 style="color: var(--secondary-color); margin-bottom: 20px;">1. 多叉树 (Generic Tree)</h3>
+                <div class="card" style="width: 90%; border-color: var(--secondary-color); margin-bottom: 10px; text-align: center;">
+                    <p style="font-size: 32px;margin-bottom: 0px;">每个节点可以有<strong>任意多个</strong>子节点。</p>
+                </div>
+                
+                <div class="tree-container" style="height: 260px; width: 400px; margin: 0 auto;">
+                    <!-- Root -->
+                    <div class="tree-node" style="width:60px; height:60px; left: 170px; top: 20px; font-size: 24px;">R</div>
+                    
+                    <!-- Children -->
+                    <div class="tree-node" style="width:50px; height:50px; left: 40px; top: 150px; font-size: 20px; border-color: var(--secondary-color);">A</div>
+                    <div class="tree-node" style="width:50px; height:50px; left: 130px; top: 150px; font-size: 20px; border-color: var(--secondary-color);">B</div>
+                    <div class="tree-node" style="width:50px; height:50px; left: 220px; top: 150px; font-size: 20px; border-color: var(--secondary-color);">C</div>
+                    <div class="tree-node" style="width:50px; height:50px; left: 310px; top: 150px; font-size: 20px; border-color: var(--secondary-color);">D</div>
+                    
+                    <svg style="position:absolute; inset:0; pointer-events:none;">
+                        <path d="M200 50 L65 190" stroke="var(--secondary-color)" stroke-width="2" stroke-linecap="round"/>
+                        <path d="M200 50 L155 190" stroke="var(--secondary-color)" stroke-width="2" stroke-linecap="round"/>
+                        <path d="M200 50 L245 190" stroke="var(--secondary-color)" stroke-width="2" stroke-linecap="round"/>
+                        <path d="M200 50 L335 190" stroke="var(--secondary-color)" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                
+                <p style="font-size: 28px; color: #999; margin-top: 20px;"><i class="fas fa-folder-open"></i> 比如：文件系统、目、索引</p>
+            </div>
+
+            <!-- Col 2: 二叉树 -->
+            <div class="col-visual" style="align-items: center;">
+                <h3 style="color: var(--accent-color); margin-bottom: 20px;">2. 二叉树 (Binary Tree)</h3>
+                <div class="card" style="width: 90%; border-color: var(--accent-color); margin-bottom: 10px; text-align: center;">
+                    <p style="font-size: 32px;margin-bottom: 0px;">每个节点<strong>最多</strong>两个子节点(分左、右)。</p>
+                </div>
+
+                <div class="tree-container" style="height: 260px; width: 400px; margin: 0 auto;">
+                    <!-- Root -->
+                    <div class="tree-node" style="width:60px; height:60px; left: 170px; top: 20px; font-size: 24px;">R</div>
+                    
+                    <!-- Left Child -->
+                    <div class="tree-node" style="width:50px; height:50px; left: 100px; top: 150px; font-size: 20px; border-color: var(--accent-color);">L</div>
+                    <!-- Right Child -->
+                    <div class="tree-node" style="width:50px; height:50px; left: 240px; top: 150px; font-size: 20px; border-color: var(--accent-color);">R</div>
+                    
+                     <svg style="position:absolute; inset:0; pointer-events:none;">
+                        <path d="M200 50 L125 175" stroke="var(--accent-color)" stroke-width="4"/>
+                        <path d="M200 50 L265 175" stroke="var(--accent-color)" stroke-width="4"/>
+                    </svg>
+                    
+                    <div style="position: absolute; top: 220px; width: 100%; text-align: center;">
+                         <span style="color: var(--accent-color); font-size: 24px; background: rgba(34,211,238,0.1); padding: 5px 15px; border-radius: 8px;">有序：左右不能颠倒</span>
+                    </div>
+                </div>
+
+                 <p style="font-size: 28px; color: #999; margin-top: 20px;"><i class="fas fa-code-branch"></i> 比如：二分查找、判断题</p>
+            </div>
+        </div>
+        
+        <!-- Bottom Conclusion -->
+        <div class="highlight-box" style="margin-top: 10px; padding: 20px;">
+            <p class="mb-0" style="text-align: center; font-size: 32px;">
+                <strong>为什么重点学二叉树？</strong> <br>
+                结构最确定的（度<=2），规律最强，是复杂树结构的基础。
+            </p>
+        </div>
+    </section>
+
+    <!-- P07: 二叉树类型 -->
+    <section class="slide" data-title="场景树类型">
+        <h2>二叉树的“名门望族”</h2>
+        <div class="tree-grid" style="gap: 50px; flex: 1; align-content: center;">
+            
+            <!-- 1. 满二叉树 / 完美二叉树 -->
+            <div class="tree-type-card" style="flex-direction: row; justify-content: space-between; text-align: left; align-items: center; padding: 35px 40px;">
+                <div style="flex: 1; padding-right: 30px;">
+                    <h3 style="font-size: 36px; color: var(--accent-color); margin-bottom: 15px;">完美二叉树 (Perfect)</h3>
+                    <p style="font-size: 26px; margin: 0; line-height: 1.4;">除了叶子，所有节点度为2。<br>所有叶子在同一层。<br><strong>非常完美，但很少见。</strong></p>
+                </div>
+                <div class="mini-tree" style="width: 240px; height: 140px; flex-shrink: 0; margin-bottom: 0; transform: scale(1.15); margin-right: 20px;">
+                    <!-- Root -->
+                    <div class="mini-node" style="left:100px; top:10px;"></div>
+                    <!-- L2 -->
+                    <div class="mini-node" style="left:50px; top:60px;"></div>
+                    <div class="mini-node" style="left:150px; top:60px;"></div>
+                    <!-- L3 -->
+                    <div class="mini-node" style="left:25px; top:110px;"></div>
+                    <div class="mini-node" style="left:75px; top:110px;"></div>
+                    <div class="mini-node" style="left:125px; top:110px;"></div>
+                    <div class="mini-node" style="left:175px; top:110px;"></div>
+                    <!-- Lines -->
+                    <svg style="position:absolute;inset:0;pointer-events:none"><path d="M120 30 L70 80 M120 30 L170 80 M70 80 L45 130 M70 80 L95 130 M170 80 L145 130 M170 80 L195 130" stroke="#666" stroke-width="2"/></svg>
+                </div>
+            </div>
+
+            <!-- 2. 完全二叉树 -->
+            <div class="tree-type-card" style="flex-direction: row; justify-content: space-between; text-align: left; align-items: center; padding: 35px 40px;">
+                 <div style="flex: 1; padding-right: 30px;">
+                    <h3 style="font-size: 36px; color: var(--secondary-color); margin-bottom: 15px;">完全二叉树 (Complete)</h3>
+                    <p style="font-size: 26px; margin: 0; line-height: 1.4;">最后一层叶子<strong>靠左排列</strong>。<br>适合<strong>数组存储</strong> (堆 Heap)。</p>
+                </div>
+                <div class="mini-tree" style="width: 240px; height: 140px; flex-shrink: 0; margin-bottom: 0; transform: scale(1.15); margin-right: 20px;">
+                    <div class="mini-node" style="left:100px; top:10px;"></div>
+                    <div class="mini-node" style="left:50px; top:60px;"></div>
+                    <div class="mini-node" style="left:150px; top:60px;"></div>
+                    <div class="mini-node" style="left:25px; top:110px; background:var(--secondary-color);"></div>
+                    <div class="mini-node" style="left:75px; top:110px; background:var(--secondary-color);"></div>
+                    <div class="mini-node" style="left:125px; top:110px; background:var(--secondary-color);"></div>
+                    <!-- Missing Right Child -->
+                    <div style="position:absolute; left:175px; top:110px; width:40px; height:40px; border:2px dashed #444; border-radius:50%;"></div>
+                     <svg style="position:absolute;inset:0;pointer-events:none"><path d="M120 30 L70 80 M120 30 L170 80 M70 80 L45 130 M70 80 L95 130 M170 80 L145 130" stroke="#666" stroke-width="2"/></svg>
+                </div>
+            </div>
+
+            <!-- 3. 完满二叉树 -->
+            <div class="tree-type-card" style="flex-direction: row; justify-content: space-between; text-align: left; align-items: center; padding: 35px 40px;">
+                <div style="flex: 1; padding-right: 30px;">
+                    <h3 style="font-size: 36px; color: var(--tertiary-color); margin-bottom: 15px;">完满二叉树 (Full)</h3>
+                    <p style="font-size: 26px; margin: 0; line-height: 1.4;">节点要么没孩子，要么有2个。<br><strong>没有“独生子女”。</strong><br>(Huffman 树就是这种)</p>
+                </div>
+                <div class="mini-tree" style="width: 240px; height: 140px; flex-shrink: 0; margin-bottom: 0; transform: scale(1.15); margin-right: 20px;">
+                    <div class="mini-node" style="left:100px; top:10px;"></div>
+                    <div class="mini-node" style="left:50px; top:60px;"></div>
+                    <div class="mini-node" style="left:150px; top:60px;"></div>
+                    <!-- Left has no children -->
+                    <!-- Right has 2 children -->
+                    <div class="mini-node" style="left:125px; top:110px;"></div>
+                    <div class="mini-node" style="left:175px; top:110px;"></div>
+                    <svg style="position:absolute;inset:0;pointer-events:none"><path d="M120 30 L70 80 M120 30 L170 80 M170 80 L145 130 M170 80 L195 130" stroke="#666" stroke-width="2"/></svg>
+                </div>
+            </div>
+
+            <!-- 4. 平衡二叉树 -->
+            <div class="tree-type-card" style="flex-direction: row; justify-content: space-between; text-align: left; align-items: center; padding: 35px 40px;">
+                <div style="flex: 1; padding-right: 30px;">
+                    <h3 style="font-size: 36px; color: #F59E0B; margin-bottom: 15px;">平衡二叉树 (Balanced)</h3>
+                    <p style="font-size: 26px; margin: 0; line-height: 1.4;">
+                        任意节点左右高度差 $\le 1$。<br>
+                        <span style="color: #888; font-size: 24px;">防止退化为链表，保证效率 $O(\log n)$。</span>
+                    </p>
+                </div>
+                
+                <div style="display: flex; align-items: center; justify-content: center; width: 240px; margin: 0; transform: scale(1.15); margin-right: 20px;">
+                    <!-- Balanced -->
+                    <div style="position: relative; width: 140px; height: 140px;">
+                        <div class="mini-node" style="width:24px; height:24px; left:58px; top:10px; border-color:#F59E0B;"></div>
+                        <div class="mini-node" style="width:24px; height:24px; left:28px; top:50px; border-color:#F59E0B;"></div>
+                        <div class="mini-node" style="width:24px; height:24px; left:88px; top:50px; border-color:#F59E0B;"></div>
+                        <div class="mini-node" style="width:24px; height:24px; left:13px; top:90px; border-color:#F59E0B;"></div>
+                        <div class="mini-node" style="width:24px; height:24px; left:43px; top:90px; border-color:#F59E0B;"></div>
+                        <svg style="position:absolute;inset:0;pointer-events:none">
+                            <path d="M70 22 L40 62 M70 22 L100 62 M40 62 L25 102 M40 62 L55 102" stroke="#F59E0B" stroke-width="2"/>
+                        </svg>
+                        <div style="position:absolute; bottom:5px; width:100%; text-align:center; color:#F59E0B; font-size: 16px;">Balanced</div>
+                    </div>
+
+                    <!-- Skewed -->
+                    <div style="position: relative; width: 80px; height: 140px;">
+                        <div class="mini-node" style="width:24px; height:24px; left:10px; top:10px; border-color:var(--warn-color);"></div>
+                        <div class="mini-node" style="width:24px; height:24px; left:30px; top:45px; border-color:var(--warn-color);"></div>
+                        <div class="mini-node" style="width:24px; height:24px; left:50px; top:80px; border-color:var(--warn-color);"></div>
+                        <div class="mini-node" style="width:24px; height:24px; left:70px; top:115px; border-color:var(--warn-color);"></div>
+                        <svg style="position:absolute;inset:0;pointer-events:none">
+                            <path d="M22 22 L42 57 M42 57 L62 92 M62 92 L82 127" stroke="var(--warn-color)" stroke-width="2"/>
+                        </svg>
+                        <div style="position:absolute; bottom:5px; width:100%; text-align:center; color:var(--warn-color); font-size: 16px;">Skewed</div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- P08: 顺序存储 -->
+    <section class="slide" data-title="顺序存储">
+        <h2>1. 顺序存储 (Array Representation)</h2>
+        <div class="layout-2col" style=" height: auto; flex: 1; align-content: start; padding-top: 20px;">
+            <div class="col-content">
+                <!-- 左侧：原理与图示 -->
+                <div class="card" style="padding: 20px; margin-bottom: 10px;">
+                    <h3 style="margin-bottom: 10px; font-size: 28px;"><i class="fas fa-th"></i> 核心思想</h3>
+                    <p style="margin-bottom: 10px; font-size: 26px;">利用<strong>数组下标</strong>关系模拟树结构</p>
+                    <ul style="margin-bottom: 10px;">
+                        <li style="margin-bottom: 5px; font-size: 24px;"><strong>Left</strong>：$2i + 1$ &nbsp;|&nbsp; <strong>Right</strong>：$2i + 2$</li>
+                        <li style="margin-bottom: 0; font-size: 24px;"><strong>Parent</strong>：$[ (i-1) / 2 ]$</li>
+                    </ul>
+                    <hr style="border: 0; border-top: 1px dashed rgba(255,255,255,0.2); margin: 15px 0;">
+                    <div>
+                        <p style="font-size: 24px;color: var(--accent-color); margin-bottom: 5px;"><i class="fas fa-thumbs-up"></i> <strong>适合：完全二叉树</strong></p>
+                        <p style="font-size: 22px; color: #aaa;margin-bottom: 0px;">如：二叉堆 (Binary Heap)，空间利用率 100%。</p>
+                    </div>
+                </div>
+                
+                <div style="transform: scale(1.25); transform-origin: top left; margin-top: 30px;">
+                    <!-- 逻辑结构：树 -->
+                    <div class="tree-container" style="height: 220px; width: 550px;">
+                        <!-- A(0) -->
+                        <div class="tree-node" style="width:50px; height:50px; font-size:22px; left:270px; top:10px; background:var(--accent-color);">A</div>
+                        <!-- B(1), C(2) -->
+                        <div class="tree-node" style="width:50px; height:50px; font-size:22px; left:170px; top:90px; background:var(--secondary-color);">B</div>
+                        <div class="tree-node" style="width:50px; height:50px; font-size:22px; left:370px; top:90px; background:var(--secondary-color);">C</div>
+                        <!-- D(3), E(4) -->
+                        <div class="tree-node" style="width:50px; height:50px; font-size:22px; left:120px; top:170px;">D</div>
+                        <div class="tree-node" style="width:50px; height:50px; font-size:22px; left:220px; top:170px;">E</div>
+                        
+                        <!-- Index Labels -->
+                        <div class="label-tag" style="left:330px; top:20px; font-size:16px; padding:2px 6px;">idx:0</div>
+                        <div class="label-tag" style="left:110px; top:100px; font-size:16px; padding:2px 6px;">idx:1</div>
+                        <div class="label-tag" style="left:430px; top:100px; font-size:16px; padding:2px 6px;">idx:2</div>
+
+                        <svg style="position:absolute;inset:0;pointer-events:none; overflow: visible;">
+                            <!-- Tree Edges -->
+                            <line x1="295" y1="35" x2="195" y2="115" stroke="#fff" stroke-width="2"/>
+                            <line x1="295" y1="35" x2="395" y2="115" stroke="#fff" stroke-width="2"/>
+                            <line x1="195" y1="115" x2="145" y2="195" stroke="#fff" stroke-width="2"/>
+                            <line x1="195" y1="115" x2="245" y2="195" stroke="#fff" stroke-width="2"/>
+                            
+                            <!-- Mapping Arrows -->
+                            <path d="M 295 60 L 295 240" stroke="rgba(255,255,255,0.1)" stroke-dasharray="5,5" />
+                            <path d="M 195 140 L 195 240" stroke="rgba(255,255,255,0.1)" stroke-dasharray="5,5" />
+                            <path d="M 395 140 L 395 240" stroke="rgba(255,255,255,0.1)" stroke-dasharray="5,5" />
+                        </svg>
+                    </div>
+                    
+                    <!-- 物理结构：数组 -->
+                    <div class="array-box" style="margin-top: 20px; justify-content: center;">
+                        <div class="array-cell" style="width:60px; height:60px; border-color:var(--accent-color);"><div class="cell-index" style="font-size:16px;">0</div><div class="cell-val" style="font-size:24px; color:var(--accent-color);">A</div></div>
+                        <div class="array-cell" style="width:60px; height:60px; border-color:var(--secondary-color);"><div class="cell-index" style="font-size:16px;">1</div><div class="cell-val" style="font-size:24px; color:var(--secondary-color);">B</div></div>
+                        <div class="array-cell" style="width:60px; height:60px; border-color:var(--secondary-color);"><div class="cell-index" style="font-size:16px;">2</div><div class="cell-val" style="font-size:24px; color:var(--secondary-color);">C</div></div>
+                        <div class="array-cell" style="width:60px; height:60px;"><div class="cell-index" style="font-size:16px;">3</div><div class="cell-val" style="font-size:24px;">D</div></div>
+                        <div class="array-cell" style="width:60px; height:60px;"><div class="cell-index" style="font-size:16px;">4</div><div class="cell-val" style="font-size:24px;">E</div></div>
+                        <div class="array-cell" style="width:60px; height:60px; opacity: 0.5; border-style: dashed;"><div class="cell-index" style="font-size:16px;">...</div></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-visual" style="align-items: stretch;">
+                <!-- 右侧：完整代码 -->
+                <div class="code-block" style="font-size: 24px; line-height: 1.4; height: 100%; white-space: pre; width: 100%;">
+<span class="code-cm">// 数组模拟二叉树 (容量 100)</span>
+<span class="code-kw">const</span> <span class="code-type">int</span> MAX_N = 100;
+<span class="code-type">int</span> tree[MAX_N];  <span class="code-cm">// 默认 -1 表示空</span>
+
+<span class="code-type">void</span> setRoot(<span class="code-type">int</span> val) {
+    tree[0] = val;
+}
+
+<span class="code-type">void</span> setLeft(<span class="code-type">int</span> i, <span class="code-type">int</span> val) {
+    <span class="code-cm">// 越界检查</span>
+    <span class="code-kw">if</span> (2*i + 1 < MAX_N)
+        tree[2*i + 1] = val;
+}
+
+<span class="code-type">void</span> setRight(<span class="code-type">int</span> i, <span class="code-type">int</span> val) {
+    <span class="code-kw">if</span> (2*i + 2 < MAX_N)
+        tree[2*i + 2] = val;
+}</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P09: 链式存储 -->
+    <section class="slide" data-title="链式存储">
+        <h2>2. 链式存储 (Linked Representation)</h2>
+        <div class="layout-2col" style="align-items: stretch; padding-top: 20px;">
+            <!-- 左侧：原理 + 图示 -->
+            <div class="col-content" style="display: flex; flex-direction: column;">
+                <div class="card" style="margin-bottom: 20px; padding: 25px;">
+                    <h3><i class="fas fa-project-diagram"></i> 核心思想</h3>
+                    <p style="font-size: 28px;">逻辑相邻物理<strong>不一定相邻</strong>，通过指针记录“下家”在哪里。</p>
+                </div>
+
+                <!-- 链式存储可视化图 -->
+                <div class="tree-container" style="flex: 1; min-height: 400px; width: 540px; margin: 0 auto; transform: scale(0.9); transform-origin: top center;">
+                    <!-- Root Node -->
+                    <div style="position: absolute; left: 160px; top: 40px; width: 220px; height: 60px; background: #333; border: 2px solid var(--accent-color); border-radius: 10px; display: flex;">
+                        <div style="width: 25%; border-right: 1px solid #555; display:flex; align-items:center; justify-content:center; font-size:14px;">Left</div>
+                        <div style="width: 50%; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size: 24px;">A</div>
+                        <div style="width: 25%; border-left: 1px solid #555; display:flex; align-items:center; justify-content:center; font-size:14px;">Right</div>
+                    </div>
+                    
+                    <!-- Left Child -->
+                    <div style="position: absolute; left: 20px; top: 200px; width: 200px; height: 60px; background: #333; border: 2px solid var(--secondary-color); border-radius: 10px; display: flex;">
+                        <div style="width: 30%; border-right: 1px solid #555; display:flex; align-items:center; justify-content:center; font-size:14px;">NULL</div>
+                        <div style="width: 40%; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size: 24px;">B</div>
+                        <div style="width: 30%; border-left: 1px solid #555; display:flex; align-items:center; justify-content:center; font-size:14px;">NULL</div>
+                    </div>
+
+                    <!-- Right Child -->
+                    <div style="position: absolute; left: 320px; top: 200px; width: 200px; height: 60px; background: #333; border: 2px solid var(--secondary-color); border-radius: 10px; display: flex;">
+                        <div style="width: 30%; border-right: 1px solid #555; display:flex; align-items:center; justify-content:center; font-size:14px;">NULL</div>
+                        <div style="width: 40%; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size: 24px;">C</div>
+                        <div style="width: 30%; border-left: 1px solid #555; display:flex; align-items:center; justify-content:center; font-size:14px;">NULL</div>
+                    </div>
+
+                    <!-- Pointers SVG -->
+                    <svg style="position:absolute; inset:0; pointer-events:none; overflow:visible;">
+                        <!-- Root Left Ptr -->
+                        <path d="M 190 100 C 190 150, 120 150, 120 200" stroke="#fff" stroke-width="3" fill="none" marker-end="url(#arrow)" />
+                        <circle cx="190" cy="100" r="4" fill="#fff" />
+                        
+                        <!-- Root Right Ptr -->
+                        <path d="M 350 100 C 350 150, 420 150, 420 200" stroke="#fff" stroke-width="3" fill="none" marker-end="url(#arrow)" />
+                        <circle cx="350" cy="100" r="4" fill="#fff" />
+
+                        <defs>
+                            <marker id="arrow" markerWidth="10" markerHeight="10" refX="5" refY="5" orient="auto">
+                                <path d="M0,0 L10,5 L0,10 z" fill="#fff" />
+                            </marker>
+                        </defs>
+                    </svg>
+                    
+                    <div style="position:absolute; top: 300px; width: 100%; text-align: center;">
+                        <p style="font-size: 32px; color: #aaa;">逻辑上是树，物理上是<br><strong>散落在内存各处</strong>的内存块</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-visual" style="align-items: stretch;">
+                <!-- 代码块 -->
+                <div class="code-block" style="font-size: 24px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; overflow-y: auto; max-height: 700px;"><span class="code-cm">// C语言实现链式存储</span>
+<span class="code-kw">#include</span> &lt;stdlib.h&gt;
+
+<span class="code-cm">// 1. 定义节点结构 (使用 typedef 简化)</span>
+<span class="code-kw">typedef</span> <span class="code-kw">struct</span> TreeNode {
+    <span class="code-type">int</span> val;
+    <span class="code-kw">struct</span> TreeNode *left;
+    <span class="code-kw">struct</span> TreeNode *right;
+} Node;
+
+<span class="code-cm">// 2. 创建新节点</span>
+Node* createNode(<span class="code-type">int</span> val) {
+    <span class="code-cm">// 申请内存</span>
+    Node* node = (Node*)malloc(<span class="code-kw">sizeof</span>(Node));
+    node->val = val;
+    node->left = NULL;
+    node->right = NULL;
+    <span class="code-kw">return</span> node;
+}
+
+<span class="code-cm">// 3. 模拟构建过程 (A -> B, C)</span>
+<span class="code-type">void</span> buildTree() {
+    <span class="code-cm">// 申请内存空间 (分散的)</span>
+    Node* root = createNode(1);   <span class="code-cm">// Node A</span>
+    Node* nodeB = createNode(2);  <span class="code-cm">// Node B</span>
+    Node* nodeC = createNode(3);  <span class="code-cm">// Node C</span>
+
+    <span class="code-cm">// 建立逻辑连接</span>
+    root->left = nodeB;
+    root->right = nodeC;
+}</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P10: 总结 -->
+    <section class="slide" data-title="课堂小结">
+        <h2>课堂小结</h2>
+        <div class="layout-2col" style="align-items: stretch;">
+            <!-- 左侧：重点回顾 -->
+            <div class="col-content">
+                <div class="card" style="height: 100%; display: flex; flex-direction: column; justify-content: center;">
+                    <h3 style="border-bottom: 2px solid rgba(255,255,255,0.1); padding-bottom: 20px; margin-bottom: 30px;">
+                        <i class="fas fa-clipboard-check" style="color: var(--accent-color);"></i> 核心知识点
+                    </h3>
+                    <ul style="font-size: 36px; line-height: 1.8;">
+                        <li style="margin-bottom: 30px;"><strong>逻辑结构</strong>：一对多，递归定义。</li>
+                        <li style="margin-bottom: 30px;"><strong>关键概念</strong>：根、叶、度、层级 (Level/Depth/Height)。</li>
+                        <li><strong>特殊形态</strong>：完全二叉树 (数组存储)、二叉搜索树 (查找)。</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- 右侧：展望与预告 -->
+            <div class="col-content" style="display: flex; flex-direction: column; gap: 40px;">
+                <!-- 感悟 -->
+                <div class="card" style="background: linear-gradient(135deg, rgba(34, 211, 238, 0.1) 0%, rgba(34, 211, 238, 0.02) 100%); border: 1px solid rgba(34, 211, 238, 0.3); flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
+                    <i class="fas fa-lightbulb" style="font-size: 60px; color: var(--accent-color); margin-bottom: 20px;"></i>
+                    <p style="font-size: 32px; color: #fff; margin: 0;">
+                        今天只是<strong>建立模型</strong>。<br>
+                        真正的魔法——<strong>递归与遍历</strong>，才刚刚开始。
+                    </p>
+                </div>
+
+                <!-- Next Step -->
+                <div class="card" style="background: rgba(255, 255, 255, 0.05); border-left: 8px solid var(--tertiary-color); flex: 1; display: flex; flex-direction: column; justify-content: center;">
+                    <h3 style="color: var(--tertiary-color); font-size: 32px; margin-bottom: 15px;">
+                        <i class="fas fa-forward"></i> Next Step: 遍历
+                    </h3>
+                    <p style="font-size: 28px; color: #ccc; margin: 0;">
+                        我们将手写代码模拟：<br>
+                        <span style="color: #fff; font-weight: bold;">前序、中序、后序、层序 (BFS)</span>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 页脚页码 -->
+    <div class="footer">
+        <span id="page-number">1 / 10</span>
+    </div>
+</div>
+
+<script>
+    const slides = document.querySelectorAll('.slide');
+    const pageNumberEl = document.getElementById('page-number');
+    const totalSlides = slides.length;
+
+    function getPageFromUrl() {
+        const params = new URLSearchParams(window.location.search);
+        const page = parseInt(params.get('page'));
+        if (!isNaN(page) && page >= 1 && page <= totalSlides) {
+            return page - 1;
+        }
+        return 0;
+    }
+
+    let currentSlide = getPageFromUrl();
+
+    function updateSlide() {
+        slides.forEach((slide, index) => {
+            slide.classList.remove('active');
+            if (index === currentSlide) {
+                slide.classList.add('active');
+            }
+        });
+        pageNumberEl.textContent = `${currentSlide + 1} / ${totalSlides}`;
+        
+        try {
+            const url = new URL(window.location.href);
+            url.searchParams.set('page', currentSlide + 1);
+            window.history.replaceState(null, '', url.href);
+        } catch (e) {}
+    }
+
+    function nextSlide() {
+        if (currentSlide < totalSlides - 1) {
+            currentSlide++;
+            updateSlide();
+        }
+    }
+
+    function prevSlide() {
+        if (currentSlide > 0) {
+            currentSlide--;
+            updateSlide();
+        }
+    }
+
+    document.addEventListener('keydown', (e) => {
+        if (['ArrowRight', ' ', 'Enter'].includes(e.key)) {
+            nextSlide();
+        } else if (e.key === 'ArrowLeft') {
+            prevSlide();
+        }
+    });
+
+    function resizeApp() {
+        const app = document.getElementById('app');
+        const scale = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+        app.style.transform = `scale(${scale})`;
+    }
+    window.addEventListener('resize', resizeApp);
+    resizeApp();
+    updateSlide();
+</script>
+
+<!-- MathJax for formulas -->
+<script>
+    window.MathJax = {
+        tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] }
+    };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
+
+</body>
+</html>

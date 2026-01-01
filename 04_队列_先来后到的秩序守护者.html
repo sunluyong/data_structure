@@ -463,12 +463,12 @@
         </div>
     </section>
 
-    <!-- P05: 什么是循环队列 (New) -->
-    <section class="slide" data-title="什么是循环队列">
-        <h2>什么是循环队列 (Circular Queue)？</h2>
+    <!-- P05: 什么是循环数组 -->
+    <section class="slide" data-title="什么是循环数组">
+        <h2>什么是循环数组？</h2>
         <div class="layout-2col">
             <div class="col-content">
-                <p><strong>循环队列</strong>本质上是基于<strong>固定长度数组</strong>实现的。</p>
+                <p><strong>循环数组</strong>本质上是基于<strong>固定长度数组</strong>实现的。</p>
                 <p>通过<strong>取模运算</strong>，在逻辑上将数组的末尾与开头相连，形成一个环形结构，从而复用数组空间。</p>
                 
                 <div class="highlight-box" style="margin-top: 20px; padding: 30px;">
@@ -636,7 +636,7 @@
                 </div>
                 <div class="highlight-box" style="margin-bottom: 0px;padding: 10px 20px 0;">
                     <div class="formula" style="font-size: 36px; padding: 15px; margin: 15px 0;">
-                        Rear = (Rear + 1) % Cap
+                        Rear = (Rear + 1) % Capacity
                     </div>
                     <div style="font-family: monospace; font-size: 26px; color: #888; background: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px;">
                         <span style="line-height: 1.5;color: var(--accent-color)">Current Rear = 7</span><br>

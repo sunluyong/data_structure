@@ -1,0 +1,1628 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>07 树：深度优先遍历与广度优先遍历</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0B1020;
+            --text-color: #EAF2FF;
+            --accent-color: #22D3EE;     /* 青色：核心概念 */
+            --secondary-color: #60A5FA;  /* 蓝色：辅助说明 */
+            --tertiary-color: #A78BFA;   /* 紫色：强调/代码 */
+            --warn-color: #F472B6;       /* 粉红：重点/易错 */
+            --code-bg: #1e293b;
+            --slide-width: 1920px;
+            --slide-height: 1080px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background-color: #000;
+            color: var(--text-color);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        #app {
+            width: var(--slide-width);
+            height: var(--slide-height);
+            background-color: var(--bg-color);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+        }
+
+        /* 背景装饰 */
+        .bg-decoration {
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            background-image: 
+                radial-gradient(circle at 15% 15%, rgba(34, 211, 238, 0.03) 0%, transparent 25%),
+                radial-gradient(circle at 85% 85%, rgba(167, 139, 250, 0.03) 0%, transparent 25%);
+            pointer-events: none;
+        }
+        
+        .grid-overlay {
+            position: absolute;
+            inset: 0;
+            background-size: 60px 60px;
+            background-image: linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+                              linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+            z-index: 0;
+        }
+
+        /* 幻灯片通用 */
+        .slide {
+            position: absolute;
+            inset: 0;
+            display: none;
+            padding: 80px 100px;
+            flex-direction: column;
+            z-index: 1;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+
+        .slide.active { display: flex; opacity: 1; }
+
+        /* 排版元素 */
+        h1 {
+            font-size: 140px;
+            font-weight: 800;
+            line-height: 1.1;
+            margin-bottom: 40px;
+            background: linear-gradient(135deg, #fff 0%, var(--secondary-color) 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        h2 {
+            font-size: 72px;
+            margin-bottom: 50px;
+            color: var(--accent-color);
+            border-bottom: 4px solid rgba(34, 211, 238, 0.3);
+            padding-bottom: 20px;
+            display: inline-block;
+        }
+
+        h3 {
+            font-size: 48px;
+            margin-bottom: 30px;
+            color: var(--secondary-color);
+        }
+
+        p, li {
+            font-size: 38px;
+            line-height: 1.5;
+            margin-bottom: 24px;
+            color: #cbd5e1;
+        }
+
+        strong { color: var(--accent-color); font-weight: 700; }
+        em { color: var(--tertiary-color); font-style: normal; font-weight: bold; }
+
+        ul { list-style: none; }
+        ul li { position: relative; padding-left: 50px; }
+        ul li::before {
+            content: "•";
+            color: var(--accent-color);
+            position: absolute;
+            left: 0;
+            font-weight: bold;
+        }
+
+        /* 布局类 */
+        .layout-center {
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        .layout-2col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 60px;
+            flex: 1; /* 自适应剩余高度 */
+            align-content: start; /* 顶部对齐 */
+        }
+        
+        .layout-2col .col-visual {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative; /* 限制绝对定位子元素 */
+        }
+
+        /* 组件 */
+        .card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 24px;
+            padding: 40px;
+            margin-bottom: 30px;
+        }
+        
+        .highlight-box {
+            background: rgba(34, 211, 238, 0.08);
+            border-left: 8px solid var(--accent-color);
+            padding: 30px 40px;
+            border-radius: 0 16px 16px 0;
+            margin: 30px 0;
+        }
+
+        .code-block {
+            font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+            background: var(--code-bg);
+            padding: 30px;
+            border-radius: 16px;
+            border: 1px solid #334155;
+            font-size: 26px;
+            line-height: 1.6;
+            color: #e2e8f0;
+            white-space: pre;
+            overflow-x: auto;
+            overflow-y: auto;
+            max-height: 650px; /* 支持垂直滚动 */
+        }
+        /* 自定义滚动条 */
+        .code-block::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+        .code-block::-webkit-scrollbar-track {
+            background: rgba(255,255,255,0.05);
+            border-radius: 5px;
+        }
+        .code-block::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.2);
+            border-radius: 5px;
+        }
+        .code-block::-webkit-scrollbar-thumb:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .code-kw { color: #c678dd; } 
+        .code-type { color: #e5c07b; } 
+        .code-fn { color: #61afef; }
+        .code-cm { color: #64748b; font-style: italic; } 
+        .code-num { color: #d19a66; }
+        .code-str { color: #98c379; }
+
+        /* 树的可视化通用样式 */
+        .tree-node {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: var(--bg-color);
+            border: 3px solid var(--accent-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            font-weight: bold;
+            color: #fff;
+            position: absolute;
+            z-index: 2;
+            box-shadow: 0 0 20px rgba(34, 211, 238, 0.2);
+            transition: all 0.3s ease;
+        }
+        
+        .tree-node.active {
+            background: var(--accent-color);
+            color: #000;
+            transform: scale(1.1);
+        }
+
+        .tree-node.visited {
+            background: var(--secondary-color);
+            border-color: var(--secondary-color);
+            /* opacity: 0.7;  Avoid seeing lines behind nodes */
+            color: rgba(255,255,255,0.8);
+        }
+        
+        .label-tag {
+            position: absolute;
+            background: rgba(0,0,0,0.6);
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 24px;
+            color: var(--secondary-color);
+            border: 1px solid var(--secondary-color);
+            white-space: nowrap;
+        }
+
+        .footer {
+            position: absolute;
+            bottom: 30px;
+            right: 40px;
+            font-size: 24px;
+            color: rgba(255, 255, 255, 0.3);
+            z-index: 10;
+        }
+
+        .tree-container {
+            position: relative;
+            width: 100%;
+            height: 600px;
+        }
+
+        /* 栈/队列可视化 */
+        .struct-container {
+            display: flex;
+            flex-direction: column-reverse; /* 栈底在下 */
+            width: 120px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top: none; /* 栈顶开口 */
+            padding: 10px;
+            gap: 5px;
+            background: rgba(255,255,255,0.02);
+            min-height: 300px;
+            align-items: center;
+        }
+        .queue-container {
+            display: flex;
+            flex-direction: row; /* 队列横向 */
+            height: 100px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-left: none; /* 两端开口? 这里模拟可视化的框 */
+            border-right: none;
+            padding: 10px;
+            gap: 5px;
+            background: rgba(255,255,255,0.02);
+            min-width: 400px;
+            align-items: center;
+        }
+        .struct-item {
+            width: 80px;
+            height: 50px;
+            background: var(--tertiary-color);
+            color: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 24px;
+            border-radius: 8px;
+        }
+
+        /* 动画控制栏 */
+        .anim-controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            margin-top: 10px;
+        }
+        .anim-controls button {
+            padding: 8px 16px;
+            font-size: 20px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: var(--text-color);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 50px;
+        }
+        .anim-controls button:hover {
+            background: var(--accent-color);
+            color: #000;
+            border-color: var(--accent-color);
+        }
+        .anim-controls button:active {
+            transform: scale(0.95);
+        }
+        .anim-progress {
+            font-family: monospace;
+            font-size: 20px;
+            color: #888;
+            margin-left: 10px;
+            min-width: 80px;
+        }
+
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <div class="bg-decoration"></div>
+    <div class="grid-overlay"></div>
+
+    <!-- P01: 封面 -->
+    <section class="slide active layout-center" data-title="封面">
+        <div style="text-align: center;">
+            <svg width="240" height="200" viewBox="0 0 240 200" style="margin-bottom: 60px; filter: drop-shadow(0 0 30px rgba(34,211,238,0.4)); overflow: visible;">
+                <!-- Edges -->
+                <line x1="120" y1="40" x2="60" y2="100" stroke="#22D3EE" stroke-width="6" stroke-linecap="round" />
+                <line x1="120" y1="40" x2="180" y2="100" stroke="#22D3EE" stroke-width="6" stroke-linecap="round" />
+                <line x1="60" y1="100" x2="30" y2="160" stroke="#22D3EE" stroke-width="6" stroke-linecap="round" />
+                <line x1="60" y1="100" x2="90" y2="160" stroke="#22D3EE" stroke-width="6" stroke-linecap="round" />
+                <line x1="180" y1="100" x2="150" y2="160" stroke="#22D3EE" stroke-width="6" stroke-linecap="round" />
+                <line x1="180" y1="100" x2="210" y2="160" stroke="#22D3EE" stroke-width="6" stroke-linecap="round" />
+                
+                <!-- Highlight Path -->
+                <path d="M120 40 L60 100 L30 160" stroke="#A78BFA" stroke-width="3" fill="none" stroke-dasharray="8,8" />
+                
+                <!-- Nodes -->
+                <circle cx="120" cy="40" r="18" fill="#0B1020" stroke="#22D3EE" stroke-width="6" />
+                <circle cx="60" cy="100" r="15" fill="#0B1020" stroke="#22D3EE" stroke-width="5" />
+                <circle cx="180" cy="100" r="15" fill="#0B1020" stroke="#22D3EE" stroke-width="5" />
+                <circle cx="30" cy="160" r="12" fill="#22D3EE" />
+                <circle cx="90" cy="160" r="12" fill="#22D3EE" />
+                <circle cx="150" cy="160" r="12" fill="#22D3EE" />
+                <circle cx="210" cy="160" r="12" fill="#22D3EE" />
+            </svg>
+            <h1>算法与数据结构</h1>
+            <p style="font-size: 60px; color: var(--secondary-color);">二叉树遍历 DFS & BFS</p>
+        </div>
+    </section>
+
+    <!-- P02: 结构体定义 -->
+    <section class="slide" data-title="结构体定义">
+        <h2>回顾树的定义</h2>
+        <div class="layout-2col" style="align-items: center;">
+            <div class="col-content">
+                <div class="card">
+                    <h3><i class="fas fa-cube"></i> 数据结构</h3>
+                    <p>使用 <code>typedef</code> 简化指针操作。</p>
+                    <ul style="font-size: 32px;">
+                        <li><strong>val</strong>：存储字符数据 (char)</li>
+                        <li><strong>left/right</strong>：左右子树指针</li>
+                    </ul>
+                </div>
+                <div class="highlight-box">
+                    <p class="mb-0"><strong>createNode</strong> 函数负责申请内存并初始化。</p>
+                </div>
+            </div>
+            <div class="col-visual">
+                <div class="code-block" style="width: 100%; font-size: 28px;"><span class="code-cm"><span class="code-kw">typedef struct</span> TreeNode {
+    <span class="code-type">char</span> val;
+    <span class="code-kw">struct</span> TreeNode *left;
+    <span class="code-kw">struct</span> TreeNode *right;
+} Node;
+
+Node* <span class="code-fn">createNode</span>(<span class="code-type">char</span> val) {
+    Node* newNode = (Node*)<span class="code-fn">malloc</span>(<span class="code-kw">sizeof</span>(Node));
+    newNode->val = val;
+    newNode->left = NULL;
+    newNode->right = NULL;
+    <span class="code-kw">return</span> newNode;
+}</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P03: 构建演示树 -->
+    <section class="slide" data-title="构建演示树">
+        <h2>构建 Demo 树</h2>
+        <div class="layout-2col" style="align-items: center;">
+            <div class="col-content">
+                 <p>为了演示遍历顺序，我们手动构建一棵标准二叉树：</p>
+                 <ul style="margin-top: 30px; font-size: 30px;">
+                     <li><strong>根</strong>：A</li>
+                     <li><strong>左子树</strong>：B (子节点 D, E)</li>
+                     <li><strong>右子树</strong>：C (子节点 F, G)</li>
+                 </ul>
+                 <div class="tree-container" style="height: 350px; margin-top: 20px; transform: scale(0.9); transform-origin: top left;">
+                    <!-- SVG Lines -->
+                    <svg style="position: absolute; width: 100%; height: 100%;">
+                        <line x1="250" y1="50" x2="150" y2="150" stroke="#fff" stroke-width="4" />
+                        <line x1="250" y1="50" x2="350" y2="150" stroke="#fff" stroke-width="4" />
+                        <line x1="150" y1="150" x2="100" y2="250" stroke="#fff" stroke-width="3" />
+                        <line x1="150" y1="150" x2="200" y2="250" stroke="#fff" stroke-width="3" />
+                        <line x1="350" y1="150" x2="300" y2="250" stroke="#fff" stroke-width="3" />
+                        <line x1="350" y1="150" x2="400" y2="250" stroke="#fff" stroke-width="3" />
+                    </svg>
+
+                    <!-- Nodes -->
+                    <div class="tree-node" style="left: 210px; top: 10px; background: var(--accent-color); color: #000;">A</div>
+                    <div class="tree-node" style="left: 110px; top: 110px;">B</div>
+                    <div class="tree-node" style="left: 310px; top: 110px;">C</div>
+                    <div class="tree-node" style="left: 60px; top: 210px;">D</div>
+                    <div class="tree-node" style="left: 160px; top: 210px;">E</div>
+                    <div class="tree-node" style="left: 260px; top: 210px;">F</div>
+                    <div class="tree-node" style="left: 360px; top: 210px;">G</div>
+                </div>
+            </div>
+            <div class="col-visual">
+                <div class="code-block" style="width: 100%; font-size: 26px;"><span class="code-type">int</span> <span class="code-fn">main</span>() {
+    Node* root = <span class="code-fn">createNode</span>(<span class="code-str">'A'</span>);
+    <span class="code-cm">// 第二层</span>
+    root->left = <span class="code-fn">createNode</span>(<span class="code-str">'B'</span>);
+    root->right = <span class="code-fn">createNode</span>(<span class="code-str">'C'</span>);
+    <span class="code-cm">// 第三层 (B的子节点)</span>
+    root->left->left = <span class="code-fn">createNode</span>(<span class="code-str">'D'</span>);
+    root->left->right = <span class="code-fn">createNode</span>(<span class="code-str">'E'</span>);
+    <span class="code-cm">// 第三层 (C的子节点)</span>
+    root->right->left = <span class="code-fn">createNode</span>(<span class="code-str">'F'</span>);
+    root->right->right = <span class="code-fn">createNode</span>(<span class="code-str">'G'</span>);
+    <span class="code-cm">// ... 调用遍历函数 ...</span>
+    <span class="code-kw">return</span> 0;
+}</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P03.5: 直觉引导 -->
+    <section class="slide" data-title="直觉引导">
+        <h2>直觉思考：如何遍历这棵树？</h2>
+        <p style="text-align: center; font-size: 36px; margin-bottom: 40px; color: #cbd5e1;">如果让你把这棵树的所有节点都“数”一遍，不重复、不遗漏，你会怎么走？</p>
+        
+        <div class="layout-2col" style="gap: 50px; align-items: stretch;">
+            <!-- Left: DFS (深度优先) -->
+            <div class="col-visual" style="background: rgba(34, 211, 238, 0.05); border-radius: 24px; padding: 40px; border: 2px solid rgba(34, 211, 238, 0.2); display: flex; flex-direction: column; align-items: center;">
+                <h3 style="color: var(--accent-color); font-size: 42px; margin-bottom: 15px;">直觉 A：一条路走到黑</h3>
+                <p style="font-size: 28px; text-align: center; margin-bottom: 30px; color: #fff;">顺着一根藤摸下去，<br>直到没路了再回头。</p>
+                
+                <div class="tree-container" style="height: 320px; width: 420px; margin: 0 auto; transform: scale(0.9); transform-origin: top center;">
+                    <svg style="position: absolute; width: 100%; height: 100%; overflow: visible; z-index: 0;">
+                        <defs>
+                            <marker id="arrow-dfs" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+                              <path d="M0,0 L0,6 L9,3 z" fill="var(--accent-color)" />
+                            </marker>
+                        </defs>
+                        <!-- Tree Links (Dimmed) -->
+                        <line x1="210" y1="50" x2="110" y2="150" stroke="#fff" stroke-width="4" stroke-opacity="0.1" />
+                        <line x1="210" y1="50" x2="310" y2="150" stroke="#fff" stroke-width="4" stroke-opacity="0.1" />
+                        <line x1="110" y1="150" x2="60" y2="250" stroke="#fff" stroke-width="3" stroke-opacity="0.1" />
+                        <line x1="110" y1="150" x2="160" y2="250" stroke="#fff" stroke-width="3" stroke-opacity="0.1" />
+                        <line x1="310" y1="150" x2="260" y2="250" stroke="#fff" stroke-width="3" stroke-opacity="0.1" />
+                        <line x1="310" y1="150" x2="360" y2="250" stroke="#fff" stroke-width="3" stroke-opacity="0.1" />
+
+                        <!-- DFS Path Visual (Curved more to avoid overlap) -->
+                        <path d="M190 60 Q130 110 90 140 Q70 180 50 230" stroke="var(--accent-color)" stroke-width="6" fill="none" stroke-dasharray="10,5" marker-end="url(#arrow-dfs)" />
+                    </svg>
+                    
+                    <!-- Nodes (Adjusted coordinates to match lines: A at 210,50 (center) -> left: 170px) -->
+                    <!-- Note: .tree-node is 80x80, so center X = left + 40, center Y = top + 40 -->
+                    <!-- A: 210,50 -> left: 170, top: 10 -->
+                    <!-- B: 110,150 -> left: 70, top: 110 -->
+                    <!-- C: 310,150 -> left: 270, top: 110 -->
+                    <!-- D: 60,250 -> left: 20, top: 210 -->
+                    <!-- E: 160,250 -> left: 120, top: 210 -->
+                    <!-- F: 260,250 -> left: 220, top: 210 -->
+                    <!-- G: 360,250 -> left: 320, top: 210 -->
+
+                    <!-- Nodes z-index 1 to cover lines. bg-color must be opaque -->
+                    <div class="tree-node" style="left: 170px; top: 10px; color: rgba(255,255,255,0.3); border-color: rgba(255,255,255,0.1); background-color: var(--bg-color);">A</div>
+                    <div class="tree-node" style="left: 70px; top: 110px; border-color: var(--accent-color); box-shadow: 0 0 15px var(--accent-color); background-color: var(--bg-color);">B</div>
+                    <div class="tree-node" style="left: 270px; top: 110px; color: rgba(255,255,255,0.3); border-color: rgba(255,255,255,0.1); background-color: var(--bg-color);">C</div>
+                    <div class="tree-node" style="left: 20px; top: 210px; background: var(--accent-color); color: #000; transform: scale(1.1); border-color: var(--accent-color);">D</div>
+                    <div class="tree-node" style="left: 120px; top: 210px; color: rgba(255,255,255,0.3); border-color: rgba(255,255,255,0.1); background-color: var(--bg-color);">E</div>
+                    <div class="tree-node" style="left: 220px; top: 210px; color: rgba(255,255,255,0.3); border-color: rgba(255,255,255,0.1); background-color: var(--bg-color);">F</div>
+                    <div class="tree-node" style="left: 320px; top: 210px; color: rgba(255,255,255,0.3); border-color: rgba(255,255,255,0.1); background-color: var(--bg-color);">G</div>
+                </div>
+
+                <div style="margin-top: auto; background: var(--accent-color); color: #000; padding: 10px 20px; border-radius: 12px; font-weight: bold; font-size: 32px;">
+                    深度优先 (DFS)
+                </div>
+            </div>
+
+            <!-- Right: BFS (广度优先) -->
+            <div class="col-visual" style="background: rgba(96, 165, 250, 0.05); border-radius: 24px; padding: 40px; border: 2px solid rgba(96, 165, 250, 0.2); display: flex; flex-direction: column; align-items: center;">
+                <h3 style="color: var(--secondary-color); font-size: 42px; margin-bottom: 15px;">直觉 B：地毯式搜索</h3>
+                <p style="font-size: 28px; text-align: center; margin-bottom: 30px; color: #fff;">先把这一层看完了，<br>再去看下一层。</p>
+                
+                <div class="tree-container" style="height: 320px; width: 420px; margin: 0 auto; transform: scale(0.9); transform-origin: top center;">
+                     <svg style="position: absolute; width: 100%; height: 100%; overflow: visible; z-index: 0;">
+                         <defs>
+                            <marker id="arrow-bfs" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+                              <path d="M0,0 L0,6 L9,3 z" fill="var(--secondary-color)" />
+                            </marker>
+                         </defs>
+                        <!-- Tree Links (Dimmed) -->
+                        <line x1="210" y1="50" x2="110" y2="150" stroke="#fff" stroke-width="4" stroke-opacity="0.1" />
+                        <line x1="210" y1="50" x2="310" y2="150" stroke="#fff" stroke-width="4" stroke-opacity="0.1" />
+                        <line x1="110" y1="150" x2="60" y2="250" stroke="#fff" stroke-width="3" stroke-opacity="0.1" />
+                        <line x1="110" y1="150" x2="160" y2="250" stroke="#fff" stroke-width="3" stroke-opacity="0.1" />
+                        <line x1="310" y1="150" x2="260" y2="250" stroke="#fff" stroke-width="3" stroke-opacity="0.1" />
+                        <line x1="310" y1="150" x2="360" y2="250" stroke="#fff" stroke-width="3" stroke-opacity="0.1" />
+
+                        <!-- BFS Scan Visual -->
+                        <rect x="40" y="90" width="340" height="120" rx="60" fill="rgba(96, 165, 250, 0.1)" stroke="var(--secondary-color)" stroke-width="4" stroke-dasharray="10,5" />
+                         <path d="M-20 150 L30 150" stroke="var(--secondary-color)" stroke-width="4" marker-end="url(#arrow-bfs)" />
+                         <path d="M390 150 L440 150" stroke="var(--secondary-color)" stroke-width="4" marker-end="url(#arrow-bfs)" />
+                    </svg>
+                    <!-- Nodes (Adjusted coordinates to match lines) -->
+                    <div class="tree-node" style="left: 170px; top: 10px; color: rgba(255,255,255,0.3); border-color: rgba(255,255,255,0.1); background-color: var(--bg-color);">A</div>
+                    <div class="tree-node" style="left: 70px; top: 110px; border-color: var(--secondary-color); color: var(--secondary-color); background-color: var(--bg-color);">B</div>
+                    <div class="tree-node" style="left: 270px; top: 110px; border-color: var(--secondary-color); color: var(--secondary-color); background-color: var(--bg-color);">C</div>
+                    <div class="tree-node" style="left: 20px; top: 210px; color: rgba(255,255,255,0.3); border-color: rgba(255,255,255,0.1); background-color: var(--bg-color);">D</div>
+                    <div class="tree-node" style="left: 120px; top: 210px; color: rgba(255,255,255,0.3); border-color: rgba(255,255,255,0.1); background-color: var(--bg-color);">E</div>
+                    <div class="tree-node" style="left: 220px; top: 210px; color: rgba(255,255,255,0.3); border-color: rgba(255,255,255,0.1); background-color: var(--bg-color);">F</div>
+                    <div class="tree-node" style="left: 320px; top: 210px; color: rgba(255,255,255,0.3); border-color: rgba(255,255,255,0.1); background-color: var(--bg-color);">G</div>
+                </div>
+
+                <div style="margin-top: auto; background: var(--secondary-color); color: #fff; padding: 10px 20px; border-radius: 12px; font-weight: bold; font-size: 32px;">
+                    广度优先 (BFS)
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P03.8: DFS的三种流派 -->
+    <section class="slide" data-title="DFS的三种流派">
+        <style>
+            /* 局部样式：移除本页列表的圆点，并调整字号 */
+            .slide[data-title="DFS的三种流派"] .step-list li {
+                padding-left: 0 !important;
+            }
+            .slide[data-title="DFS的三种流派"] .step-list li::before {
+                content: none !important;
+            }
+        </style>
+        <h2>DFS 的三种流派</h2>
+        <p style="text-align: center; font-size: 32px; margin-bottom: 40px; color: #cbd5e1;">虽然路径都是“一条路走到黑”，但<strong>“处理数据”的时机</strong>不同，诞生了三种流派。</p>
+        
+        <div class="layout-2col" style="grid-template-columns: 1fr 1fr 1fr; gap: 40px; align-items: stretch;">
+            
+            <!-- Pre-order -->
+            <div class="card" style="border-top: 8px solid var(--accent-color); padding: 30px; display: flex; flex-direction: column; align-items: center;">
+                <h3 style="color: var(--accent-color); font-size: 40px; margin-bottom: 10px;">前序</h3>
+                <div style="font-size: 20px; color: #888; margin-bottom: 30px;">Pre-order</div>
+                
+                <!-- Visual Block -->
+                <div style="display: flex; gap: 10px; margin-bottom: 30px; transform: scale(1.1);">
+                    <div style="background: var(--accent-color); color: #000; padding: 10px 20px; border-radius: 8px; font-weight: bold;">根</div>
+                    <div style="border: 2px solid rgba(255,255,255,0.2); padding: 10px 20px; border-radius: 8px; color: #888;">左</div>
+                    <div style="border: 2px solid rgba(255,255,255,0.2); padding: 10px 20px; border-radius: 8px; color: #888;">右</div>
+                </div>
+
+                <ul class="step-list" style="font-size: 20px; color: #ccc; text-align: left; line-height: 1.5;">
+                    <li>1. <strong style="font-size: 30px;color: var(--accent-color);">访问根节点</strong></li>
+                    <li style="font-size: 30px;">2. 遍历左子树</li>
+                    <li style="font-size: 30px;">3. 遍历右子树</li>
+                </ul>
+                
+                <div style="margin-top: auto; padding: 15px; background: rgba(34,211,238,0.1); border-radius: 12px; font-size: 22px; color: var(--accent-color); width: 100%; text-align: center;">
+                    "进门先办事"<br><span style="font-size: 18px; opacity: 0.8;">(如：目录复制)</span>
+                </div>
+            </div>
+
+            <!-- In-order -->
+            <div class="card" style="border-top: 8px solid var(--secondary-color); padding: 30px; display: flex; flex-direction: column; align-items: center;">
+                <h3 style="color: var(--secondary-color); font-size: 40px; margin-bottom: 10px;">中序</h3>
+                <div style="font-size: 20px; color: #888; margin-bottom: 30px;">In-order</div>
+                
+                <!-- Visual Block -->
+                <div style="display: flex; gap: 10px; margin-bottom: 30px; transform: scale(1.1);">
+                    <div style="border: 2px solid rgba(255,255,255,0.2); padding: 10px 20px; border-radius: 8px; color: #888;">左</div>
+                    <div style="background: var(--secondary-color); color: #000; padding: 10px 20px; border-radius: 8px; font-weight: bold;">根</div>
+                    <div style="border: 2px solid rgba(255,255,255,0.2); padding: 10px 20px; border-radius: 8px; color: #888;">右</div>
+                </div>
+
+                <ul class="step-list" style="font-size: 20px; color: #ccc; text-align: left; line-height: 2;">
+                    <li style="font-size: 30px;">1. 遍历左子树</li>
+                    <li style="font-size: 30px;">2. <strong style="font-size: 30px;color: var(--secondary-color);">访问根节点</strong></li>
+                    <li style="font-size: 30px;">3. 遍历右子树</li>
+                </ul>
+
+                <div style="margin-top: auto; padding: 15px; background: rgba(96,165,250,0.1); border-radius: 12px; font-size: 22px; color: var(--secondary-color); width: 100%; text-align: center;">
+                    "夹在中间办"<br><span style="font-size: 18px; opacity: 0.8;">(如：BST 排序)</span>
+                </div>
+            </div>
+
+            <!-- Post-order -->
+            <div class="card" style="border-top: 8px solid var(--warn-color); padding: 30px; display: flex; flex-direction: column; align-items: center;">
+                <h3 style="color: var(--warn-color); font-size: 40px; margin-bottom: 10px;">后序</h3>
+                <div style="font-size: 20px; color: #888; margin-bottom: 30px;">Post-order</div>
+                
+                <!-- Visual Block -->
+                <div style="display: flex; gap: 10px; margin-bottom: 30px; transform: scale(1.1);">
+                    <div style="border: 2px solid rgba(255,255,255,0.2); padding: 10px 20px; border-radius: 8px; color: #888;">左</div>
+                    <div style="border: 2px solid rgba(255,255,255,0.2); padding: 10px 20px; border-radius: 8px; color: #888;">右</div>
+                    <div style="background: var(--warn-color); color: #000; padding: 10px 20px; border-radius: 8px; font-weight: bold;">根</div>
+                </div>
+
+                <ul class="step-list" style="font-size: 20px; color: #ccc; text-align: left; line-height: 2;">
+                    <li style="font-size: 30px;">1. 遍历左子树</li>
+                    <li style="font-size: 30px;">2. 遍历右子树</li>
+                    <li>3. <strong style="font-size: 30px;color: var(--warn-color);">访问根节点</strong></li>
+                </ul>
+
+                <div style="margin-top: auto; padding: 15px; background: rgba(244,114,182,0.1); border-radius: 12px; font-size: 22px; color: var(--warn-color); width: 100%; text-align: center;">
+                    "最后再收尾"<br><span style="font-size: 18px; opacity: 0.8;">(如：删除目录)</span>
+                </div>
+            </div>
+
+        </div>
+        
+        <div style="margin-top: 0px; text-align: center; font-size: 28px; color: #cbd5e1; background: rgba(255,255,255,0.05); padding: 20px; border-radius: 16px;">
+            <i class="fas fa-lightbulb" style="color: #FCD34D;"></i> <strong>核心口诀</strong>：所谓前、中、后，指的都是 <strong>根节点 (Root)</strong> 在什么时机被访问。
+        </div>
+    </section>
+
+    <!-- P04: 前序遍历（递归） -->
+    <section class="slide" data-title="前序遍历（递归）">
+        <h2>前序遍历 (Pre-order) - 递归实现</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="card" style="padding: 20px; display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h3><i class="fas fa-code-branch"></i> 遍历顺序</h3>
+                        <p style="font-size: 32px; font-weight: bold; color: var(--accent-color); margin-bottom: 0;">根 → 左 → 右</p>
+                    </div>
+                    <div class="anim-controls">
+                        <button onclick="Anim.prev()"><i class="fas fa-step-backward"></i></button>
+                        <button onclick="Anim.toggle()"><i class="fas fa-play"></i></button>
+                        <button onclick="Anim.next()"><i class="fas fa-step-forward"></i></button>
+                        <button onclick="Anim.reset()"><i class="fas fa-undo"></i></button>
+                        <div class="anim-progress" id="p4-progress">0/0</div>
+                    </div>
+                </div>
+                
+                <div class="tree-container" id="p4-tree" style="height: 400px; margin-top: 30px; transform: scale(1); transform-origin: top left;">
+                    <svg style="position: absolute; width: 100%; height: 100%; z-index: 1;">
+                        <line x1="250" y1="50" x2="150" y2="150" stroke="#fff" stroke-width="4" />
+                        <line x1="250" y1="50" x2="350" y2="150" stroke="#fff" stroke-width="4" />
+                        <line x1="150" y1="150" x2="100" y2="250" stroke="#fff" stroke-width="3" />
+                        <line x1="150" y1="150" x2="200" y2="250" stroke="#fff" stroke-width="3" />
+                        <line x1="350" y1="150" x2="300" y2="250" stroke="#fff" stroke-width="3" />
+                        <line x1="350" y1="150" x2="400" y2="250" stroke="#fff" stroke-width="3" />
+                    </svg>
+                    <!-- Nodes -->
+                    <div class="tree-node" data-val="A" style="left: 210px; top: 10px; z-index: 10;">A</div>
+                    <div class="tree-node" data-val="B" style="left: 110px; top: 110px; z-index: 10;">B</div>
+                    <div class="tree-node" data-val="C" style="left: 310px; top: 110px; z-index: 10;">C</div>
+                    <div class="tree-node" data-val="D" style="left: 60px; top: 210px; z-index: 10;">D</div>
+                    <div class="tree-node" data-val="E" style="left: 160px; top: 210px; z-index: 10;">E</div>
+                    <div class="tree-node" data-val="F" style="left: 260px; top: 210px; z-index: 10;">F</div>
+                    <div class="tree-node" data-val="G" style="left: 360px; top: 210px; z-index: 10;">G</div>
+                </div>
+
+                <div class="highlight-box" style="margin-top: 10px; padding: 20px;">
+                    <p style="font-size: 26px;"><strong>当前序列：</strong> <span id="p4-output" style="color: var(--accent-color); font-family: monospace; font-weight: bold;"></span></p>
+                </div>
+            </div>
+            <div class="col-visual">
+                <div class="code-block" style="width: 100%; font-size: 28px;"><span class="code-cm"><span class="code-type">void</span> <span class="code-fn">preOrder</span>(Node* root) {
+    <span class="code-cm">// 1. 递归终止条件</span>
+    <span class="code-kw">if</span> (root == NULL) {
+        <span class="code-kw">return</span>;
+    }
+    <span class="code-cm">// 2. 访问当前节点 (根)</span>
+    <span class="code-fn">printf</span>(<span class="code-str">"%c "</span>, root->val);
+    <span class="code-cm">// 3. 递归遍历左子树</span>
+    <span class="code-fn">preOrder</span>(root->left);
+    <span class="code-cm">// 4. 递归遍历右子树</span>
+    <span class="code-fn">preOrder</span>(root->right);
+}
+            </div>
+        </div>
+    </section>
+
+    <!-- P06: 中序遍历（递归） -->
+    <section class="slide" data-title="中序遍历（递归）">
+        <h2>中序遍历 (In-order) - 递归实现</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="card" style="padding: 20px; display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h3><i class="fas fa-code-branch"></i> 遍历顺序</h3>
+                        <p style="font-size: 32px; font-weight: bold; color: var(--accent-color); margin-bottom: 0;">左 → <strong style="text-decoration: underline;">根</strong> → 右</p>
+                    </div>
+                    <div class="anim-controls">
+                        <button onclick="Anim.prev()"><i class="fas fa-step-backward"></i></button>
+                        <button onclick="Anim.toggle()"><i class="fas fa-play"></i></button>
+                        <button onclick="Anim.next()"><i class="fas fa-step-forward"></i></button>
+                        <button onclick="Anim.reset()"><i class="fas fa-undo"></i></button>
+                        <div class="anim-progress" id="p6-progress">0/0</div>
+                    </div>
+                </div>
+                
+                <div class="tree-container" id="p6-tree" style="height: 400px; margin-top: 30px; transform: scale(1); transform-origin: top left;">
+                    <svg style="position: absolute; width: 100%; height: 100%; z-index: 1;">
+                        <line x1="250" y1="50" x2="150" y2="150" stroke="#fff" stroke-width="4" />
+                        <line x1="250" y1="50" x2="350" y2="150" stroke="#fff" stroke-width="4" />
+                        <line x1="150" y1="150" x2="100" y2="250" stroke="#fff" stroke-width="3" />
+                        <line x1="150" y1="150" x2="200" y2="250" stroke="#fff" stroke-width="3" />
+                        <line x1="350" y1="150" x2="300" y2="250" stroke="#fff" stroke-width="3" />
+                        <line x1="350" y1="150" x2="400" y2="250" stroke="#fff" stroke-width="3" />
+                    </svg>
+                    <!-- Nodes -->
+                    <div class="tree-node" data-val="A" style="left: 210px; top: 10px; z-index: 10;">A</div>
+                    <div class="tree-node" data-val="B" style="left: 110px; top: 110px; z-index: 10;">B</div>
+                    <div class="tree-node" data-val="C" style="left: 310px; top: 110px; z-index: 10;">C</div>
+                    <div class="tree-node" data-val="D" style="left: 60px; top: 210px; z-index: 10;">D</div>
+                    <div class="tree-node" data-val="E" style="left: 160px; top: 210px; z-index: 10;">E</div>
+                    <div class="tree-node" data-val="F" style="left: 260px; top: 210px; z-index: 10;">F</div>
+                    <div class="tree-node" data-val="G" style="left: 360px; top: 210px; z-index: 10;">G</div>
+                </div>
+
+                <div class="highlight-box" style="margin-top: 10px; padding: 20px;">
+                    <p style="font-size: 26px;"><strong>当前序列：</strong> <span id="p6-output" style="color: var(--accent-color); font-family: monospace; font-weight: bold;"></span></p>
+                </div>
+            </div>
+            <div class="col-visual">
+                <div class="code-block" style="width: 100%; font-size: 28px;"><span class="code-type">void</span> <span class="code-fn">inOrder</span>(Node* root) {
+    <span class="code-kw">if</span> (!root) <span class="code-kw">return</span>;
+    
+    <span class="code-cm">// 1. 先递归左子树</span>
+    <span class="code-fn">inOrder</span>(root->left); 
+    
+    <span class="code-cm">// 2. 访问当前节点 (根)</span>
+    <span class="code-fn">printf</span>(<span class="code-str">"%c "</span>, root->val);
+    
+    <span class="code-cm">// 3. 再递归右子树</span>
+    <span class="code-fn">inOrder</span>(root->right); 
+}
+<span class="code-cm">// 输出结果: D B E A F C G</span></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P07: 后序遍历（递归） -->
+    <section class="slide" data-title="后序遍历（递归）">
+        <h2>后序遍历 (Post-order) - 递归实现</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="card" style="padding: 20px; display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h3><i class="fas fa-code-branch"></i> 遍历顺序</h3>
+                        <p style="font-size: 32px; font-weight: bold; color: var(--accent-color); margin-bottom: 0;">左 → 右 → <strong style="text-decoration: underline;">根</strong></p>
+                    </div>
+                    <div class="anim-controls">
+                        <button onclick="Anim.prev()"><i class="fas fa-step-backward"></i></button>
+                        <button onclick="Anim.toggle()"><i class="fas fa-play"></i></button>
+                        <button onclick="Anim.next()"><i class="fas fa-step-forward"></i></button>
+                        <button onclick="Anim.reset()"><i class="fas fa-undo"></i></button>
+                        <div class="anim-progress" id="p7-progress">0/0</div>
+                    </div>
+                </div>
+                
+                <div class="tree-container" id="p7-tree" style="height: 400px; margin-top: 30px; transform: scale(1); transform-origin: top left;">
+                    <svg style="position: absolute; width: 100%; height: 100%; z-index: 1;">
+                        <line x1="250" y1="50" x2="150" y2="150" stroke="#fff" stroke-width="4" />
+                        <line x1="250" y1="50" x2="350" y2="150" stroke="#fff" stroke-width="4" />
+                        <line x1="150" y1="150" x2="100" y2="250" stroke="#fff" stroke-width="3" />
+                        <line x1="150" y1="150" x2="200" y2="250" stroke="#fff" stroke-width="3" />
+                        <line x1="350" y1="150" x2="300" y2="250" stroke="#fff" stroke-width="3" />
+                        <line x1="350" y1="150" x2="400" y2="250" stroke="#fff" stroke-width="3" />
+                    </svg>
+                    <!-- Nodes -->
+                    <div class="tree-node" data-val="A" style="left: 210px; top: 10px; z-index: 10;">A</div>
+                    <div class="tree-node" data-val="B" style="left: 110px; top: 110px; z-index: 10;">B</div>
+                    <div class="tree-node" data-val="C" style="left: 310px; top: 110px; z-index: 10;">C</div>
+                    <div class="tree-node" data-val="D" style="left: 60px; top: 210px; z-index: 10;">D</div>
+                    <div class="tree-node" data-val="E" style="left: 160px; top: 210px; z-index: 10;">E</div>
+                    <div class="tree-node" data-val="F" style="left: 260px; top: 210px; z-index: 10;">F</div>
+                    <div class="tree-node" data-val="G" style="left: 360px; top: 210px; z-index: 10;">G</div>
+                </div>
+
+                <div class="highlight-box" style="margin-top: 10px; padding: 20px;">
+                    <p style="font-size: 26px;"><strong>当前序列：</strong> <span id="p7-output" style="color: var(--accent-color); font-family: monospace; font-weight: bold;"></span></p>
+                </div>
+            </div>
+            <div class="col-visual">
+                <div class="code-block" style="width: 100%; font-size: 28px;"><span class="code-type">void</span> <span class="code-fn">postOrder</span>(Node* root) {
+    <span class="code-kw">if</span> (!root) <span class="code-kw">return</span>;
+    
+    <span class="code-fn">postOrder</span>(root->left); <span class="code-cm">// 左</span>
+    <span class="code-fn">postOrder</span>(root->right);<span class="code-cm">// 右</span>
+    
+    <span class="code-cm">// 3. 访问当前节点 (根)</span>
+    <span class="code-fn">printf</span>(<span class="code-str">"%c "</span>, root->val); 
+}
+<span class="code-cm">// 输出结果: D E B F G C A</span></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P05: 前序遍历（非递归/迭代） -->
+    <section class="slide" data-title="前序遍历（迭代）">
+        <h2>前序遍历 (Pre-order) - 迭代实现</h2>
+        <div class="layout-2col" style="grid-template-columns: 1.1fr 0.9fr;">
+            <!-- Left: Animation (Swapped) -->
+            <div class="col-content" style="display: flex; flex-direction: column; justify-content: center;">
+                
+                <!-- Visual Area: Tree + Stack -->
+                <div style="display: flex; width: 100%; height: 500px; align-items: center; justify-content: space-around; background: rgba(255,255,255,0.02); border-radius: 16px; padding: 20px; position: relative;">
+                    
+                    <!-- Tree -->
+                    <div class="tree-container" id="p5-tree" style="width: 400px; height: 400px; transform: scale(0.9); transform-origin: center center; position: relative;">
+                         <svg style="position: absolute; width: 100%; height: 100%; z-index: 1;">
+                            <line x1="250" y1="50" x2="150" y2="150" stroke="#fff" stroke-width="4" />
+                            <line x1="250" y1="50" x2="350" y2="150" stroke="#fff" stroke-width="4" />
+                            <line x1="150" y1="150" x2="100" y2="250" stroke="#fff" stroke-width="3" />
+                            <line x1="150" y1="150" x2="200" y2="250" stroke="#fff" stroke-width="3" />
+                            <line x1="350" y1="150" x2="300" y2="250" stroke="#fff" stroke-width="3" />
+                            <line x1="350" y1="150" x2="400" y2="250" stroke="#fff" stroke-width="3" />
+                        </svg>
+                        <div class="tree-node" data-val="A" style="left: 210px; top: 10px;">A</div>
+                        <div class="tree-node" data-val="B" style="left: 110px; top: 110px;">B</div>
+                        <div class="tree-node" data-val="C" style="left: 310px; top: 110px;">C</div>
+                        <div class="tree-node" data-val="D" style="left: 60px; top: 210px;">D</div>
+                        <div class="tree-node" data-val="E" style="left: 160px; top: 210px;">E</div>
+                        <div class="tree-node" data-val="F" style="left: 260px; top: 210px;">F</div>
+                        <div class="tree-node" data-val="G" style="left: 360px; top: 210px;">G</div>
+                    </div>
+
+                    <!-- Visual Separator -->
+                    <div style="height: 300px; border-left: 2px dashed rgba(255,255,255,0.1); margin: 0 20px;"></div>
+
+                    <!-- Stack -->
+                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                        <div style="margin-bottom: 10px; color: var(--warn-color); font-weight: bold; font-size: 24px;">Stack (FILO)</div>
+                        <div id="p5-stack" class="struct-container" style="width: 140px; height: 350px; overflow: hidden; padding-bottom: 0; background: rgba(0,0,0,0.3);">
+                            <!-- Stack items -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Info Panel (Steps & Output) -->
+                <div style="margin-top: 20px; display: flex; flex-direction: column; gap: 15px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div id="p5-step-text" style="font-size: 26px; color: var(--secondary-color);">
+                            <i class="fas fa-info-circle"></i> 点击演示开始...
+                        </div>
+                        <div class="anim-controls">
+                            <button onclick="Anim.prev()"><i class="fas fa-step-backward"></i></button>
+                            <button onclick="Anim.toggle()"><i class="fas fa-play"></i></button>
+                            <button onclick="Anim.next()"><i class="fas fa-step-forward"></i></button>
+                            <button onclick="Anim.reset()"><i class="fas fa-undo"></i></button>
+                            <div class="anim-progress" id="p5-progress">0/0</div>
+                        </div>
+                    </div>
+                    
+                    <div style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); min-height: 60px; display: flex; align-items: center;">
+                        <strong style="color: var(--accent-color); font-size: 24px; margin-right: 15px;">Output:</strong> 
+                        <span id="p5-output" style="font-family: monospace; font-size: 26px; font-weight: bold; color: #fff;"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Code (Swapped) -->
+            <div class="col-visual">
+                <div class="code-block" style="width: 100%; font-size: 22px; max-height: 800px;"><span class="code-type">void</span> <span class="code-fn">preOrderIterative</span>(Node* root) {
+    <span class="code-kw">if</span> (root == NULL) <span class="code-kw">return</span>;
+    <span class="code-cm">// 1. 初始化栈</span>
+    Node* stack[100];
+    <span class="code-type">int</span> top = -1;
+    <span class="code-cm">// 2. 根节点入栈</span>
+    stack[++top] = root;
+    <span class="code-kw">while</span> (top >= 0) {
+        <span class="code-cm">// 3. 弹出并访问</span>
+        Node* curr = stack[top--];
+        <span class="code-fn">printf</span>(<span class="code-str">"%c "</span>, curr->val);
+        <span class="code-cm">// 4. 子节点入栈 (先右后左)</span>
+        <span class="code-kw">if</span> (curr->right) 
+            stack[++top] = curr->right;
+        <span class="code-kw">if</span> (curr->left) 
+            stack[++top] = curr->left;
+    }
+}</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P07: BFS (层序遍历) -->
+    <section class="slide" data-title="BFS层序遍历">
+        <h2>BFS 层序遍历 (Queue实现)</h2>
+        <div class="layout-2col" style="grid-template-columns: 1.1fr 0.9fr;">
+            <!-- Left: Animation -->
+            <div class="col-content" style="display: flex; flex-direction: column; justify-content: center;">
+                
+                <!-- Visual Area: Tree + Queue -->
+                <div style="display: flex; width: 100%; height: 500px; align-items: center; justify-content: space-around; background: rgba(255,255,255,0.02); border-radius: 16px; padding: 20px; position: relative;">
+                    
+                    <!-- Tree -->
+                    <div class="tree-container" id="bfs-tree" style="width: 400px; height: 400px; transform: scale(0.9); transform-origin: center center; position: relative;">
+                         <svg style="position: absolute; width: 100%; height: 100%; z-index: 1;">
+                            <line x1="250" y1="50" x2="150" y2="150" stroke="#fff" stroke-width="4" />
+                            <line x1="250" y1="50" x2="350" y2="150" stroke="#fff" stroke-width="4" />
+                            <line x1="150" y1="150" x2="100" y2="250" stroke="#fff" stroke-width="3" />
+                            <line x1="150" y1="150" x2="200" y2="250" stroke="#fff" stroke-width="3" />
+                            <line x1="350" y1="150" x2="300" y2="250" stroke="#fff" stroke-width="3" />
+                            <line x1="350" y1="150" x2="400" y2="250" stroke="#fff" stroke-width="3" />
+                        </svg>
+                        <div class="tree-node" data-val="A" style="left: 210px; top: 10px;">A</div>
+                        <div class="tree-node" data-val="B" style="left: 110px; top: 110px;">B</div>
+                        <div class="tree-node" data-val="C" style="left: 310px; top: 110px;">C</div>
+                        <div class="tree-node" data-val="D" style="left: 60px; top: 210px;">D</div>
+                        <div class="tree-node" data-val="E" style="left: 160px; top: 210px;">E</div>
+                        <div class="tree-node" data-val="F" style="left: 260px; top: 210px;">F</div>
+                        <div class="tree-node" data-val="G" style="left: 360px; top: 210px;">G</div>
+                    </div>
+
+                    <!-- Visual Separator -->
+                    <div style="height: 300px; border-left: 2px dashed rgba(255,255,255,0.1); margin: 0 20px;"></div>
+
+                    <!-- Queue (Vertical for layout, Top=Front, Bottom=Rear) -->
+                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                        <div style="margin-bottom: 10px; color: var(--secondary-color); font-weight: bold; font-size: 24px;">Queue (FIFO)</div>
+                        <div style="font-size: 14px; color: #888; margin-bottom: 5px;">Front (Out)</div>
+                        <div id="bfs-queue" class="struct-container" style="width: 140px; height: 350px; overflow: hidden; padding-bottom: 0; background: rgba(0,0,0,0.3); border-top: 2px solid rgba(255,255,255,0.3); border-bottom: 2px solid rgba(255,255,255,0.3); border-left: 2px solid rgba(255,255,255,0.3); border-right: 2px solid rgba(255,255,255,0.3); flex-direction: column;">
+                            <!-- Queue items -->
+                        </div>
+                        <div style="font-size: 14px; color: #888; margin-top: 5px;">Rear (In)</div>
+                    </div>
+                </div>
+                
+                <!-- Info Panel -->
+                <div style="margin-top: 20px; display: flex; flex-direction: column; gap: 15px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div id="bfs-step-text" style="font-size: 26px; color: var(--secondary-color);">
+                            <i class="fas fa-info-circle"></i> 点击演示开始...
+                        </div>
+                        <div class="anim-controls">
+                            <button onclick="Anim.prev()"><i class="fas fa-step-backward"></i></button>
+                            <button onclick="Anim.toggle()"><i class="fas fa-play"></i></button>
+                            <button onclick="Anim.next()"><i class="fas fa-step-forward"></i></button>
+                            <button onclick="Anim.reset()"><i class="fas fa-undo"></i></button>
+                            <div class="anim-progress" id="bfs-progress">0/0</div>
+                        </div>
+                    </div>
+                    
+                    <div style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); min-height: 60px; display: flex; align-items: center;">
+                        <strong style="color: var(--secondary-color); font-size: 24px; margin-right: 15px;">Output:</strong> 
+                        <span id="bfs-output" style="font-family: monospace; font-size: 26px; font-weight: bold; color: #fff;"></span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Right: Code -->
+            <div class="col-visual">
+                <div class="code-block" style="width: 100%; font-size: 22px; max-height: 800px;"><span class="code-type">void</span> <span class="code-fn">levelOrder</span>(Node* root) {
+    <span class="code-kw">if</span> (!root) <span class="code-kw">return</span>;
+    <span class="code-cm">// 1. 初始化队列</span>
+    Node* queue[100];
+    <span class="code-type">int</span> front = 0, rear = 0;
+    <span class="code-cm">// 2. 根入队</span>
+    queue[rear++] = root;
+    <span class="code-kw">while</span> (front < rear) {
+        <span class="code-cm">// 3. 出队并访问</span>
+        Node* curr = queue[front++];
+        <span class="code-fn">printf</span>(<span class="code-str">"%c "</span>, curr->val);
+        <span class="code-cm">// 4. 左右孩子入队</span>
+        <span class="code-kw">if</span> (curr->left) 
+            queue[rear++] = curr->left;
+        <span class="code-kw">if</span> (curr->right) 
+            queue[rear++] = curr->right;
+    }
+}</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P07.5: 应用场景 -->
+    <section class="slide" data-title="应用场景">
+        <h2>深度 vs 广度：应用场景对比</h2>
+        <div class="layout-2col">
+            <!-- DFS Column -->
+            <div class="col-content">
+                <div class="card" style="border-top: 6px solid var(--accent-color); height: 100%;">
+                    <h3 style="color: var(--accent-color); display: flex; align-items: center; gap: 15px;">
+                        <i class="fas fa-layer-group"></i> 深度优先 (DFS)
+                    </h3>
+                    <p style="font-size: 28px; color: #aaa; margin-bottom: 40px;">一条路走到黑，撞墙才回头。</p>
+                    
+                    <ul class="scenario-list">
+                        <li>
+                            <div class="icon-box"><i class="fas fa-dungeon"></i></div>
+                            <div>
+                                <strong>回溯算法 (Backtracking)</strong>
+                                <p>走迷宫、数独、八皇后问题。</p>
+                            </div>
+                        </li>
+                        <li>
+                            <div class="icon-box"><i class="fas fa-folder-open"></i></div>
+                            <div>
+                                <strong>文件系统操作</strong>
+                                <p>删除文件夹 (后序)、目录树展示 (前序)。</p>
+                            </div>
+                        </li>
+                        <li>
+                            <div class="icon-box"><i class="fas fa-code"></i></div>
+                            <div>
+                                <strong>语法树分析</strong>
+                                <p>编译器解析代码结构、表达式求值。</p>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- BFS Column -->
+            <div class="col-content">
+                <div class="card" style="border-top: 6px solid var(--secondary-color); height: 100%;">
+                    <h3 style="color: var(--secondary-color); display: flex; align-items: center; gap: 15px;">
+                        <i class="fas fa-wifi"></i> 广度优先 (BFS)
+                    </h3>
+                    <p style="font-size: 28px; color: #aaa; margin-bottom: 40px;">步步为营，层层推进。</p>
+                    
+                    <ul class="scenario-list">
+                        <li>
+                            <div class="icon-box" style="background: rgba(96, 165, 250, 0.2); color: var(--secondary-color);"><i class="fas fa-route"></i></div>
+                            <div>
+                                <strong>最短路径</strong>
+                                <p>地图导航、游戏寻路 (无权图最短跳数)。</p>
+                            </div>
+                        </li>
+                        <li>
+                            <div class="icon-box" style="background: rgba(96, 165, 250, 0.2); color: var(--secondary-color);"><i class="fas fa-users"></i></div>
+                            <div>
+                                <strong>社交网络</strong>
+                                <p>寻找“三度人脉”、推荐好友。</p>
+                            </div>
+                        </li>
+                        <li>
+                            <div class="icon-box" style="background: rgba(96, 165, 250, 0.2); color: var(--secondary-color);"><i class="fas fa-broadcast-tower"></i></div>
+                            <div>
+                                <strong>广播/层级扫描</strong>
+                                <p>局域网消息扩散、网络爬虫、垃圾回收。</p>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <style>
+            .scenario-list {
+                list-style: none;
+                padding: 0;
+            }
+            .scenario-list li {
+                display: flex;
+                align-items: center;
+                gap: 25px;
+                margin-bottom: 40px;
+                padding-left: 0; /* Override default li padding */
+            }
+            .scenario-list li::before { content: none; } /* Remove default bullet */
+            
+            .icon-box {
+                width: 80px;
+                height: 80px;
+                background: rgba(34, 211, 238, 0.2);
+                color: var(--accent-color);
+                border-radius: 16px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 36px;
+                flex-shrink: 0;
+            }
+            .scenario-list strong {
+                display: block;
+                font-size: 32px;
+                margin-bottom: 5px;
+                color: #fff;
+            }
+            .scenario-list p {
+                font-size: 24px;
+                color: #94a3b8;
+                margin-bottom: 0;
+                line-height: 1.4;
+            }
+        </style>
+    </section>
+
+    <!-- P08: 总结 -->
+    <section class="slide" data-title="小结">
+        <h2>课堂小结</h2>
+        <div class="layout-2col" style="align-items: stretch;">
+            <div class="col-content">
+                <div class="card" style="height: 100%; display:flex; flex-direction:column; justify-content:center;">
+                    <h3 style="border-bottom: 2px solid rgba(255,255,255,0.1); padding-bottom: 20px;">
+                        <i class="fas fa-check-circle" style="color: var(--accent-color);"></i> 关键点
+                    </h3>
+                    <ul style="font-size: 30px; line-height: 1.8;">
+                        <li><strong>递归 (Recursion)</strong>：代码最简洁，利用系统栈。</li>
+                        <li><strong>迭代 (Iteration)</strong>：
+                            <ul style="margin-top: 10px; margin-bottom: 10px;">
+                        <li>DFS → <strong>Stack</strong> (后进先出)</li>
+                        <li>BFS → <strong>Queue</strong> (先进先出)</li>
+                            </ul>
+                        </li>
+                        <li><strong>学会了什么</strong>：我们现在可以访问树中<strong>每一个</strong>节点了。</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="col-content">
+                 <div class="card" style="height: 100%; border: 1px dashed rgba(255, 255, 255, 0.3); background: rgba(34, 211, 238, 0.05); display: flex; flex-direction: column; justify-content: center;">
+                    <h3><i class="fas fa-lightbulb" style="color: var(--warn-color);"></i> 引申思考</h3>
+                    <p style="font-size: 32px; margin-bottom: 20px;">既然能遍历整棵树，我们当然可以<strong>搜索</strong>任意数据。</p>
+                    <p style="font-size: 28px; color: #aaa; margin-bottom: 30px;">但无序树的搜索需要遍历所有节点，效率是 O(N)。</p>
+                    <div style="background: var(--accent-color); color: #000; padding: 20px; border-radius: 12px; text-align: center; font-weight: bold; font-size: 32px;">
+                        下节预告：二叉搜索树 (BST)<br>
+                        <span style="font-size: 24px;">让搜索像查字典一样快</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 页脚页码 -->
+    <div class="footer">
+        <span id="page-number">1 / 10</span>
+    </div>
+</div>
+
+<script>
+    const slides = document.querySelectorAll('.slide');
+    const pageNumberEl = document.getElementById('page-number');
+    const totalSlides = slides.length;
+
+    function getPageFromUrl() {
+        const params = new URLSearchParams(window.location.search);
+        const page = parseInt(params.get('page'));
+        if (!isNaN(page) && page >= 1 && page <= totalSlides) {
+            return page - 1;
+        }
+        return 0;
+    }
+
+    let currentSlide = getPageFromUrl();
+
+    function updateSlide() {
+        slides.forEach((slide, index) => {
+            slide.classList.remove('active');
+            if (index === currentSlide) {
+                slide.classList.add('active');
+            }
+        });
+        pageNumberEl.textContent = `${currentSlide + 1} / ${totalSlides}`;
+        
+        try {
+            const url = new URL(window.location.href);
+            url.searchParams.set('page', currentSlide + 1);
+            window.history.replaceState(null, '', url.href);
+        } catch (e) {}
+
+        // Set active animation for current slide
+        Anim.setActive(currentSlide);
+    }
+
+    function nextSlide() {
+        if (currentSlide < totalSlides - 1) {
+            currentSlide++;
+            updateSlide();
+        }
+    }
+
+    function prevSlide() {
+        if (currentSlide > 0) {
+            currentSlide--;
+            updateSlide();
+        }
+    }
+
+    document.addEventListener('keydown', (e) => {
+        // Prevent default only if we handle it
+        if (['ArrowRight', ' ', 'Enter'].includes(e.key)) {
+            nextSlide();
+        } else if (e.key === 'ArrowLeft') {
+            prevSlide();
+        } else if (['ArrowUp', 'PageUp'].includes(e.key)) {
+             Anim.prev();
+        } else if (['ArrowDown', 'PageDown'].includes(e.key)) {
+             Anim.next();
+        } else if (e.key.toLowerCase() === 'r') {
+             Anim.reset();
+        }
+    });
+
+    function resizeApp() {
+        const app = document.getElementById('app');
+        const scale = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+        app.style.transform = `scale(${scale})`;
+    }
+    window.addEventListener('resize', resizeApp);
+    resizeApp();
+
+    // ==========================================
+    // Animation Engine (Snapshot Based)
+    // ==========================================
+    class AnimationManager {
+        constructor() {
+            this.animations = {}; 
+            this.currentAnim = null;
+            this.currentStep = 0;
+            this.timer = null;
+            this.isPlaying = false;
+        }
+
+        register(slideIndex, snapshots, renderFn, uiIds) {
+            this.animations[slideIndex] = { snapshots, render: renderFn, uiIds };
+        }
+
+        setActive(slideIndex) {
+            this.stop();
+            if (this.animations[slideIndex]) {
+                this.currentAnim = this.animations[slideIndex];
+                this.currentStep = 0;
+                this.render();
+                this.updateUI();
+            } else {
+                this.currentAnim = null;
+            }
+        }
+
+        next() {
+            this.stop(); // Manual interaction stops auto-play
+            if (!this.currentAnim) return;
+            if (this.currentStep < this.currentAnim.snapshots.length - 1) {
+                this.currentStep++;
+                this.render();
+                this.updateUI();
+            }
+        }
+
+        prev() {
+            this.stop();
+            if (!this.currentAnim) return;
+            if (this.currentStep > 0) {
+                this.currentStep--;
+                this.render();
+                this.updateUI();
+            }
+        }
+
+        reset() {
+            this.stop();
+            if (!this.currentAnim) return;
+            this.currentStep = 0;
+            this.render();
+            this.updateUI();
+        }
+
+        toggle() {
+            if (this.isPlaying) this.stop();
+            else this.play();
+        }
+
+        play() {
+            if (!this.currentAnim) return;
+            // If at end, restart
+            if (this.currentStep >= this.currentAnim.snapshots.length - 1) {
+                this.currentStep = 0;
+                this.render();
+                this.updateUI();
+            }
+            this.isPlaying = true;
+            this.tick();
+        }
+
+        stop() {
+            this.isPlaying = false;
+            if (this.timer) clearTimeout(this.timer);
+        }
+
+        tick() {
+            if (!this.isPlaying) return;
+            
+            const delay = this.currentAnim.snapshots[this.currentStep].delay || 800;
+            
+            this.timer = setTimeout(() => {
+                if (!this.isPlaying) return;
+                if (this.currentStep < this.currentAnim.snapshots.length - 1) {
+                    this.currentStep++;
+                    this.render();
+                    this.updateUI();
+                    this.tick();
+                } else {
+                    this.stop();
+                }
+            }, delay);
+        }
+
+        render() {
+            if (!this.currentAnim) return;
+            const state = this.currentAnim.snapshots[this.currentStep];
+            this.currentAnim.render(state, this.currentAnim.uiIds);
+        }
+
+        updateUI() {
+            if (!this.currentAnim) return;
+            const el = document.getElementById(this.currentAnim.uiIds.progress);
+            if (el) {
+                el.textContent = `${this.currentStep} / ${this.currentAnim.snapshots.length - 1}`;
+            }
+        }
+    }
+
+    const Anim = new AnimationManager();
+
+    // ==========================================
+    // Generators
+    // ==========================================
+
+    function generateRecursiveSnapshots(steps) {
+        const snapshots = [];
+        let output = "";
+        let treeState = {}; 
+
+        // Initial state
+        snapshots.push({ tree: {}, output: "", delay: 0 });
+
+        steps.forEach(step => {
+            treeState = { ...treeState };
+            
+            // Clean active/backtracking
+            for (let k in treeState) {
+                if (treeState[k] === 'active' || treeState[k] === 'backtracking') {
+                     treeState[k] = 'visited';
+                }
+            }
+
+            if (step.type === 'visit') {
+                treeState[step.val] = 'active';
+                output += step.val + " ";
+            } else if (step.type === 'back') {
+                treeState[step.val] = 'backtracking';
+            }
+
+            snapshots.push({
+                tree: treeState,
+                output: output,
+                delay: step.type === 'visit' ? 1000 : 500
+            });
+        });
+
+        // Final cleanup
+        let finalTree = { ...treeState };
+        for (let k in finalTree) finalTree[k] = 'visited';
+        snapshots.push({ tree: finalTree, output: output, delay: 0 });
+
+        return snapshots;
+    }
+
+    function generateIterativeSnapshots(steps) {
+        const snapshots = [];
+        let stack = [];
+        let output = "";
+        let treeState = {};
+        let activeNode = null;
+
+        snapshots.push({ tree: {}, stack: [], output: "", desc: "准备开始", delay: 500 });
+
+        steps.forEach(step => {
+             // Reset previously active node
+             if (activeNode) {
+                treeState = { ...treeState, [activeNode]: 'visited' };
+                activeNode = null;
+            }
+            // Also reset pushed status if any
+            for(let k in treeState) {
+                if(treeState[k] === 'pushed') treeState[k] = 'default';
+            }
+
+            if (step.type === 'push') {
+                stack = [...stack, step.val];
+                treeState = { ...treeState, [step.val]: 'pushed' }; 
+            } else if (step.type === 'pop') {
+                stack = stack.slice(0, -1);
+                activeNode = step.val;
+                treeState = { ...treeState, [step.val]: 'active' };
+                output += step.val + " ";
+            }
+
+            snapshots.push({
+                tree: treeState,
+                stack: stack,
+                output: output,
+                desc: step.desc,
+                delay: step.type === 'push' ? 800 : 1200
+            });
+        });
+        
+        if (activeNode) treeState = { ...treeState, [activeNode]: 'visited' };
+        snapshots.push({ tree: treeState, stack: [], output: output, desc: "遍历结束", delay: 0 });
+
+        return snapshots;
+    }
+
+    function generateBFSSnapshots(steps) {
+        const snapshots = [];
+        let queue = [];
+        let output = "";
+        let treeState = {};
+        let activeNode = null;
+
+        snapshots.push({ tree: {}, queue: [], output: "", desc: "准备开始", delay: 500 });
+
+        steps.forEach(step => {
+             if (activeNode) {
+                treeState = { ...treeState, [activeNode]: 'visited' };
+                activeNode = null;
+            }
+            for(let k in treeState) {
+                if(treeState[k] === 'enqueued') treeState[k] = 'default';
+            }
+
+            if (step.type === 'enqueue') {
+                queue = [...queue, step.val];
+                treeState = { ...treeState, [step.val]: 'enqueued' };
+            } else if (step.type === 'dequeue') {
+                queue = queue.slice(1); // Remove from front
+                activeNode = step.val;
+                treeState = { ...treeState, [step.val]: 'active' };
+                output += step.val + " ";
+            }
+
+            snapshots.push({
+                tree: treeState,
+                queue: queue,
+                output: output,
+                desc: step.desc,
+                delay: step.type === 'enqueue' ? 800 : 1200
+            });
+        });
+
+        if (activeNode) treeState = { ...treeState, [activeNode]: 'visited' };
+        snapshots.push({ tree: treeState, queue: [], output: output, desc: "遍历结束", delay: 0 });
+
+        return snapshots;
+    }
+
+    // ==========================================
+    // Renderers
+    // ==========================================
+    function renderTreeAndOutput(state, uiIds) {
+        const container = document.getElementById(uiIds.container);
+        const output = document.getElementById(uiIds.output);
+        
+        if (state.output !== undefined) output.textContent = state.output;
+
+        const nodes = container.querySelectorAll('.tree-node');
+        nodes.forEach(n => {
+            const val = n.dataset.val || n.textContent.trim();
+            const status = state.tree[val];
+            
+            n.className = 'tree-node'; // reset
+            n.style.transform = '';
+            n.style.boxShadow = '';
+            n.style.borderColor = '';
+            n.style.backgroundColor = '';
+
+            if (status === 'active') {
+                n.classList.add('active');
+                n.style.transform = 'scale(1.3)';
+                n.style.boxShadow = '0 0 30px var(--accent-color)';
+                // BFS Color Override
+                if (uiIds.queue) n.style.boxShadow = '0 0 30px var(--secondary-color)';
+            } else if (status === 'visited') {
+                n.classList.add('visited');
+            } else if (status === 'backtracking') {
+                n.classList.add('backtracking');
+                n.style.transform = 'scale(1.1)';
+                n.style.borderColor = '#F472B6';
+                n.style.boxShadow = '0 0 20px rgba(244, 114, 182, 0.6)';
+            } else if (status === 'pushed') {
+                n.style.borderColor = '#F472B6';
+            } else if (status === 'enqueued') {
+                n.style.borderColor = 'var(--secondary-color)';
+            }
+        });
+
+        if (state.stack !== undefined && uiIds.stack) {
+             const stackContainer = document.getElementById(uiIds.stack);
+             stackContainer.innerHTML = '';
+             // Render stack bottom-up
+             state.stack.forEach(val => {
+                 const div = document.createElement('div');
+                 div.className = 'struct-item';
+                 div.textContent = val;
+                 // Stack items enter from top conceptually, but here we just list them
+                 // Last item is top
+                 stackContainer.prepend(div); // Visual stack: top item on top
+             });
+        }
+        
+        if (state.queue !== undefined && uiIds.queue) {
+             const queueContainer = document.getElementById(uiIds.queue);
+             queueContainer.innerHTML = '';
+             // Render Queue: Front at Top
+             state.queue.forEach(val => {
+                 const div = document.createElement('div');
+                 div.className = 'struct-item';
+                 div.textContent = val;
+                 div.style.backgroundColor = 'var(--secondary-color)';
+                 queueContainer.appendChild(div);
+             });
+        }
+
+        if (state.desc && uiIds.stepText) {
+            document.getElementById(uiIds.stepText).textContent = state.desc;
+        }
+    }
+
+    // ==========================================
+    // Init Data
+    // ==========================================
+    function initAnimations() {
+        // P04: Pre-order
+        const stepsP4 = [
+            { val: 'A', type: 'visit' }, { val: 'B', type: 'visit' }, { val: 'D', type: 'visit' },
+            { val: 'B', type: 'back' }, { val: 'E', type: 'visit' }, { val: 'B', type: 'back' },
+            { val: 'A', type: 'back' }, { val: 'C', type: 'visit' }, { val: 'F', type: 'visit' },
+            { val: 'C', type: 'back' }, { val: 'G', type: 'visit' }, { val: 'C', type: 'back' },
+            { val: 'A', type: 'back' }
+        ];
+        Anim.register(5, generateRecursiveSnapshots(stepsP4), renderTreeAndOutput, { container: 'p4-tree', output: 'p4-output', progress: 'p4-progress' });
+
+        // P06: In-order
+        const stepsP6 = [
+            { val: 'A', type: 'back' }, { val: 'B', type: 'back' }, { val: 'D', type: 'visit' },
+            { val: 'B', type: 'visit' }, { val: 'E', type: 'visit' }, { val: 'B', type: 'back' },
+            { val: 'A', type: 'visit' }, { val: 'C', type: 'back' }, { val: 'F', type: 'visit' },
+            { val: 'C', type: 'visit' }, { val: 'G', type: 'visit' }, { val: 'C', type: 'back' },
+            { val: 'A', type: 'back' }
+        ];
+        Anim.register(6, generateRecursiveSnapshots(stepsP6), renderTreeAndOutput, { container: 'p6-tree', output: 'p6-output', progress: 'p6-progress' });
+
+        // P07: Post-order
+        const stepsP7 = [
+            { val: 'A', type: 'back' }, { val: 'B', type: 'back' }, { val: 'D', type: 'visit' },
+            { val: 'B', type: 'back' }, { val: 'E', type: 'visit' }, { val: 'B', type: 'visit' },
+            { val: 'A', type: 'back' }, { val: 'C', type: 'back' }, { val: 'F', type: 'visit' },
+            { val: 'C', type: 'back' }, { val: 'G', type: 'visit' }, { val: 'C', type: 'visit' },
+            { val: 'A', type: 'visit' }
+        ];
+        Anim.register(7, generateRecursiveSnapshots(stepsP7), renderTreeAndOutput, { container: 'p7-tree', output: 'p7-output', progress: 'p7-progress' });
+
+        // P05: Iterative (Index 8)
+        const stepsIter = [
+            { type: 'push', val: 'A', desc: "1. 根节点 A 入栈" },
+            { type: 'pop', val: 'A', desc: "2. 弹出 A，访问并打印" },
+            { type: 'push', val: 'C', desc: "3. 右孩子 C 入栈" },
+            { type: 'push', val: 'B', desc: "4. 左孩子 B 入栈" },
+            { type: 'pop', val: 'B', desc: "5. 弹出 B，访问" },
+            { type: 'push', val: 'E', desc: "6. B的右孩子 E 入栈" },
+            { type: 'push', val: 'D', desc: "7. B的左孩子 D 入栈" },
+            { type: 'pop', val: 'D', desc: "8. 弹出 D (叶子)" },
+            { type: 'pop', val: 'E', desc: "9. 弹出 E (叶子)" },
+            { type: 'pop', val: 'C', desc: "10. 弹出 C，访问" },
+            { type: 'push', val: 'G', desc: "11. C的右孩子 G 入栈" },
+            { type: 'push', val: 'F', desc: "12. C的左孩子 F 入栈" },
+            { type: 'pop', val: 'F', desc: "13. 弹出 F (叶子)" },
+            { type: 'pop', val: 'G', desc: "14. 弹出 G (叶子)" }
+        ];
+        Anim.register(8, generateIterativeSnapshots(stepsIter), renderTreeAndOutput, { 
+            container: 'p5-tree', output: 'p5-output', stack: 'p5-stack', stepText: 'p5-step-text', progress: 'p5-progress' 
+        });
+
+        // BFS (Index 9)
+        const stepsBFS = [
+            { type: 'enqueue', val: 'A', desc: "1. 根节点 A 入队" },
+            { type: 'dequeue', val: 'A', desc: "2. A 出队，访问" },
+            { type: 'enqueue', val: 'B', desc: "3. 左孩子 B 入队" },
+            { type: 'enqueue', val: 'C', desc: "4. 右孩子 C 入队" },
+            { type: 'dequeue', val: 'B', desc: "5. B 出队，访问" },
+            { type: 'enqueue', val: 'D', desc: "6. 左孩子 D 入队" },
+            { type: 'enqueue', val: 'E', desc: "7. 右孩子 E 入队" },
+            { type: 'dequeue', val: 'C', desc: "8. C 出队，访问" },
+            { type: 'enqueue', val: 'F', desc: "9. 左孩子 F 入队" },
+            { type: 'enqueue', val: 'G', desc: "10. 右孩子 G 入队" },
+            { type: 'dequeue', val: 'D', desc: "11. D 出队 (叶子)" },
+            { type: 'dequeue', val: 'E', desc: "12. E 出队 (叶子)" },
+            { type: 'dequeue', val: 'F', desc: "13. F 出队 (叶子)" },
+            { type: 'dequeue', val: 'G', desc: "14. G 出队 (叶子)" }
+        ];
+        Anim.register(9, generateBFSSnapshots(stepsBFS), renderTreeAndOutput, { 
+            container: 'bfs-tree', output: 'bfs-output', queue: 'bfs-queue', stepText: 'bfs-step-text', progress: 'bfs-progress' 
+        });
+        
+        updateSlide(); // Trigger first load
+    }
+    
+    // Start everything
+    initAnimations();
+</script>
+
+</body>
+</html>
