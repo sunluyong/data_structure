@@ -15,12 +15,129 @@
             --code-bg: #1a202c;
             --slide-width: 1920px;
             --slide-height: 1080px;
+            --color-success: #10b981;
         }
 
         * {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
+        }
+
+        /* 动画控制栏 */
+        .anim-controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            justify-content: center;
+        }
+        .anim-controls button {
+            padding: 8px 16px;
+            font-size: 20px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: var(--text-color);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 50px;
+        }
+        .anim-controls button:hover {
+            background: var(--accent-color);
+            color: #000;
+            border-color: var(--accent-color);
+        }
+        .anim-progress {
+            font-family: monospace;
+            font-size: 20px;
+            color: #888;
+            margin-left: 10px;
+            min-width: 80px;
+        }
+        
+        /* 两数之和动画特定样式 */
+        .array-container {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            justify-content: center;
+        }
+        .array-cell {
+            width: 80px;
+            height: 80px;
+            border: 2px solid #666;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            position: relative;
+            background: rgba(255,255,255,0.05);
+            transition: all 0.3s;
+            border-radius: 8px;
+        }
+        .array-cell.active {
+            border-color: var(--accent-color);
+            box-shadow: 0 0 15px var(--accent-color);
+            background: rgba(34, 211, 238, 0.2);
+            transform: scale(1.1);
+        }
+        .array-cell.found {
+            border-color: var(--color-success);
+            background: rgba(16, 185, 129, 0.3);
+            box-shadow: 0 0 20px var(--color-success);
+        }
+        .array-index {
+            position: absolute;
+            bottom: -30px;
+            font-size: 20px;
+            color: #888;
+            font-family: monospace;
+        }
+        
+        .map-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            border: 2px dashed var(--secondary-color);
+            padding: 20px;
+            border-radius: 10px;
+            min-height: 240px;
+            background: rgba(167, 139, 250, 0.05);
+            width: 100%;
+        }
+        .map-item {
+            display: flex;
+            justify-content: space-between;
+            background: rgba(255,255,255,0.1);
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 24px;
+            animation: fadeIn 0.5s;
+        }
+        .map-item.highlight {
+            background: var(--color-success);
+            color: #000;
+            font-weight: bold;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .info-panel {
+            background: rgba(0,0,0,0.3);
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            font-size: 26px;
+            min-height: 100px;
+            display: flex;
+            align-items: center;
+            border-left: 6px solid var(--accent-color);
         }
 
         body {
@@ -196,7 +313,6 @@
             font-family: 'Courier New', Courier, monospace;
             font-size: 60px;
             text-align: center;
-            margin: 40px 0;
             color: #fff;
             background: rgba(0,0,0,0.3);
             padding: 30px;
@@ -642,50 +758,99 @@
         </div>
     </section>
 
-    <!-- P13: 实战：两数之和 -->
-    <section class="slide" data-title="实战：两数之和">
-        <h2>实战：两数之和 (Two Sum)</h2>
+    <!-- P13a: 实战：两数之和 (暴力) -->
+    <section class="slide" data-title="实战：两数之和 (暴力解法)">
+        <h2>实战：两数之和 (暴力解法)</h2>
         <div class="layout-2col">
             <div class="col-content">
-                <div class="highlight-box"  style="margin-top:-40px;">
-                    <p class="mb-0"><strong>题目</strong>：给定数组 <code>nums</code> 和目标值 <code>target</code>，找出和为目标值的两个整数下标。</p>
-                    <div style="margin-top: 20px; color: #ccc; border-top: 1px dashed rgba(34, 211, 238, 0.3); padding-top: 15px;">
-                        <p class="mb-0" style="font-family: monospace;font-size:30px; ">Input: nums = [2, 5, 7, 9], target = 12</p>
-                        <p class="mb-0" style="font-family: monospace;font-size:30px; ">Output: [1, 2] <span style="color: #666;">// Because 5 + 7 = 12</span></p>
-                    </div>
+                <div class="highlight-box" style="margin-top:-20px;">
+                    <p class="mb-0" style="font-size: 32px;"><strong>题目</strong>：给定数组 <code>nums</code> 和目标值 <code>target</code>，找出和为目标值的两个整数下标。</p>
                 </div>
                 
-                <div class="card" style="border-color: #ef4444; margin-bottom: 20px;">
-                    <span class="card-title" style="color: #ef4444; font-size: 32px;">暴力解法 (O(n²))</span>
-                    <p style="font-size: 28px;margin-bottom: 0;">两层循环，每个人都去问一遍：“你是我的另一半吗？”</p>
+                <div style="margin-top: 20px; color: #ccc; border: 1px dashed rgba(34, 211, 238, 0.3); padding: 20px; border-radius: 10px; background: rgba(34,211,238,0.05);">
+                    <p class="mb-0" style="font-family: monospace;font-size:28px;">Input: nums = [2, 5, 7, 9], target = 12</p>
+                    <p class="mb-0" style="font-family: monospace;font-size:28px; margin-top:10px;">Output: [1, 2] <span style="color: #666;">// 5 + 7 = 12</span></p>
                 </div>
 
-                <div class="card" style="border-color: var(--color-success); margin-bottom: 0;">
-                    <span class="card-title" style="color: var(--color-success); font-size: 32px;">哈希解法 (O(n))</span>
-                    <p style="font-size: 28px;margin-bottom: 0;">每人把自己的需求贴在墙上（哈希表）。<br>路过时看一眼墙上，有没有人正在找我？</p>
+                <div class="card" style="border-color: #ef4444; margin-top: 30px;">
+                    <span class="card-title" style="color: #ef4444;"><i class="fas fa-bomb"></i> 暴力思维</span>
+                    <p>对于每一个数，都去后面找“另一半”。</p>
+                    <div class="formula" style="font-size: 40px; border-color: #ef4444; color: #ef4444;">
+                        O(N²)
+                    </div>
                 </div>
             </div>
             <div class="col-content">
-                <div class="code-block" style="font-size: 22px;">
-<span class="code-keyword">int</span>* twoSum(<span class="code-type">int</span>* nums, <span class="code-type">int</span> size, <span class="code-type">int</span> target) {
-    <span class="code-comment">// Map: 存 {数值: 下标}</span>
-    HashMap map = createMap();
-    
-    <span class="code-keyword">for</span> (<span class="code-type">int</span> i = <span class="code-number">0</span>; i &lt; size; i++) {
-        <span class="code-type">int</span> need = target - nums[i];
-        
-        <span class="code-comment">// 1. 查表：有人在找我吗？</span>
-        <span class="code-keyword">if</span> (hasKey(map, need)) {
-            <span class="code-keyword">return</span> <span class="code-func">result</span>(get(map, need), i);
+                <div class="code-block" style="font-size: 24px;">
+<span class="code-keyword">int</span>* twoSumBrute(<span class="code-type">int</span>* nums, <span class="code-type">int</span> n, <span class="code-type">int</span> target) {
+    <span class="code-keyword">for</span> (<span class="code-type">int</span> i = <span class="code-number">0</span>; i &lt; n - 1; i++) {
+        <span class="code-comment">// 内层循环：寻找另一半</span>
+        <span class="code-keyword">for</span> (<span class="code-type">int</span> j = i + <span class="code-number">1</span>; j &lt; n; j++) {
+            <span class="code-keyword">if</span> (nums[i] + nums[j] == target) {
+                <span class="code-keyword">return</span> <span class="code-func">result</span>(i, j);
+            }
         }
-        
-        <span class="code-comment">// 2. 登记：把我自己和下标存进去</span>
+    }
+    <span class="code-keyword">return</span> NULL;
+}</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P13b: 实战：两数之和 (哈希) -->
+    <section class="slide" data-title="实战：两数之和 (哈希解法)">
+        <h2>实战：两数之和 (哈希解法)</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="code-block" style="font-size: 24px;"><span class="code-keyword">int</span>* twoSumHash(<span class="code-type">int</span>* nums, <span class="code-type">int</span> n, <span class="code-type">int</span> target) {
+    <span class="code-comment">// Key: 数值, Value: 下标</span>
+    HashMap map = createMap(); 
+    
+    <span class="code-keyword">for</span> (<span class="code-type">int</span> i = <span class="code-number">0</span>; i &lt; n; i++) {
+        <span class="code-type">int</span> pair = target - nums[i];
+        <span class="code-comment">// 1. 查表：KV匹配</span>
+        <span class="code-keyword">if</span> (hasKey(map, pair)) {
+            <span class="code-keyword">return</span> <span class="code-func">result</span>(get(map, pair), i);
+        }
+        <span class="code-comment">// 2. 存表：将 {nums[i]: i} 放入 KV</span>
         put(map, nums[i], i);
     }
     <span class="code-keyword">return</span> NULL;
 }</div>
-                <div style="text-align: center; margin-top: 20px;">
-                    <p style="font-size: 24px; color: #888;">一次遍历，查表 O(1)，总耗时 O(n)</p>
+                <div class="formula" style="font-size: 32px; margin-top: 20px; padding: 10px; border-color: var(--color-success);">
+                    时间 O(N) | 空间 O(N)
+                </div>
+            </div>
+            
+            <div class="col-content">
+                <!-- 动画区域 -->
+                <div class="card" style="border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.2);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+                        <div class="anim-controls">
+                            <button onclick="TwoSumAnim.prev()"><i class="fas fa-step-backward"></i></button>
+                            <button onclick="TwoSumAnim.toggle()"><i class="fas fa-play"></i></button>
+                            <button onclick="TwoSumAnim.next()"><i class="fas fa-step-forward"></i></button>
+                            <button onclick="TwoSumAnim.reset()"><i class="fas fa-undo"></i></button>
+                            <div class="anim-progress" id="ts-progress">0/0</div>
+                        </div>
+                    </div>
+
+                    <div class="array-container" id="ts-array" style="margin-bottom: 50px;">
+                        <!-- JS generated -->
+                    </div>
+
+                    <div class="info-panel" id="ts-info">
+                        准备开始...
+                    </div>
+
+                    <div style="display: flex; gap: 20px;">
+                        <div style="flex: 1;">
+                            <h4 style="color: var(--secondary-color); margin-bottom: 10px; font-size: 28px;"><i class="fas fa-map"></i> Hash Map (Key → Value)</h4>
+                            <div class="map-container" id="ts-map">
+                                <!-- JS generated -->
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -868,6 +1033,236 @@
     
     resizeApp(); 
     updateSlide();
+
+    // ==========================================
+    // Animation Engine
+    // ==========================================
+    class AnimationManager {
+        constructor() {
+            this.snapshots = []; 
+            this.currentStep = 0;
+            this.timer = null;
+            this.isPlaying = false;
+            this.renderFn = null;
+            this.uiIds = {};
+        }
+
+        init(snapshots, renderFn, uiIds) {
+            this.snapshots = snapshots;
+            this.renderFn = renderFn;
+            this.uiIds = uiIds;
+            this.currentStep = 0;
+            this.render();
+            this.updateUI();
+        }
+
+        next() {
+            this.stop();
+            if (this.currentStep < this.snapshots.length - 1) {
+                this.currentStep++;
+                this.render();
+                this.updateUI();
+            }
+        }
+
+        prev() {
+            this.stop();
+            if (this.currentStep > 0) {
+                this.currentStep--;
+                this.render();
+                this.updateUI();
+            }
+        }
+
+        reset() {
+            this.stop();
+            this.currentStep = 0;
+            this.render();
+            this.updateUI();
+        }
+
+        toggle() {
+            if (this.isPlaying) this.stop();
+            else this.play();
+        }
+
+        play() {
+            if (this.currentStep >= this.snapshots.length - 1) {
+                this.currentStep = 0;
+            }
+            this.isPlaying = true;
+            this.tick();
+        }
+
+        stop() {
+            this.isPlaying = false;
+            if (this.timer) clearTimeout(this.timer);
+        }
+
+        tick() {
+            if (!this.isPlaying) return;
+            const delay = this.snapshots[this.currentStep].delay || 1000;
+            this.render();
+            this.updateUI();
+            
+            this.timer = setTimeout(() => {
+                if (!this.isPlaying) return;
+                if (this.currentStep < this.snapshots.length - 1) {
+                    this.currentStep++;
+                    this.tick();
+                } else {
+                    this.stop();
+                }
+            }, delay);
+        }
+
+        render() {
+            if (this.renderFn && this.snapshots[this.currentStep]) {
+                this.renderFn(this.snapshots[this.currentStep], this.uiIds);
+            }
+        }
+
+        updateUI() {
+            const el = document.getElementById(this.uiIds.progress);
+            if (el) {
+                el.textContent = `${this.currentStep} / ${this.snapshots.length - 1}`;
+            }
+        }
+    }
+
+    const TwoSumAnim = new AnimationManager();
+
+    // Two Sum Logic
+    function initTwoSumAnim() {
+        const nums = [2, 5, 7, 9];
+        const target = 12;
+        const snapshots = [];
+        let map = {};
+
+        // Initial state
+        snapshots.push({
+            idx: -1,
+            map: {},
+            desc: "开始：数组 nums=[2, 5, 7, 9], target=12",
+            found: null,
+            delay: 1000
+        });
+
+        for (let i = 0; i < nums.length; i++) {
+            const x = nums[i];
+            const need = target - x;
+            
+            // Step 1: Check
+            snapshots.push({
+                idx: i,
+                map: {...map},
+                desc: `步骤 ${i+1}-1: 当前数 ${x}。Map 里有 ${need} (即 12-${x}) 吗？`,
+                found: null,
+                delay: 2000
+            });
+
+            if (map.hasOwnProperty(need)) {
+                // Found
+                snapshots.push({
+                    idx: i,
+                    map: {...map},
+                    desc: `找到啦！Map 中存在 Key=${need} (下标 ${map[need]})。`,
+                    found: [map[need], i], // indices
+                    delay: 3000
+                });
+                break; // Stop loop
+            }
+
+            // Step 2: Put
+            snapshots.push({
+                idx: i,
+                map: {...map},
+                desc: `没找到。将当前数 ${x} (下标 ${i}) 存入 Map，等待有缘人。`,
+                found: null,
+                delay: 1500
+            });
+
+            map[x] = i;
+
+            // Step 3: Updated Map
+            snapshots.push({
+                idx: i,
+                map: {...map},
+                desc: `Map 已更新。继续下一个...`,
+                found: null,
+                delay: 1000
+            });
+        }
+
+        TwoSumAnim.init(snapshots, renderTwoSum, {
+            container: 'ts-array',
+            map: 'ts-map',
+            info: 'ts-info',
+            progress: 'ts-progress'
+        });
+    }
+
+    function renderTwoSum(state, uiIds) {
+        const nums = [2, 5, 7, 9];
+        
+        // 1. Render Array
+        const arrContainer = document.getElementById(uiIds.container);
+        if (arrContainer) {
+            arrContainer.innerHTML = '';
+            nums.forEach((val, i) => {
+                const cell = document.createElement('div');
+                cell.className = 'array-cell';
+                cell.textContent = val;
+                
+                const idxSpan = document.createElement('span');
+                idxSpan.className = 'array-index';
+                idxSpan.textContent = i;
+                cell.appendChild(idxSpan);
+
+                if (i === state.idx) {
+                    cell.classList.add('active');
+                }
+                if (state.found && state.found.includes(i)) {
+                    cell.classList.add('found');
+                    cell.style.borderColor = '#10b981';
+                }
+                arrContainer.appendChild(cell);
+            });
+        }
+
+        // 2. Render Map
+        const mapContainer = document.getElementById(uiIds.map);
+        if (mapContainer) {
+            mapContainer.innerHTML = '';
+            if (Object.keys(state.map).length === 0) {
+                mapContainer.innerHTML = '<div style="color:#666; text-align:center; padding-top:20px; font-size:24px;">(空)</div>';
+            } else {
+                for (let key in state.map) {
+                    const item = document.createElement('div');
+                    item.className = 'map-item';
+                    item.innerHTML = `<span>Key: ${key}</span> <span style="color:#888;">→</span> <span>Val: ${state.map[key]}</span>`;
+                    
+                    // Highlight if it's the found one
+                    if (state.found) {
+                         const currentVal = nums[state.found[1]];
+                         const complement = 12 - currentVal;
+                         if (parseInt(key) === complement) {
+                             item.classList.add('highlight');
+                         }
+                    }
+                    mapContainer.appendChild(item);
+                }
+            }
+        }
+
+        // 3. Info
+        const infoEl = document.getElementById(uiIds.info);
+        if (infoEl) infoEl.textContent = state.desc;
+    }
+
+    // Initialize after load
+    window.addEventListener('load', initTwoSumAnim);
+
 </script>
 
 </body>
