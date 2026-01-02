@@ -828,8 +828,17 @@ Node* <span class="code-fn">createNode</span>(<span class="code-type">char</span
             <!-- Left: Animation (Swapped) -->
             <div class="col-content" style="display: flex; flex-direction: column; justify-content: center;">
                 
+                <!-- Principle Explanation -->
+                <div class="card" style="margin-bottom: 20px; padding: 20px; border-left: 6px solid var(--tertiary-color);">
+                    <h3 style="font-size: 32px; margin-bottom: 15px; color: var(--tertiary-color);"><i class="fas fa-cogs"></i> 核心原理</h3>
+                    <p style="font-size: 24px; color: #ccc; margin: 0;">
+                        <i class="fas fa-exclamation-triangle" style="color: var(--warn-color); margin-right: 8px;"></i> 
+                        <strong>关键点</strong>：要实现 <span style="color: var(--accent-color);">“根→左→右”</span>，入栈时必须 <strong>“先右后左”</strong> (栈是反向的)。
+                    </p>
+                </div>
+
                 <!-- Visual Area: Tree + Stack -->
-                <div style="display: flex; width: 100%; height: 500px; align-items: center; justify-content: space-around; background: rgba(255,255,255,0.02); border-radius: 16px; padding: 20px; position: relative;">
+                <div style="display: flex; width: 100%; height: 400px; align-items: center; justify-content: space-around; background: rgba(255,255,255,0.02); border-radius: 16px; padding: 20px; position: relative;">
                     
                     <!-- Tree -->
                     <div class="tree-container" id="p5-tree" style="width: 400px; height: 400px; transform: scale(0.9); transform-origin: center center; position: relative;">
@@ -915,8 +924,17 @@ Node* <span class="code-fn">createNode</span>(<span class="code-type">char</span
             <!-- Left: Animation -->
             <div class="col-content" style="display: flex; flex-direction: column; justify-content: center;">
                 
+                <!-- Principle Explanation -->
+                <div class="card" style="margin-bottom: 20px; padding: 20px; border-left: 6px solid var(--secondary-color);">
+                    <h3 style="font-size: 32px; margin-bottom: 15px; color: var(--secondary-color);"><i class="fas fa-cogs"></i> 核心原理</h3>
+                    <p style="font-size: 24px; color: #ccc; margin: 0;">
+                        <i class="fas fa-lightbulb" style="color: #FCD34D; margin-right: 8px;"></i> 
+                        <strong>关键点</strong>：上一层节点出队时，顺手把下一层的孩子（左右）带入队。
+                    </p>
+                </div>
+
                 <!-- Visual Area: Tree + Queue -->
-                <div style="display: flex; width: 100%; height: 500px; align-items: center; justify-content: space-around; background: rgba(255,255,255,0.02); border-radius: 16px; padding: 20px; position: relative;">
+                <div style="display: flex; width: 100%; height: 400px; align-items: center; justify-content: space-around; background: rgba(255,255,255,0.02); border-radius: 16px; padding: 20px; position: relative;">
                     
                     <!-- Tree -->
                     <div class="tree-container" id="bfs-tree" style="width: 400px; height: 400px; transform: scale(0.9); transform-origin: center center; position: relative;">
@@ -1519,7 +1537,7 @@ Node* <span class="code-fn">createNode</span>(<span class="code-type">char</span
                  div.textContent = val;
                  // Stack items enter from top conceptually, but here we just list them
                  // Last item is top
-                 stackContainer.prepend(div); // Visual stack: top item on top
+                 stackContainer.appendChild(div); // Visual stack: top item on top (due to flex-direction: column-reverse)
              });
         }
         

@@ -1,0 +1,1769 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>08 二叉搜索树：动态的二分查找</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0B1020;
+            --text-color: #EAF2FF;
+            --accent-color: #22D3EE;     /* 青色：核心概念 */
+            --secondary-color: #60A5FA;  /* 蓝色：辅助说明 */
+            --tertiary-color: #A78BFA;   /* 紫色：强调/代码 */
+            --warn-color: #F472B6;       /* 粉红：重点/易错 */
+            --code-bg: #1e293b;
+            --slide-width: 1920px;
+            --slide-height: 1080px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background-color: #000;
+            color: var(--text-color);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        #app {
+            width: var(--slide-width);
+            height: var(--slide-height);
+            background-color: var(--bg-color);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+        }
+
+        /* 背景装饰 */
+        .bg-decoration {
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            background-image: 
+                radial-gradient(circle at 15% 15%, rgba(34, 211, 238, 0.03) 0%, transparent 25%),
+                radial-gradient(circle at 85% 85%, rgba(167, 139, 250, 0.03) 0%, transparent 25%);
+            pointer-events: none;
+        }
+        
+        .grid-overlay {
+            position: absolute;
+            inset: 0;
+            background-size: 60px 60px;
+            background-image: linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+                              linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+            z-index: 0;
+        }
+
+        /* 幻灯片通用 */
+        .slide {
+            position: absolute;
+            inset: 0;
+            display: none;
+            padding: 80px 100px;
+            flex-direction: column;
+            z-index: 1;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+
+        .slide.active { display: flex; opacity: 1; }
+
+        /* 排版元素 */
+        h1 {
+            font-size: 140px;
+            font-weight: 800;
+            line-height: 1.1;
+            margin-bottom: 40px;
+            background: linear-gradient(135deg, #fff 0%, var(--secondary-color) 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        h2 {
+            font-size: 72px;
+            margin-bottom: 50px;
+            color: var(--accent-color);
+            border-bottom: 4px solid rgba(34, 211, 238, 0.3);
+            padding-bottom: 20px;
+            display: inline-block;
+        }
+
+        h3 {
+            font-size: 48px;
+            margin-bottom: 30px;
+            color: var(--secondary-color);
+        }
+
+        p, li {
+            font-size: 38px;
+            line-height: 1.5;
+            margin-bottom: 24px;
+            color: #cbd5e1;
+        }
+
+        strong { color: var(--accent-color); font-weight: 700; }
+        em { color: var(--tertiary-color); font-style: normal; font-weight: bold; }
+
+        ul { list-style: none; }
+        ul li { position: relative; padding-left: 50px; }
+        ul li::before {
+            content: "•";
+            color: var(--accent-color);
+            position: absolute;
+            left: 0;
+            font-weight: bold;
+        }
+
+        /* 布局类 */
+        .layout-center {
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        .layout-2col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 60px;
+            flex: 1;
+            align-content: start;
+        }
+        
+        .layout-2col .col-visual {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+
+        /* 组件 */
+        .card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 24px;
+            padding: 40px;
+            margin-bottom: 30px;
+        }
+        
+        .highlight-box {
+            background: rgba(34, 211, 238, 0.08);
+            border-left: 8px solid var(--accent-color);
+            padding: 30px 40px;
+            border-radius: 0 16px 16px 0;
+            margin: 30px 0;
+        }
+
+        .code-block {
+            font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+            background: var(--code-bg);
+            padding: 30px;
+            border-radius: 16px;
+            border: 1px solid #334155;
+            font-size: 26px;
+            line-height: 1.6;
+            color: #e2e8f0;
+            white-space: pre;
+            overflow-x: auto;
+            overflow-y: auto;
+            max-height: 650px;
+        }
+        .code-block::-webkit-scrollbar { width: 10px; height: 10px; }
+        .code-block::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); border-radius: 5px; }
+        .code-block::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 5px; }
+        .code-block::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.3); }
+
+        .code-kw { color: #c678dd; } 
+        .code-type { color: #e5c07b; } 
+        .code-fn { color: #61afef; }
+        .code-cm { color: #64748b; font-style: italic; } 
+        .code-num { color: #d19a66; }
+        .code-str { color: #98c379; }
+
+        /* 树节点样式 */
+        .tree-node {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: #0B1020; /* 强制不透明背景 */
+            border: 3px solid var(--accent-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            font-weight: bold;
+            color: #fff;
+            position: absolute;
+            z-index: 2;
+            box-shadow: 0 0 20px rgba(34, 211, 238, 0.2);
+            transition: all 0.4s ease;
+        }
+        
+        .tree-node.active {
+            background: var(--accent-color);
+            color: #000;
+            transform: scale(1.2);
+            box-shadow: 0 0 40px var(--accent-color);
+            z-index: 10;
+        }
+        
+        .tree-node.visited {
+            background: #103749; /* 实色背景代替 rgba，防止透出线条 (Mix of #0B1020 and cyan) */
+            border-color: rgba(34, 211, 238, 0.5);
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .tree-node.target {
+            background: var(--warn-color);
+            border-color: var(--warn-color);
+            box-shadow: 0 0 30px var(--warn-color);
+        }
+
+        .tree-container {
+            position: relative;
+            width: 100%;
+            height: 500px;
+        }
+
+        .footer {
+            position: absolute;
+            bottom: 30px;
+            right: 40px;
+            font-size: 24px;
+            color: rgba(255, 255, 255, 0.3);
+            z-index: 10;
+        }
+        
+        /* 动画控制栏 */
+        .anim-controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            margin-top: 10px;
+        }
+        .anim-controls button {
+            padding: 8px 16px;
+            font-size: 20px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: var(--text-color);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 50px;
+        }
+        .anim-controls button:hover {
+            background: var(--accent-color);
+            color: #000;
+            border-color: var(--accent-color);
+        }
+        .anim-controls button:active { transform: scale(0.95); }
+        .anim-progress {
+            font-family: monospace;
+            font-size: 20px;
+            color: #888;
+            margin-left: 10px;
+            min-width: 80px;
+        }
+
+        /* 数组演示样式 */
+        .arr-box { 
+            width: 60px; 
+            height: 60px; 
+            border: 2px solid #555; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            font-family: monospace; 
+            font-size: 28px; 
+            position: relative;
+            background: rgba(255,255,255,0.05);
+            transition: all 0.3s;
+        }
+        .arr-box.active { 
+            border-color: var(--accent-color); 
+            background: rgba(34,211,238,0.2); 
+            box-shadow: 0 0 15px rgba(34,211,238,0.2);
+        }
+        .ptr { 
+            position: absolute; 
+            bottom: -35px; 
+            left: 50%; 
+            transform: translateX(-50%); 
+            font-size: 20px; 
+            font-weight: bold; 
+        }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <div class="bg-decoration"></div>
+    <div class="grid-overlay"></div>
+
+    <!-- P01: 封面 -->
+    <section class="slide active layout-center" data-title="封面">
+        <div style="text-align: center;">
+            <svg width="400" height="300" viewBox="0 0 400 300" style="margin-bottom: 40px; filter: drop-shadow(0 0 30px rgba(34,211,238,0.2)); overflow: visible;">
+                <defs>
+                    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+                        <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+                        <feMerge>
+                            <feMergeNode in="coloredBlur"/>
+                            <feMergeNode in="SourceGraphic"/>
+                        </feMerge>
+                    </filter>
+                </defs>
+
+                <!-- 连接线 -->
+                <!-- Root -> Left -->
+                <path d="M200 60 L120 140" stroke="#334155" stroke-width="4" stroke-linecap="round" />
+                <!-- Root -> Right (Active Path) -->
+                <path d="M200 60 L280 140" stroke="#22D3EE" stroke-width="6" stroke-linecap="round" opacity="0.6">
+                    <animate attributeName="opacity" values="0.4;1;0.4" dur="2s" repeatCount="indefinite" />
+                </path>
+
+                <!-- Left -> Children -->
+                <path d="M120 140 L80 220" stroke="#334155" stroke-width="2" />
+                <path d="M120 140 L160 220" stroke="#334155" stroke-width="2" />
+
+                <!-- Right -> Children -->
+                <!-- Right -> Left (Active Path) -->
+                <path d="M280 140 L240 220" stroke="#22D3EE" stroke-width="4" stroke-dasharray="8,4" />
+                <path d="M280 140 L320 220" stroke="#334155" stroke-width="2" />
+
+                <!-- Nodes -->
+                
+                <!-- Root Node -->
+                <g transform="translate(200, 60)">
+                    <circle r="35" fill="#0B1020" stroke="#22D3EE" stroke-width="5" />
+                    <text y="10" text-anchor="middle" fill="#fff" font-size="24" font-weight="bold" font-family="monospace">50</text>
+                    <text x="50" y="-10" fill="#22D3EE" font-size="16" font-weight="bold">Root</text>
+                </g>
+
+                <!-- Left Child (Blue) -->
+                <g transform="translate(120, 140)">
+                    <circle r="28" fill="#0B1020" stroke="#60A5FA" stroke-width="3" />
+                    <text y="8" text-anchor="middle" fill="#93C5FD" font-size="18" font-family="monospace">25</text>
+                    <text x="-40" y="0" text-anchor="end" fill="#60A5FA" font-size="14">&lt; 50</text>
+                </g>
+
+                <!-- Right Child (Pink/Purple) -->
+                <g transform="translate(280, 140)">
+                    <circle r="30" fill="#0B1020" stroke="#F472B6" stroke-width="4" filter="url(#glow)" />
+                    <text y="8" text-anchor="middle" fill="#FBCFE8" font-size="20" font-family="monospace">75</text>
+                    <text x="45" y="0" text-anchor="start" fill="#F472B6" font-size="14">&gt; 50</text>
+                </g>
+
+                <!-- Leaf Nodes -->
+                <!-- 25's children -->
+                <circle cx="80" cy="220" r="15" fill="#1e293b" stroke="#475569" stroke-width="2" />
+                <circle cx="160" cy="220" r="15" fill="#1e293b" stroke="#475569" stroke-width="2" />
+
+                <!-- 75's children -->
+                <!-- Target Node (60) -->
+                <g transform="translate(240, 220)">
+                    <circle r="20" fill="rgba(34, 211, 238, 0.2)" stroke="none">
+                         <animate attributeName="r" values="20;30;20" dur="2s" repeatCount="indefinite" />
+                    </circle>
+                    <circle r="18" fill="#0B1020" stroke="#22D3EE" stroke-width="3" />
+                    <text y="6" text-anchor="middle" fill="#22D3EE" font-size="16" font-weight="bold">60</text>
+                </g>
+                
+                <circle cx="320" cy="220" r="15" fill="#1e293b" stroke="#475569" stroke-width="2" />
+
+                <!-- Decoration Text -->
+                <text x="200" y="280" text-anchor="middle" fill="#64748b" font-size="14" letter-spacing="2">BINARY SEARCH TREE</text>
+            </svg>
+            <h1>算法与数据结构</h1>
+            <p style="font-size: 60px; color: var(--secondary-color);">二叉搜索树 (BST)</p>
+        </div>
+    </section>
+
+    <!-- P02: 承上启下 - 查找的困境 -->
+    <section class="slide" data-title="查找瓶颈">
+        <h2>回顾与思考：查找的瓶颈</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="card">
+                    <h3><i class="fas fa-search-minus"></i> 线性扫描 (Linear Scan)</h3>
+                    <ul style="font-size: 32px;">
+                        <li><strong>现状</strong>：在无序的数组/链表中查找。</li>
+                        <li><strong>方法</strong>：只能从头看到尾 (Brute-force)。</li>
+                        <li><strong>代价</strong>：$O(N)$ —— 数据量翻倍，耗时翻倍。</li>
+                    </ul>
+                    <div style="margin-top: 30px; background: rgba(255,255,255,0.05); padding: 20px; border-radius: 12px;">
+                        <p style="font-size: 28px; color: #aaa; margin-bottom: 10px;">假设有 10 亿用户 ($10^9$)：
+                            <span style="font-size: 36px; font-family: monospace; color: var(--warn-color);">$O(N)$</span>
+                            <span style="font-size: 28px;">$\approx$ 10 亿次运算 (太慢)</span>
+                        </p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-visual layout-center">
+                <!-- Visual Metaphor: Dictionary/Book Search -->
+                <div style="position: relative; width: 100%; height: 400px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 40px;">
+                    
+                    <!-- Scenario A: Linear -->
+                    <div style="width: 80%; opacity: 0.5;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 24px; color: #888;">
+                            <span><i class="fas fa-robot"></i> 计算机的“笨”办法</span>
+                            <span>一个个看...</span>
+                        </div>
+                        <div style="height: 20px; background: #334155; border-radius: 10px; position: relative; overflow: hidden;">
+                            <div style="position: absolute; left: 0; top: 0; bottom: 0; width: 30%; background: var(--warn-color); opacity: 0.5;"></div>
+                            <div style="position: absolute; left: 30%; top: -5px; bottom: -5px; width: 4px; background: #fff;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Scenario B: Intuition -->
+                    <div style="width: 80%;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 24px; color: var(--accent-color);">
+                            <span><i class="fas fa-brain"></i> 人类的直觉</span>
+                            <span>直接翻中间？</span>
+                        </div>
+                        <div style="height: 20px; background: #334155; border-radius: 10px; position: relative;">
+                            <!-- Middle highlight -->
+                            <div style="position: absolute; left: 50%; top: -15px; bottom: -15px; width: 4px; background: var(--accent-color); box-shadow: 0 0 15px var(--accent-color);"></div>
+                            <!-- Arrows pointing to sides -->
+                            <div style="position: absolute; top: 30px; left: 0; right: 0; display: flex; justify-content: space-between; color: #888; font-size: 20px;">
+                                <span>小了往左</span>
+                                <span>大了往右</span>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+                <p style="margin-top: 40px; font-size: 32px; text-align: center; color: #fff;">
+                    面对<strong>有序</strong>数据，<br>
+                    我们还需要从头开始吗？
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- P03: 二分查找 -->
+    <section class="slide" data-title="二分查找">
+        <h2>二分查找：思想与实现</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <ul style="font-size: 32px; margin-bottom: 30px;">
+                    <li><strong>生活案例</strong>：猜数字 (0-100)。
+                        <ul>
+                            <li>50 → 大了 → 25... 每次排除<strong>一半</strong>。</li>
+                        </ul>
+                    </li>
+                    <li><strong>核心条件</strong>：数据必须<strong>有序 (Sorted)</strong>。</li>
+                    <li><strong>性能</strong>：$O(\log N)$ (10亿数据仅需 30 次)。</li>
+                </ul>
+                
+                <div class="card" style="padding: 0; background: transparent; border: none;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h3 style="margin: 0; font-size: 32px; color: var(--secondary-color);"><i class="fas fa-play-circle"></i> 动态演示: Find 23</h3>
+                        <div class="anim-controls">
+                            <button onclick="Anim.prev()"><i class="fas fa-step-backward"></i></button>
+                            <button onclick="Anim.toggle()"><i class="fas fa-play"></i></button>
+                            <button onclick="Anim.next()"><i class="fas fa-step-forward"></i></button>
+                            <button onclick="Anim.reset()"><i class="fas fa-undo"></i></button>
+                        </div>
+                    </div>
+                    
+                    <!-- Animation Container -->
+                    <div id="bs-anim-container" style="
+                        background: rgba(255,255,255,0.05); 
+                        border-radius: 16px; 
+                        padding: 30px 10px; 
+                        height: 180px; 
+                        display: flex; 
+                        justify-content: center; 
+                        align-items: center; 
+                        gap: 8px;
+                        position: relative;
+                        margin-bottom: 10px;">
+                        <!-- JS will populate this -->
+                    </div>
+                    <div id="bs-text" style="text-align: center; font-size: 24px; color: #aaa; min-height: 40px;">准备就绪</div>
+                </div>
+            </div>
+            
+            <div class="col-visual">
+                 <div class="code-block" style="font-size: 24px; margin-top: 0;"><span class="code-kw">int</span> <span class="code-fn">binarySearch</span>(<span class="code-kw">int</span> nums[], <span class="code-kw">int</span> size, <span class="code-kw">int</span> target) {
+    <span class="code-kw">int</span> left = <span class="code-num">0</span>, right = size - <span class="code-num">1</span>;
+    
+    <span class="code-kw">while</span> (left <= right) {
+        <span class="code-kw">int</span> mid = left + (right - left) / <span class="code-num">2</span>;
+        
+        <span class="code-kw">if</span> (nums[mid] == target)
+            <span class="code-kw">return</span> mid; <span class="code-cm">// Found</span>
+        <span class="code-kw">else if</span> (nums[mid] < target)
+            left = mid + <span class="code-num">1</span>; <span class="code-cm">// Target in right</span>
+        <span class="code-kw">else</span>
+            right = mid - <span class="code-num">1</span>; <span class="code-cm">// Target in left</span>
+    }
+    <span class="code-kw">return</span> <span class="code-num">-1</span>;
+}</div>
+            </div>
+        </div>
+    </section>
+
+
+    <!-- P04: 数组的缺陷 -->
+    <section class="slide" data-title="数组的缺陷">
+        <h2>为什么不直接用有序数组？</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="card" style="border-left: 8px solid var(--warn-color);">
+                    <h3><i class="fas fa-exclamation-triangle"></i> 数组的致命痛点</h3>
+                    <p>有序数组虽然查找快 ($O(\log N)$)，但<strong>插入和删除太慢</strong>。</p>
+                    <p style="font-size: 28px; color: #ccc;">往数组中间插一个数，后面所有元素都要往后挪。</p>
+                </div>
+                
+                <!-- Performance Table -->
+                <table style="width: 100%; border-collapse: collapse; font-size: 32px; margin-top: 30px;">
+                    <tr style="border-bottom: 2px solid #334155;">
+                        <th style="text-align: left; padding: 20px; color: #888;">数据结构</th>
+                        <th style="padding: 20px; color: var(--accent-color);">查找</th>
+                        <th style="padding: 20px; color: var(--warn-color);">插入/删除</th>
+                    </tr>
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+                        <td style="padding: 20px;">有序数组</td>
+                        <td style="padding: 20px; text-align: center; color: var(--accent-color);">$O(\log N)$</td>
+                        <td style="padding: 20px; text-align: center; color: var(--warn-color);">$O(N)$</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+                        <td style="padding: 20px;">链表</td>
+                        <td style="padding: 20px; text-align: center; color: #888;">$O(N)$</td>
+                        <td style="padding: 20px; text-align: center; color: var(--accent-color);">$O(1)$*</td>
+                    </tr>
+                    <tr style="background: rgba(34, 211, 238, 0.1);">
+                        <td style="padding: 20px; font-weight: bold;">BST (平衡)</td>
+                        <td style="padding: 20px; text-align: center; color: var(--accent-color); font-weight: bold;">$O(\log N)$</td>
+                        <td style="padding: 20px; text-align: center; color: var(--accent-color); font-weight: bold;">$O(\log N)$</td>
+                    </tr>
+                </table>
+            </div>
+            
+            <div class="col-visual">
+                <!-- Animation of Array Insertion -->
+                <div style="display: flex; gap: 10px; align-items: center; justify-content: center; height: 100px;">
+                    <div style="border: 2px solid #fff; padding: 15px; width: 60px; text-align: center;">1</div>
+                    <div style="border: 2px solid #fff; padding: 15px; width: 60px; text-align: center;">3</div>
+                    <div style="border: 2px solid #fff; padding: 15px; width: 60px; text-align: center;">5</div>
+                    <div style="border: 2px solid #fff; padding: 15px; width: 60px; text-align: center;">7</div>
+                    <div style="border: 2px solid #fff; padding: 15px; width: 60px; text-align: center;">9</div>
+                </div>
+                <div style="margin-top: 20px; font-size: 40px; color: var(--warn-color);">
+                    <i class="fas fa-arrow-down"></i> 插入 4
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center; justify-content: center; height: 100px; margin-top: 20px; position: relative;">
+                    <div style="border: 2px solid #fff; padding: 15px; width: 60px; text-align: center;">1</div>
+                    <div style="border: 2px solid #fff; padding: 15px; width: 60px; text-align: center;">3</div>
+                    <div style="border: 2px solid var(--warn-color); background: rgba(244,114,182,0.2); padding: 15px; width: 60px; text-align: center;">4</div>
+                    <div style="border: 2px solid #fff; padding: 15px; width: 60px; text-align: center; transform: translateX(10px); opacity: 0.7;">5</div>
+                    <div style="border: 2px solid #fff; padding: 15px; width: 60px; text-align: center; transform: translateX(10px); opacity: 0.7;">7</div>
+                    <div style="border: 2px solid #fff; padding: 15px; width: 60px; text-align: center; transform: translateX(10px); opacity: 0.7;">9</div>
+                </div>
+                <p style="color: #888; font-size: 24px; margin-top: 20px;">牵一发而动全身：插入需要移动大量元素</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- P05: BST 定义 -->
+    <section class="slide" data-title="BST定义">
+        <h2>主角登场：二叉搜索树 (BST)</h2>
+        <div class="layout-2col" style="grid-template-columns: 50% 50%;">
+            <div class="col-content">
+                <p>将二分查找的决策路径“固化”为一种数据结构。</p>
+                <div class="highlight-box">
+                    <p style="font-size: 32px; margin-bottom: 10px;"><strong><i class="fas fa-gavel"></i> 核心法则</strong></p>
+                    <p style="font-size: 28px;">对于树中的任意节点：</p>
+                    <ul style="font-size: 28px;">
+                        <li><span style="color: var(--secondary-color);">左子树</span> 所有节点的值 < <strong>根节点</strong></li>
+                        <li><span style="color: var(--warn-color);">右子树</span> 所有节点的值 > <strong>根节点</strong></li>
+                    </ul>
+                </div>
+
+                <!-- Visual of BST Property -->
+                <div style="display: flex; justify-content: center;">
+                    <div class="tree-container" style="width: 480px; height: 350px; transform: scale(0.9); transform-origin: top center; margin-top: 20px;">
+                        <svg style="position: absolute; width: 100%; height: 100%; z-index: 0; overflow: visible;">
+                            <!-- Edges -->
+                            <!-- 10 -> 5, 15 -->
+                            <line x1="240" y1="40" x2="135" y2="115" stroke="#fff" stroke-width="4" />
+                            <line x1="240" y1="40" x2="335" y2="115" stroke="#fff" stroke-width="4" />
+                            
+                            <!-- 5 -> 3, 7 -->
+                            <line x1="135" y1="115" x2="70" y2="200" stroke="#fff" stroke-width="3" />
+                            <line x1="135" y1="115" x2="190" y2="200" stroke="#fff" stroke-width="3" />
+
+                            <!-- 15 -> 12, 18 -->
+                            <line x1="335" y1="115" x2="270" y2="200" stroke="#fff" stroke-width="3" />
+                            <line x1="335" y1="115" x2="390" y2="200" stroke="#fff" stroke-width="3" />
+                            
+                            <!-- Regions (Dashed) -->
+                            <!-- Left Subtree of 10 -->
+                            <path d="M 135 115 L 35 245 L 235 245 Z" fill="rgba(96, 165, 250, 0.1)" stroke="var(--secondary-color)" stroke-dasharray="5,5"/>
+                            <!-- Right Subtree of 10 -->
+                            <path d="M 335 115 L 235 245 L 435 245 Z" fill="rgba(244, 114, 182, 0.1)" stroke="var(--warn-color)" stroke-dasharray="5,5"/>
+                        </svg>
+
+                        <!-- Root -->
+                        <div class="tree-node" style="left: 200px; top: 0px; background: #0B1020; width: 80px; height: 80px; z-index: 10;">10</div>
+                        
+                        <!-- L1 -->
+                        <div class="tree-node" style="left: 100px; top: 80px; width: 70px; height: 70px; font-size: 28px; border-color: var(--secondary-color); color: var(--secondary-color);">5</div>
+                        <div class="tree-node" style="left: 300px; top: 80px; width: 70px; height: 70px; font-size: 28px; border-color: var(--warn-color); color: var(--warn-color);">15</div>
+
+                        <!-- L2 -->
+                        <div class="tree-node" style="left: 40px; top: 170px; width: 60px; height: 60px; font-size: 24px; border-width: 2px; border-color: var(--secondary-color); color: var(--secondary-color);">3</div>
+                        <div class="tree-node" style="left: 160px; top: 170px; width: 60px; height: 60px; font-size: 24px; border-width: 2px; border-color: var(--secondary-color); color: var(--secondary-color);">7</div>
+                        
+                        <div class="tree-node" style="left: 240px; top: 170px; width: 60px; height: 60px; font-size: 24px; border-width: 2px; border-color: var(--warn-color); color: var(--warn-color);">12</div>
+                        <div class="tree-node" style="left: 360px; top: 170px; width: 60px; height: 60px; font-size: 24px; border-width: 2px; border-color: var(--warn-color); color: var(--warn-color);">18</div>
+                        
+                        <!-- Labels -->
+                        <div style="position: absolute; left: 60px; top: 250px; color: var(--secondary-color); font-size: 20px; width: 160px; text-align: center;">
+                            都比 10 小
+                        </div>
+                        <div style="position: absolute; left: 260px; top: 250px; color: var(--warn-color); font-size: 20px; width: 160px; text-align: center;">
+                            都比 10 大
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-visual" style="justify-content: flex-start;">
+                <!-- Efficiency Chart -->
+                <div class="card" style="width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; border: none; background: transparent;">
+                    <h3 style="color: #fff; margin-bottom: 20px;">查找效率对比：树 vs 链表</h3>
+                    <svg width="600" height="400" viewBox="0 0 600 400" style="overflow: visible;">
+                        <!-- Axes -->
+                        <line x1="50" y1="350" x2="550" y2="350" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)" />
+                        <line x1="50" y1="350" x2="50" y2="50" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)" />
+                        <text x="560" y="360" fill="#64748b" font-size="20">N (数据量)</text>
+                        <text x="30" y="40" fill="#64748b" font-size="20">Steps (耗时)</text>
+
+                        <!-- O(N) Line -->
+                        <path d="M 50 350 L 550 50" stroke="var(--warn-color)" stroke-width="4" fill="none" />
+                        <text x="500" y="80" fill="var(--warn-color)" font-size="24" font-weight="bold">O(N)</text>
+                        <text x="500" y="110" fill="var(--warn-color)" font-size="18">链表 / 数组</text>
+
+                        <!-- O(log N) Line -->
+                        <path d="M 50 350 Q 150 340, 550 300" stroke="var(--accent-color)" stroke-width="4" fill="none" />
+                        <text x="560" y="300" fill="var(--accent-color)" font-size="24" font-weight="bold">O(log N)</text>
+                        <text x="560" y="330" fill="var(--accent-color)" font-size="18">BST (平衡)</text>
+
+                        <!-- Comparisons -->
+                        <line x1="400" y1="350" x2="400" y2="140" stroke="#fff" stroke-width="1" stroke-dasharray="5,5" opacity="0.3" />
+                        <circle cx="400" cy="140" r="6" fill="var(--warn-color)" />
+                        <circle cx="400" cy="315" r="6" fill="var(--accent-color)" />
+                        
+                        <text x="410" y="150" fill="#fff" font-size="20">100万次</text>
+                        <text x="410" y="310" fill="#fff" font-size="20">仅需 20 次！</text>
+                        <text x="380" y="380" fill="#888" font-size="18">N = 1,000,000</text>
+                    </svg>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P06: 动态演示 - 查找 -->
+    <section class="slide" data-title="动态演示：查找">
+        <h2>BST 查找：动态二分</h2>
+        <div class="layout-2col" style="grid-template-columns: 50% 50%;">
+            <div class="col-content">
+                <div class="card" style="padding: 20px; display: flex; flex-direction: column; gap: 15px;">
+                    <div>
+                        <h3 style="margin: 0; font-size: 28px;"><i class="fas fa-search"></i> 寻找目标：<span style="color: var(--warn-color); font-size: 40px;">7</span></h3>
+                    </div>
+                    <div class="anim-controls" style="margin-top: 0;">
+                        <button onclick="Anim.prev()"><i class="fas fa-step-backward"></i></button>
+                        <button onclick="Anim.toggle()"><i class="fas fa-play"></i></button>
+                        <button onclick="Anim.next()"><i class="fas fa-step-forward"></i></button>
+                        <button onclick="Anim.reset()"><i class="fas fa-undo"></i></button>
+                        <div class="anim-progress" id="search-progress">0/0</div>
+                    </div>
+                    
+                    <div class="highlight-box" style="margin: 0; padding: 15px;">
+                        <div id="search-log" style="font-family: monospace; font-size: 22px;">
+                            点击播放开始演示...
+                        </div>
+                    </div>
+                </div>
+
+                <div style="display: flex; justify-content: center; width: 100%;">
+                <div class="tree-container" id="search-tree" style="height: 400px; width: 500px; transform: scale(0.9); transform-origin: top center; margin-top: 20px;">
+                    <svg style="position: absolute; width: 100%; height: 100%; z-index: 0; overflow: visible;">
+                        <line x1="250" y1="50" x2="150" y2="150" stroke="#fff" stroke-width="4" />
+                            <line x1="250" y1="50" x2="350" y2="150" stroke="#fff" stroke-width="4" />
+                            <line x1="150" y1="150" x2="80" y2="250" stroke="#fff" stroke-width="3" />
+                            <line x1="150" y1="150" x2="220" y2="250" stroke="#fff" stroke-width="3" />
+                            <line x1="350" y1="150" x2="300" y2="250" stroke="#fff" stroke-width="3" />
+                            <line x1="350" y1="150" x2="400" y2="250" stroke="#fff" stroke-width="3" />
+                        </svg>
+                        <!-- Nodes -->
+                        <div class="tree-node" data-val="10" style="left: 210px; top: 10px;">10</div>
+                        <div class="tree-node" data-val="5" style="left: 110px; top: 110px;">5</div>
+                        <div class="tree-node" data-val="15" style="left: 310px; top: 110px;">15</div>
+                        <div class="tree-node" data-val="3" style="left: 40px; top: 210px;">3</div>
+                        <div class="tree-node" data-val="7" style="left: 180px; top: 210px;">7</div>
+                        <div class="tree-node" data-val="12" style="left: 260px; top: 210px;">12</div>
+                        <div class="tree-node" data-val="18" style="left: 360px; top: 210px;">18</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-visual">
+                <!-- Code Block -->
+                <div class="code-block" style="font-size: 24px; width: 100%;"><span class="code-kw">struct</span> TreeNode {
+    <span class="code-type">int</span> val;
+    TreeNode *left;
+    TreeNode *right;
+};
+
+<span class="code-type">bool</span> <span class="code-fn">search</span>(TreeNode* node, <span class="code-type">int</span> target) {
+    <span class="code-kw">if</span> (!node) <span class="code-kw">return</span> <span class="code-kw">false</span>;
+    <span class="code-kw">if</span> (target == node-&gt;val) <span class="code-kw">return</span> <span class="code-kw">true</span>;
+    
+    <span class="code-kw">if</span> (target &lt; node-&gt;val)
+        <span class="code-kw">return</span> <span class="code-fn">search</span>(node-&gt;left, target); <span class="code-cm">// 小往左</span>
+    <span class="code-kw">else</span>
+        <span class="code-kw">return</span> <span class="code-fn">search</span>(node-&gt;right, target);<span class="code-cm">// 大往右</span>
+}</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P07: 递归原理 -->
+    <section class="slide" data-title="递归原理">
+        <h2>BST 递归原理</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="card" style="border-top: 6px solid var(--secondary-color); display: flex; flex-direction: column;">
+                    <h3 style="color: var(--secondary-color);"><i class="fas fa-sitemap"></i> 1. 向下甩锅 (Boss思维)</h3>
+                    
+                    <div style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+                        <p style="font-size: 26px; color: #ccc; margin: 0;">
+                            <i class="fas fa-user-tie"></i> <strong>Root = 局部管理者</strong><br>
+                            只负责当前这一层的判断，不关心整棵树细节。
+                        </p>
+                    </div>
+
+                    <ul style="font-size: 28px; line-height: 1.5; flex: 1;">
+                        <li style="margin-bottom: 20px;"><strong>判断方向</strong>：
+                            <br>比我小 $\to$ 命令<span style="color: var(--secondary-color);">左下属</span>去办
+                            <br>比我大 $\to$ 命令<span style="color: var(--warn-color);">右下属</span>去办
+                        </li>
+                        <li><strong>信任机制</strong>：
+                            <br>任务派发后（递归调用），<strong>无条件信任</strong>下属能把事情办好。
+                            <br><span style="font-size: 24px; color: #888;">(我不干涉具体的执行过程)</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="col-content">
+                <div class="card" style="border-top: 6px solid var(--tertiary-color); display: flex; flex-direction: column;">
+                    <h3 style="color: var(--tertiary-color);"><i class="fas fa-undo-alt"></i> 2. 向上汇报 (指针重连)</h3>
+                    
+                    <div style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+                        <p style="font-size: 26px; color: #ccc; margin: 0;">
+                            <i class="fas fa-exclamation-triangle"></i> <strong>下属结构可能巨变</strong><br>
+                            (从无到有、被删除消失、换了新Leader)
+                        </p>
+                    </div>
+
+                    <ul style="font-size: 28px; line-height: 1.5; flex: 1;">
+                        <li style="margin-bottom: 20px;"><strong>汇报身份 (返回值)</strong>：
+                            <br>递归返回值代表 —— “任务执行完后，这块地盘<strong>现在的Leader</strong>是谁”。
+                        </li>
+                        <li><strong>更新连接</strong>：
+                            <br>Boss 听到汇报后，必须执行 <strong>“指针重连”</strong>：
+                            <div class="code-block" style="padding: 10px; margin-top: 10px; font-size: 24px;">root.left = insert(...)</div>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P07: 节点插入详解 -->
+    <section class="slide" data-title="插入逻辑">
+        <h2>BST 插入：分情况讨论</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="card">
+                    <h3><i class="fas fa-code-branch"></i> 插入的三种剧本</h3>
+                    <ul style="font-size: 32px; line-height: 1.8;">
+                        <li style="margin-bottom: 20px;">
+                            <strong>1. 比当前节点小</strong><br>
+                            <span style="color: #aaa; font-size: 28px;">这事儿我不归我管，归我左边的下属（左子树）管</span>
+                        </li>
+                        <li>
+                            <strong>2. 比当前节点大</strong><br>
+                            <span style="color: #aaa; font-size: 28px;">这事儿我不归我管，归我右边的下属（右子树）管</span>
+                        </li>
+                        <li style="margin-bottom: 20px;">
+                          <strong>3. 空树 (Base Case)</strong><br>
+                          <span style="color: #aaa; font-size: 28px;">我就直接变成那个新节点</span>
+                      </li>
+                    </ul>
+                </div>
+                <div class="highlight-box" style="margin-top: 30px;">
+                    <p style="font-size: 28px; margin: 0;">
+                        <i class="fas fa-lightbulb" style="color: #fbbf24;"></i> 
+                        不要试图在脑子里模拟计算机压栈的过程，要使用老板思维
+                    </p>
+                </div>
+            </div>
+            
+            <div class="col-visual layout-center">
+                <!-- 静态示意图 -->
+                <svg width="600" height="600" viewBox="0 0 600 600" style="overflow: visible;">
+                    <!-- Case 2 & 3 Lines -->
+                    <path d="M 300 50 L 150 280" stroke="#334155" stroke-width="4" stroke-dasharray="8,8" />
+                    <path d="M 300 50 L 450 280" stroke="#334155" stroke-width="4" stroke-dasharray="8,8" />
+
+                    <!-- Current Node -->
+                    <g transform="translate(300, 50)">
+                        <circle r="50" fill="#0B1020" stroke="#fff" stroke-width="4" />
+                        <text y="10" text-anchor="middle" fill="#fff" font-size="32" font-family="monospace" font-weight="bold">Cur</text>
+                    </g>
+
+                    <!-- Left Target -->
+                    <g transform="translate(150, 280)">
+                        <!-- 增加宽度，使用不透明背景 -->
+                        <rect x="-100" y="-40" width="200" height="80" rx="16" fill="#0B1020" stroke="var(--secondary-color)" stroke-width="3" />
+                        <text y="10" text-anchor="middle" fill="var(--secondary-color)" font-size="32" font-weight="bold">Target &lt; Cur</text>
+                        <!-- Arrow -->
+                        <path d="M 0 45 L 0 120" stroke="var(--secondary-color)" stroke-width="3" marker-end="url(#arrow-blue)" />
+                        <text x="15" y="90" fill="#94a3b8" font-size="20">Go Left</text>
+                    </g>
+
+                    <!-- Right Target -->
+                    <g transform="translate(450, 280)">
+                        <!-- 增加宽度，使用不透明背景 -->
+                        <rect x="-100" y="-40" width="200" height="80" rx="16" fill="#0B1020" stroke="var(--warn-color)" stroke-width="3" />
+                        <text y="10" text-anchor="middle" fill="var(--warn-color)" font-size="32" font-weight="bold">Target &gt; Cur</text>
+                        <!-- Arrow -->
+                        <path d="M 0 45 L 0 120" stroke="var(--warn-color)" stroke-width="3" marker-end="url(#arrow-pink)" />
+                        <text x="15" y="90" fill="#94a3b8" font-size="20">Go Right</text>
+                    </g>
+
+                    <!-- Empty Spot -->
+                    <g transform="translate(150, 470)">
+                         <circle r="35" fill="#0B1020" stroke="#64748b" stroke-width="3" stroke-dasharray="8,6" />
+                         <text y="8" text-anchor="middle" fill="#64748b" font-size="18" font-weight="bold">NULL</text>
+                         <text y="70" text-anchor="middle" fill="#fff" font-size="24">找到空位!</text>
+                    </g>
+                    
+                    <!-- Defs for markers -->
+                    <defs>
+                        <marker id="arrow-blue" markerWidth="12" markerHeight="12" refX="0" refY="3" orient="auto" markerUnits="strokeWidth">
+                          <path d="M0,0 L0,6 L9,3 z" fill="var(--secondary-color)" />
+                        </marker>
+                        <marker id="arrow-pink" markerWidth="12" markerHeight="12" refX="0" refY="3" orient="auto" markerUnits="strokeWidth">
+                          <path d="M0,0 L0,6 L9,3 z" fill="var(--warn-color)" />
+                        </marker>
+                    </defs>
+                </svg>
+            </div>
+        </div>
+    </section>
+
+    <!-- P08: 动态演示 - 插入 -->
+    <section class="slide" data-title="插入演示">
+        <h2>插入实战：动画与代码</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="card" style="padding: 20px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <div>
+                        <h3><i class="fas fa-plus-circle"></i> 插入数字：<span style="color: var(--accent-color); font-size: 48px;">13</span></h3>
+                    </div>
+                    <div class="anim-controls">
+                        <button onclick="Anim.prev()"><i class="fas fa-step-backward"></i></button>
+                        <button onclick="Anim.toggle()"><i class="fas fa-play"></i></button>
+                        <button onclick="Anim.next()"><i class="fas fa-step-forward"></i></button>
+                        <button onclick="Anim.reset()"><i class="fas fa-undo"></i></button>
+                        <div class="anim-progress" id="insert-progress">0/0</div>
+                    </div>
+                </div>
+                
+                <div class="highlight-box" style="margin-top: 0; padding: 20px;">
+                    <div id="insert-log" style="font-family: monospace; font-size: 26px;">
+                        点击播放开始演示...
+                    </div>
+                </div>
+
+                <div class="tree-container" id="insert-tree" style="height: 400px; transform: scale(0.9); transform-origin: top center; margin-top: 10px;">
+                    <svg style="position: absolute; width: 100%; height: 100%; z-index: 0; overflow: visible;">
+                        <line x1="250" y1="50" x2="150" y2="150" stroke="#fff" stroke-width="4" />
+                        <line x1="250" y1="50" x2="350" y2="150" stroke="#fff" stroke-width="4" />
+                        <line x1="150" y1="150" x2="80" y2="250" stroke="#fff" stroke-width="3" />
+                        <line x1="150" y1="150" x2="220" y2="250" stroke="#fff" stroke-width="3" />
+                        <line x1="350" y1="150" x2="300" y2="250" stroke="#fff" stroke-width="3" />
+                        <line x1="350" y1="150" x2="400" y2="250" stroke="#fff" stroke-width="3" />
+                        
+                        <!-- New line for 13, hidden initially -->
+                        <line id="line-13" x1="300" y1="250" x2="340" y2="330" stroke="#22D3EE" stroke-width="3" stroke-dasharray="5,5" style="opacity: 0; transition: opacity 0.5s;" />
+                    </svg>
+                    
+                    <div class="tree-node" data-val="10" style="left: 210px; top: 10px;">10</div>
+                    <div class="tree-node" data-val="5" style="left: 110px; top: 110px;">5</div>
+                    <div class="tree-node" data-val="15" style="left: 310px; top: 110px;">15</div>
+                    <div class="tree-node" data-val="3" style="left: 40px; top: 210px;">3</div>
+                    <div class="tree-node" data-val="7" style="left: 180px; top: 210px;">7</div>
+                    <div class="tree-node" data-val="12" style="left: 260px; top: 210px;">12</div>
+                    <div class="tree-node" data-val="18" style="left: 360px; top: 210px;">18</div>
+                    
+                    <!-- New Node 13 -->
+                    <div class="tree-node" data-val="13" style="left: 300px; top: 290px; opacity: 0; background: var(--accent-color); color: #000; transition: opacity 0.5s;">13</div>
+                </div>
+            </div>
+            
+            <div class="col-visual">
+                <div class="code-block" style="font-size: 24px; margin-top: 0; height: 100%;"><span class="code-kw">TreeNode*</span> <span class="code-fn">insert</span>(TreeNode* node, <span class="code-kw">int</span> val) {
+    <span class="code-cm">// 1. 递归出口：找到空位</span>
+    <span class="code-kw">if</span> (node == NULL) {
+        <span class="code-kw">return </span>createNode(val);
+    }
+
+    <span class="code-cm">// 2. 递归查找并连接</span>
+    <span class="code-kw">if</span> (val &lt; node-&gt;val) {
+        node-&gt;left = <span class="code-fn">insert</span>(node-&gt;left, val);
+    } <span class="code-kw">else if</span> (val &gt; node-&gt;val) {
+        node-&gt;right = <span class="code-fn">insert</span>(node-&gt;right, val);
+    }
+    
+    <span class="code-cm">// 3. 返回当前节点</span>
+    <span class="code-kw">return</span> node;
+}</div>
+        </div>
+    </section>
+
+    <!-- P09: 节点删除详解 -->
+    <section class="slide" data-title="删除逻辑">
+        <h2>BST 删除</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="card">
+                    <h3><i class="fas fa-trash-alt"></i> 删除的三种情况</h3>
+                    <ul style="font-size: 32px; line-height: 1.6;">
+                        <li style="margin-bottom: 20px;">
+                            <strong>1. 叶子节点 (Leaf)</strong><br>
+                            <span style="color: #aaa; font-size: 26px;">无牵无挂，直接删除。</span>
+                        </li>
+                        <li style="margin-bottom: 20px;">
+                            <strong>2. 只有一个孩子</strong><br>
+                            <span style="color: #aaa; font-size: 26px;">子承父业，独苗顶上 (父节点指向孙子)。</span>
+                        </li>
+                        <li>
+                            <strong>3. 有两个孩子 (麻烦)</strong><br>
+                            <span style="color: #aaa; font-size: 26px;">找<strong>替罪羊</strong> (Successor) 顶包：</span>
+                            <ul style="font-size: 24px; margin-top: 5px; color: var(--secondary-color);">
+                                <li>右子树中<strong>最小</strong>的节点 (或左最大)。</li>
+                                <li>值覆盖当前节点，然后删除那个替罪羊。</li>
+                            </ul>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="col-visual layout-center">
+                <svg width="700" height="550" viewBox="0 0 700 550" style="overflow: visible;">
+                    <!-- Title -->
+                    <text x="350" y="20" text-anchor="middle" fill="#aaa" font-size="24">Case 3: 左右子树都不为空</text>
+
+                    <!-- Tree Edges -->
+                    <line x1="350" y1="80" x2="200" y2="200" stroke="#fff" stroke-width="4" />
+                    <line x1="350" y1="80" x2="500" y2="200" stroke="#fff" stroke-width="4" />
+                    
+                    <!-- Right Subtree Edges -->
+                    <line x1="500" y1="200" x2="420" y2="320" stroke="#fff" stroke-width="3" stroke-dasharray="5,5" />
+                    <line x1="500" y1="200" x2="580" y2="320" stroke="#334155" stroke-width="3" />
+
+                    <!-- Nodes -->
+                    <!-- Del Node -->
+                    <g transform="translate(350, 80)">
+                        <circle r="45" fill="#1e293b" stroke="var(--warn-color)" stroke-width="4" stroke-dasharray="8,4" />
+                        <text y="10" text-anchor="middle" fill="#fff" font-size="24" font-family="monospace">Target</text>
+                    </g>
+                    
+                    <!-- Left Child -->
+                    <g transform="translate(200, 200)">
+                        <circle r="35" fill="#0B1020" stroke="#fff" stroke-width="3" />
+                        <text y="8" text-anchor="middle" fill="#fff" font-size="24">L</text>
+                        <text y="60" text-anchor="middle" fill="#64748b" font-size="20">左子树</text>
+                    </g>
+                    
+                    <!-- Right Child -->
+                    <g transform="translate(500, 200)">
+                        <circle r="35" fill="#0B1020" stroke="#fff" stroke-width="3" />
+                        <text y="8" text-anchor="middle" fill="#fff" font-size="24">R</text>
+                        <text y="60" text-anchor="middle" fill="#64748b" font-size="20">右子树</text>
+                    </g>
+
+                    <!-- Successor (Min in Right) -->
+                    <g transform="translate(420, 320)">
+                        <circle r="40" fill="var(--accent-color)" stroke="none" />
+                        <text y="8" text-anchor="middle" fill="#000" font-size="24" font-weight="bold">Min</text>
+                        <text x="-60" y="10" text-anchor="end" fill="var(--accent-color)" font-size="20">Successor</text>
+                        <text x="-60" y="35" text-anchor="end" fill="#64748b" font-size="18">(右子树最小)</text>
+                    </g>
+                    
+                    <!-- Right-Right (Just decoration) -->
+                    <g transform="translate(580, 320)">
+                         <circle r="20" fill="#1e293b" stroke="#334155" stroke-width="2" />
+                    </g>
+
+                    <!-- Action 1: Copy -->
+                    <path d="M 390 290 Q 350 250, 350 155" stroke="var(--accent-color)" stroke-width="4" marker-end="url(#arrow-cyan)" fill="none" />
+                    <rect x="270" y="192" width="120" height="40" rx="8" fill="#0B1020" stroke="var(--accent-color)" />
+                    <text x="330" y="220" text-anchor="middle" fill="var(--accent-color)" font-size="20">1. 覆盖值</text>
+
+                    <!-- Action 2: Delete -->
+                    <line x1="390" y1="350" x2="450" y2="350" stroke="var(--warn-color)" stroke-width="4" />
+                    <text x="420" y="380" text-anchor="middle" fill="var(--warn-color)" font-size="20">2. 删掉它</text>
+                    <text x="420" y="405" text-anchor="middle" fill="#64748b" font-size="16">(它一定是叶子或仅有右孩)</text>
+
+                    <defs>
+                        <marker id="arrow-cyan" markerWidth="12" markerHeight="12" refX="0" refY="3" orient="auto" markerUnits="strokeWidth">
+                          <path d="M0,0 L0,6 L9,3 z" fill="var(--accent-color)" />
+                        </marker>
+                    </defs>
+                </svg>
+            </div>
+        </div>
+    </section>
+
+    <!-- P10: 动态演示 - 删除 -->
+    <section class="slide" data-title="删除演示">
+        <h2>删除实战：移除节点 5</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="card" style="padding: 20px; display: flex; flex-direction: column; gap: 15px; margin-bottom: 20px;">
+                    <div>
+                        <h3 style="font-size: 28px; margin: 0;"><i class="fas fa-trash"></i> 目标：<span style="color: var(--warn-color); font-size: 40px;">5</span> (双子节点)</h3>
+                    </div>
+                    <div class="anim-controls">
+                        <button onclick="Anim.prev()"><i class="fas fa-step-backward"></i></button>
+                        <button onclick="Anim.toggle()"><i class="fas fa-play"></i></button>
+                        <button onclick="Anim.next()"><i class="fas fa-step-forward"></i></button>
+                        <button onclick="Anim.reset()"><i class="fas fa-undo"></i></button>
+                        <div class="anim-progress" id="delete-progress">0/0</div>
+                    </div>
+                </div>
+                
+                <div class="highlight-box" style="margin-top: 0; padding: 20px;">
+                    <div id="delete-log" style="font-family: monospace; font-size: 26px;">
+                        点击播放开始演示...
+                    </div>
+                </div>
+
+                <div class="tree-container" id="delete-tree" style="height: 400px; transform: scale(0.9); transform-origin: top center; margin-top: 10px;">
+                    <svg style="position: absolute; width: 100%; height: 100%; z-index: 0; overflow: visible;">
+                        <!-- Root connections -->
+                        <line x1="250" y1="50" x2="150" y2="150" stroke="#fff" stroke-width="4" />
+                        <line x1="250" y1="50" x2="350" y2="150" stroke="#fff" stroke-width="4" />
+                        
+                        <!-- Left subtree (5's children) -->
+                        <line id="line-5-3" x1="150" y1="150" x2="80" y2="250" stroke="#fff" stroke-width="3" />
+                        <line id="line-5-7" x1="150" y1="150" x2="220" y2="250" stroke="#fff" stroke-width="3" />
+                        
+                        <!-- Right subtree -->
+                        <line x1="350" y1="150" x2="300" y2="250" stroke="#fff" stroke-width="3" />
+                        <line x1="350" y1="150" x2="400" y2="250" stroke="#fff" stroke-width="3" />
+                    </svg>
+                    
+                    <div class="tree-node" data-val="10" style="left: 210px; top: 10px;">10</div>
+                    <div class="tree-node" data-val="5" style="left: 110px; top: 110px;">5</div>
+                    <div class="tree-node" data-val="15" style="left: 310px; top: 110px;">15</div>
+                    <div class="tree-node" data-val="3" style="left: 40px; top: 210px;">3</div>
+                    <div class="tree-node" data-val="7" style="left: 180px; top: 210px;">7</div>
+                    <div class="tree-node" data-val="12" style="left: 260px; top: 210px;">12</div>
+                    <div class="tree-node" data-val="18" style="left: 360px; top: 210px;">18</div>
+                </div>
+            </div>
+            
+            <div class="col-visual">
+                <div class="code-block" style="font-size: 22px; margin-top: 0; height: 100%;"><span class="code-kw">TreeNode*</span> <span class="code-fn">deleteNode</span>(TreeNode* node, <span class="code-kw">int</span> key) {
+    <span class="code-kw">if</span> (!node) <span class="code-kw">return</span> NULL;
+    
+    <span class="code-kw">if</span> (key &lt; node-&gt;val) 
+        node-&gt;left = <span class="code-fn">deleteNode</span>(node-&gt;left, key);
+    <span class="code-kw">else if</span> (key &gt; node-&gt;val) 
+        node-&gt;right = <span class="code-fn">deleteNode</span>(node-&gt;right, key);
+    <span class="code-kw">else</span> { <span class="code-cm">// Found key</span>
+        <span class="code-cm">// Case 1 & 2: 0或1个孩子</span>
+        <span class="code-kw">if</span> (!node-&gt;left) <span class="code-kw">return</span> node-&gt;right;
+        <span class="code-kw">if</span> (!node-&gt;right) <span class="code-kw">return</span> node-&gt;left;
+        
+        <span class="code-cm">// Case 3: 两个孩子</span>
+        TreeNode* min = node-&gt;right;
+        <span class="code-kw">while</span>(min-&gt;left) min = min-&gt;left; <span class="code-cm">// 找最小</span>
+        
+        node-&gt;val = min-&gt;val; <span class="code-cm">// 1.值覆盖</span>
+        node-&gt;right = <span class="code-fn">deleteNode</span>(node-&gt;right, min-&gt;val); 
+    }
+    <span class="code-kw">return</span> node;
+}</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P08: 回扣 DFS - 中序遍历 -->
+    <section class="slide" data-title="回扣 DFS">
+        <h2>神来之笔：BST 与 DFS</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="card" style="border-top: 6px solid var(--secondary-color);">
+                    <h3><i class="fas fa-question-circle"></i> 思考题</h3>
+                    <p>如果对这棵 BST 进行我们刚学过的 <strong>DFS 中序遍历 (In-order)</strong>，会发生什么？</p>
+                    <p style="font-size: 28px; color: #aaa;">顺序：左子树 $\to$ 根 $\to$ 右子树</p>
+                </div>
+                
+                <div class="anim-controls" style="justify-content: center; margin: 40px 0;">
+                    <button onclick="Anim.prev()" style="width: 60px;"><i class="fas fa-step-backward"></i></button>
+                    <button onclick="Anim.toggle()" style="width: 80px; font-size: 24px;"><i class="fas fa-play"></i></button>
+                    <button onclick="Anim.next()" style="width: 60px;"><i class="fas fa-step-forward"></i></button>
+                    <button onclick="Anim.reset()" style="width: 60px;"><i class="fas fa-undo"></i></button>
+                    <div class="anim-progress" id="inorder-progress">0/0</div>
+                </div>
+                
+                <div class="highlight-box">
+                    <div style="display: flex; align-items: center; gap: 20px;">
+                        <span style="font-size: 32px; font-weight: bold;">Output:</span>
+                        <div id="inorder-output" style="font-family: monospace; font-size: 36px; color: var(--accent-color); letter-spacing: 2px;">
+                            <!-- Output will appear here -->
+                        </div>
+                    </div>
+                </div>
+                
+                <p id="inorder-conclusion" style="opacity: 0; transition: opacity 1s; color: var(--accent-color); font-weight: bold; font-size: 36px; text-align: center; margin-top: 20px;">
+                    <i class="fas fa-check"></i> 居然是严格升序的！
+                </p>
+            </div>
+            
+            <div class="col-visual">
+                <div class="tree-container" id="inorder-tree" style="height: 500px; width: 500px; transform: scale(1); transform-origin: top center;">
+                    <svg style="position: absolute; width: 100%; height: 100%; z-index: 0;">
+                        <line x1="250" y1="50" x2="150" y2="150" stroke="#fff" stroke-width="4" />
+                        <line x1="250" y1="50" x2="350" y2="150" stroke="#fff" stroke-width="4" />
+                        <line x1="150" y1="150" x2="80" y2="250" stroke="#fff" stroke-width="3" />
+                        <line x1="150" y1="150" x2="220" y2="250" stroke="#fff" stroke-width="3" />
+                        <line x1="350" y1="150" x2="300" y2="250" stroke="#fff" stroke-width="3" />
+                        <line x1="350" y1="150" x2="400" y2="250" stroke="#fff" stroke-width="3" />
+                    </svg>
+                    <div class="tree-node" data-val="10" style="left: 210px; top: 10px;">10</div>
+                    <div class="tree-node" data-val="5" style="left: 110px; top: 110px;">5</div>
+                    <div class="tree-node" data-val="15" style="left: 310px; top: 110px;">15</div>
+                    <div class="tree-node" data-val="3" style="left: 40px; top: 210px;">3</div>
+                    <div class="tree-node" data-val="7" style="left: 180px; top: 210px;">7</div>
+                    <div class="tree-node" data-val="12" style="left: 260px; top: 210px;">12</div>
+                    <div class="tree-node" data-val="18" style="left: 360px; top: 210px;">18</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P09: 总结 -->
+    <section class="slide" data-title="课堂小结">
+        <h2>课堂小结</h2>
+        <div class="layout-2col" style="align-items: stretch;">
+            <div class="col-content">
+                <div class="card" style="height: 100%; display:flex; flex-direction:column; justify-content:center;">
+                    <h3 style="border-bottom: 2px solid rgba(255,255,255,0.1); padding-bottom: 20px;">
+                        <i class="fas fa-star" style="color: var(--accent-color);"></i> 核心知识点
+                    </h3>
+                    <ul style="font-size: 30px; line-height: 2;">
+                        <li><strong>思想源头</strong>：二分查找 (Binary Search)。</li>
+                        <li><strong>BST 性质</strong>：左 < 根 < 右。</li>
+                        <li><strong>性能优势</strong>：
+                            <ul>
+                                <li>查找：$O(\log N)$</li>
+                                <li>插入：$O(\log N)$ (优于数组)</li>
+                            </ul>
+                        </li>
+                        <li><strong>重要结论</strong>：BST 的中序遍历 = <strong>有序数组</strong>。</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="col-content">
+                 <div class="card" style="height: 100%; border: 1px dashed rgba(255, 255, 255, 0.3); background: rgba(34, 211, 238, 0.05); display: flex; flex-direction: column; justify-content: center;">
+                    <h3><i class="fas fa-question-circle" style="color: var(--warn-color);"></i> 思考</h3>
+                    <p style="font-size: 32px; margin-bottom: 20px;">BST 维护了所有元素的全局有序性。但如果我们只关心<strong>最大值</strong>或<strong>最小值</strong>（比如任务调度、VIP排队）...</p>
+                    <p style="font-size: 28px; color: #aaa; margin-bottom: 30px;">有没有比 BST 更轻量、更专注的数据结构？</p>
+                    <div style="background: var(--accent-color); color: #000; padding: 20px; border-radius: 12px; text-align: center; font-weight: bold; font-size: 32px;">
+                        下节预告：堆与优先队列<br>
+                        <span style="font-size: 24px;">谁才是“老大”？</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 页脚页码 -->
+    <div class="footer">
+        <span id="page-number">1 / 10</span>
+    </div>
+</div>
+
+<script>
+    const slides = document.querySelectorAll('.slide');
+    const pageNumberEl = document.getElementById('page-number');
+    const totalSlides = slides.length;
+
+    // --- Slide Navigation Logic (Same as before) ---
+    function getPageFromUrl() {
+        const params = new URLSearchParams(window.location.search);
+        const page = parseInt(params.get('page'));
+        if (!isNaN(page) && page >= 1 && page <= totalSlides) {
+            return page - 1;
+        }
+        return 0;
+    }
+
+    let currentSlide = getPageFromUrl();
+
+    function updateSlide() {
+        slides.forEach((slide, index) => {
+            slide.classList.remove('active');
+            if (index === currentSlide) {
+                slide.classList.add('active');
+            }
+        });
+        pageNumberEl.textContent = `${currentSlide + 1} / ${totalSlides}`;
+        
+        try {
+            const url = new URL(window.location.href);
+            url.searchParams.set('page', currentSlide + 1);
+            window.history.replaceState(null, '', url.href);
+        } catch (e) {}
+
+        Anim.setActive(currentSlide);
+    }
+
+    function nextSlide() {
+        if (currentSlide < totalSlides - 1) {
+            currentSlide++;
+            updateSlide();
+        }
+    }
+
+    function prevSlide() {
+        if (currentSlide > 0) {
+            currentSlide--;
+            updateSlide();
+        }
+    }
+
+    document.addEventListener('keydown', (e) => {
+        if (['ArrowRight', ' ', 'Enter'].includes(e.key)) {
+            nextSlide();
+        } else if (e.key === 'ArrowLeft') {
+            prevSlide();
+        } else if (['ArrowUp', 'PageUp'].includes(e.key)) {
+             Anim.prev();
+        } else if (['ArrowDown', 'PageDown'].includes(e.key)) {
+             Anim.next();
+        } else if (e.key.toLowerCase() === 'r') {
+             Anim.reset();
+        }
+    });
+
+    function resizeApp() {
+        const app = document.getElementById('app');
+        const scale = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+        app.style.transform = `scale(${scale})`;
+    }
+    window.addEventListener('resize', resizeApp);
+    resizeApp();
+
+    // ==========================================
+    // Animation Engine
+    // ==========================================
+    class AnimationManager {
+        constructor() {
+            this.animations = {}; 
+            this.currentAnim = null;
+            this.currentStep = 0;
+            this.timer = null;
+            this.isPlaying = false;
+        }
+
+        register(slideIndex, snapshots, renderFn, uiIds) {
+            this.animations[slideIndex] = { snapshots, render: renderFn, uiIds };
+        }
+
+        setActive(slideIndex) {
+            this.stop();
+            if (this.animations[slideIndex]) {
+                this.currentAnim = this.animations[slideIndex];
+                this.currentStep = 0;
+                this.render();
+                this.updateUI();
+            } else {
+                this.currentAnim = null;
+            }
+        }
+
+        next() {
+            this.stop();
+            if (!this.currentAnim) return;
+            if (this.currentStep < this.currentAnim.snapshots.length - 1) {
+                this.currentStep++;
+                this.render();
+                this.updateUI();
+            }
+        }
+
+        prev() {
+            this.stop();
+            if (!this.currentAnim) return;
+            if (this.currentStep > 0) {
+                this.currentStep--;
+                this.render();
+                this.updateUI();
+            }
+        }
+
+        reset() {
+            this.stop();
+            if (!this.currentAnim) return;
+            this.currentStep = 0;
+            this.render();
+            this.updateUI();
+        }
+
+        toggle() {
+            if (this.isPlaying) this.stop();
+            else this.play();
+        }
+
+        play() {
+            if (!this.currentAnim) return;
+            if (this.currentStep >= this.currentAnim.snapshots.length - 1) {
+                this.currentStep = 0;
+                this.render();
+                this.updateUI();
+            }
+            this.isPlaying = true;
+            this.tick();
+        }
+
+        stop() {
+            this.isPlaying = false;
+            if (this.timer) clearTimeout(this.timer);
+        }
+
+        tick() {
+            if (!this.isPlaying) return;
+            const delay = this.currentAnim.snapshots[this.currentStep].delay || 800;
+            this.timer = setTimeout(() => {
+                if (!this.isPlaying) return;
+                if (this.currentStep < this.currentAnim.snapshots.length - 1) {
+                    this.currentStep++;
+                    this.render();
+                    this.updateUI();
+                    this.tick();
+                } else {
+                    this.stop();
+                }
+            }, delay);
+        }
+
+        render() {
+            if (!this.currentAnim) return;
+            const state = this.currentAnim.snapshots[this.currentStep];
+            this.currentAnim.render(state, this.currentAnim.uiIds);
+        }
+
+        updateUI() {
+            if (!this.currentAnim) return;
+            const el = document.getElementById(this.currentAnim.uiIds.progress);
+            if (el) {
+                el.textContent = `${this.currentStep} / ${this.currentAnim.snapshots.length - 1}`;
+            }
+        }
+    }
+
+    const Anim = new AnimationManager();
+
+    // ==========================================
+    // Generators & Logic
+    // ==========================================
+    
+    // Helper to generate snapshots
+    function createSnapshot(treeState, logText, delay = 1000, extra = {}) {
+        return { tree: {...treeState}, log: logText, delay, ...extra };
+    }
+
+    // --- Binary Search Animation Data ---
+    function initBinarySearchAnim() {
+        const snapshots = [];
+        const nums = [2, 5, 8, 12, 16, 23, 38, 56, 72, 91];
+        const target = 23;
+
+        // 0. Init
+        snapshots.push({ 
+            left: -1, right: -1, mid: -1, 
+            desc: "准备在有序数组中查找 23", 
+            delay: 1000 
+        });
+
+        // 1. Algo simulation
+        let l = 0, r = nums.length - 1;
+        while (l <= r) {
+            let m = Math.floor((l + r) / 2);
+            // State: Calculated Mid
+            snapshots.push({ 
+                left: l, right: r, mid: m, 
+                desc: `范围 [${l}, ${r}], Mid = ${m} (Val: ${nums[m]})`, 
+                delay: 1500 
+            });
+
+            if (nums[m] === target) {
+                // Found
+                snapshots.push({ 
+                    left: l, right: r, mid: m, found: true,
+                    desc: `nums[${m}] == 23，找到目标！`, 
+                    delay: 0 
+                });
+                break;
+            } else if (nums[m] < target) {
+                 snapshots.push({ 
+                     left: l, right: r, mid: m, highlight: 'right',
+                     desc: `${nums[m]} < 23，去右半边 (Left = Mid + 1)`, 
+                     delay: 1500 
+                 });
+                l = m + 1;
+            } else {
+                 snapshots.push({ 
+                     left: l, right: r, mid: m, highlight: 'left',
+                     desc: `${nums[m]} > 23，去左半边 (Right = Mid - 1)`, 
+                     delay: 1500 
+                 });
+                r = m - 1;
+            }
+        }
+        
+        Anim.register(2, snapshots, renderBinarySearchAnim, { 
+            container: 'bs-anim-container', text: 'bs-text', progress: 'bs-progress'
+        });
+    }
+
+    // --- Search Animation Data ---
+    function initSearchAnim() {
+        const snapshots = [];
+        // Tree structure: 10, 5, 15, 3, 7, 12, 18
+        // Target: 7
+        
+        // Step 0: Start
+        snapshots.push(createSnapshot({}, "准备查找目标: 7", 500));
+        
+        // Step 1: Visit Root 10
+        snapshots.push(createSnapshot({ '10': 'active' }, "1. 访问根节点 10", 1000));
+        
+        // Step 2: Compare 7 < 10
+        snapshots.push(createSnapshot({ '10': 'visited' }, "2. 7 < 10，向左找", 1000));
+        
+        // Step 3: Visit 5
+        snapshots.push(createSnapshot({ '10': 'visited', '5': 'active' }, "3. 访问节点 5", 1000));
+        
+        // Step 4: Compare 7 > 5
+        snapshots.push(createSnapshot({ '10': 'visited', '5': 'visited' }, "4. 7 > 5，向右找", 1000));
+        
+        // Step 5: Visit 7
+        snapshots.push(createSnapshot({ '10': 'visited', '5': 'visited', '7': 'target' }, "5. 找到目标 7！", 0));
+
+        Anim.register(5, snapshots, renderTreeAnim, { 
+            container: 'search-tree', log: 'search-log', progress: 'search-progress' 
+        });
+    }
+
+    // --- Insert Animation Data ---
+    function initInsertAnim() {
+        const snapshots = [];
+        // Insert: 13
+        
+        // 0
+        snapshots.push(createSnapshot({}, "准备插入: 13", 500));
+        
+        // 1. Root 10
+        snapshots.push(createSnapshot({ '10': 'active' }, "1. 13 > 10，向右走", 1000));
+        
+        // 2. Node 15
+        snapshots.push(createSnapshot({ '10': 'visited', '15': 'active' }, "2. 13 < 15，向左走", 1000));
+        
+        // 3. Node 12
+        snapshots.push(createSnapshot({ '10': 'visited', '15': 'visited', '12': 'active' }, "3. 13 > 12，向右走", 1000));
+        
+        // 4. Null -> Insert
+        snapshots.push(createSnapshot(
+            { '10': 'visited', '15': 'visited', '12': 'visited', '13': 'new' }, 
+            "4. 发现空位，插入 13！", 
+            0,
+            { showLink: true }
+        ));
+
+        Anim.register(8, snapshots, renderTreeAnim, { 
+            container: 'insert-tree', log: 'insert-log', progress: 'insert-progress' 
+        });
+    }
+
+    // --- Delete Animation Data ---
+    function initDeleteAnim() {
+        const snapshots = [];
+        // Delete: 5 (Children: 3, 7)
+        
+        // 0
+        snapshots.push(createSnapshot({}, "准备删除: 5", 500));
+        
+        // 1. Find 5
+        snapshots.push(createSnapshot({ '10': 'visited', '5': 'target' }, "1. 找到目标 5 (有两个孩子)", 1000));
+        
+        // 2. Find Successor (Right Child 7)
+        snapshots.push(createSnapshot({ '10': 'visited', '5': 'target', '7': 'active' }, "2. 去右子树找最小节点 (Successor)", 1000));
+        
+        // 3. 7 has no left child
+        snapshots.push(createSnapshot({ '10': 'visited', '5': 'target', '7': 'active' }, "3. 节点 7 没有左孩子，它是最小的", 1000));
+        
+        // 4. Swap Value
+        snapshots.push(createSnapshot(
+            { '10': 'visited', '5': 'target', '7': 'visited' }, 
+            "4. 用 7 的值覆盖 5", 
+            1000,
+            { overrides: { '5': '7' } } // Show 7 in 5's circle
+        ));
+        
+        // 5. Delete old 7
+        snapshots.push(createSnapshot(
+            { '10': 'visited', '5': 'visited' }, 
+            "5. 删除原节点 7 (连接 5->...)", 
+            0,
+            { 
+                overrides: { '5': '7' },
+                hiddenNodes: ['7'],
+                hiddenLines: ['line-5-7']
+            }
+        ));
+
+        Anim.register(10, snapshots, renderTreeAnim, { 
+            container: 'delete-tree', log: 'delete-log', progress: 'delete-progress' 
+        });
+    }
+
+    // --- In-order Animation Data ---
+    function initInOrderAnim() {
+        const snapshots = [];
+        // Inorder: 3, 5, 7, 10, 12, 15, 18
+        // Steps simulates recursion visually
+        
+        let output = "";
+        let visited = {};
+        
+        function visit(val) {
+            output += (output ? ", " : "") + val;
+            return output;
+        }
+
+        // 0
+        snapshots.push(createSnapshot({}, "", 500, { output: "" }));
+
+        // Simplified steps for demo clarity (Left-Root-Right)
+        
+        // ... traversing to 3 ...
+        snapshots.push(createSnapshot({ '10':'stack', '5':'stack', '3':'active' }, "到达最左节点 3", 800, { output }));
+        output = visit('3');
+        snapshots.push(createSnapshot({ '10':'stack', '5':'stack', '3':'visited' }, "输出 3", 800, { output }));
+        
+        // Back to 5
+        snapshots.push(createSnapshot({ '10':'stack', '5':'active', '3':'visited' }, "回到节点 5", 800, { output }));
+        output = visit('5');
+        snapshots.push(createSnapshot({ '10':'stack', '5':'visited', '3':'visited' }, "输出 5", 800, { output }));
+        
+        // Right to 7
+        snapshots.push(createSnapshot({ '10':'stack', '5':'visited', '3':'visited', '7':'active' }, "访问右节点 7", 800, { output }));
+        output = visit('7');
+        snapshots.push(createSnapshot({ '10':'stack', '5':'visited', '3':'visited', '7':'visited' }, "输出 7", 800, { output }));
+        
+        // Back to 10
+        snapshots.push(createSnapshot({ '10':'active', '5':'visited', '3':'visited', '7':'visited' }, "回到根节点 10", 800, { output }));
+        output = visit('10');
+        snapshots.push(createSnapshot({ '10':'visited', '5':'visited', '3':'visited', '7':'visited' }, "输出 10", 800, { output }));
+        
+        // Right Subtree... to 12
+        snapshots.push(createSnapshot({ '10':'visited', '15':'stack', '12':'active', '5':'visited', '3':'visited', '7':'visited' }, "访问节点 12", 800, { output }));
+        output = visit('12');
+        snapshots.push(createSnapshot({ '10':'visited', '15':'stack', '12':'visited', '5':'visited', '3':'visited', '7':'visited' }, "输出 12", 800, { output }));
+        
+        // Back to 15
+        snapshots.push(createSnapshot({ '10':'visited', '15':'active', '12':'visited', '5':'visited', '3':'visited', '7':'visited' }, "回到节点 15", 800, { output }));
+        output = visit('15');
+        snapshots.push(createSnapshot({ '10':'visited', '15':'visited', '12':'visited', '5':'visited', '3':'visited', '7':'visited' }, "输出 15", 800, { output }));
+        
+        // Right to 18
+        snapshots.push(createSnapshot({ '10':'visited', '15':'visited', '18':'active', '12':'visited', '5':'visited', '3':'visited', '7':'visited' }, "访问节点 18", 800, { output }));
+        output = visit('18');
+        snapshots.push(createSnapshot({ '10':'visited', '15':'visited', '18':'visited', '12':'visited', '5':'visited', '3':'visited', '7':'visited' }, "输出 18", 800, { output, showConclusion: true }));
+
+        Anim.register(11, snapshots, renderTreeAnim, { 
+            container: 'inorder-tree', log: null, progress: 'inorder-progress', output: 'inorder-output', conclusion: 'inorder-conclusion' 
+        });
+    }
+
+    // --- Renderer ---
+    function renderBinarySearchAnim(state, uiIds) {
+        const container = document.getElementById(uiIds.container);
+        const nums = [2, 5, 8, 12, 16, 23, 38, 56, 72, 91];
+        
+        let html = '';
+        nums.forEach((val, idx) => {
+            let classes = 'arr-box';
+            let style = '';
+            let ptrs = '';
+
+            // Opacity logic based on range
+            if (state.left !== -1 && (idx < state.left || idx > state.right)) {
+                style += 'opacity: 0.2; border-color: #333;';
+            }
+
+            // Highlight Mid
+            if (idx === state.mid) {
+                classes += ' active';
+                if (state.found) {
+                    style += 'background: rgba(34, 211, 238, 0.4); border-color: var(--accent-color); box-shadow: 0 0 20px var(--accent-color);';
+                } else if (state.highlight === 'left') {
+                    style += 'border-color: var(--warn-color);'; // Too big
+                } else if (state.highlight === 'right') {
+                    style += 'border-color: var(--secondary-color);'; // Too small
+                }
+            }
+
+            // Pointers
+            if (idx === state.left) ptrs += `<div class="ptr" style="color:var(--secondary-color); bottom: -30px;">L</div>`;
+            if (idx === state.right) ptrs += `<div class="ptr" style="color:var(--warn-color); bottom: -30px;">R</div>`;
+            if (idx === state.mid) ptrs += `<div class="ptr" style="color:var(--tertiary-color); top: -30px;">M</div>`;
+            
+            html += `<div class="${classes}" style="${style}">${val}${ptrs}</div>`;
+        });
+        
+        container.innerHTML = html;
+        
+        if (uiIds.text && state.desc) {
+            document.getElementById(uiIds.text).textContent = state.desc;
+        }
+    }
+
+    function renderTreeAnim(state, uiIds) {
+        const container = document.getElementById(uiIds.container);
+        
+        // Update Nodes
+        const nodes = container.querySelectorAll('.tree-node');
+        nodes.forEach(n => {
+            const val = n.dataset.val;
+            const status = state.tree[val];
+            
+            n.className = 'tree-node'; // reset
+            n.style.opacity = '1';
+            n.textContent = val; // Reset text
+
+            // Handle overrides
+            if (state.overrides && state.overrides[val]) {
+                n.textContent = state.overrides[val];
+                n.style.fontWeight = 'bold';
+                n.style.color = '#fff'; // Ensure visibility
+            }
+
+            // Handle hidden nodes
+            if (state.hiddenNodes && state.hiddenNodes.includes(val)) {
+                n.style.opacity = '0';
+            }
+            
+            if (val === '13' && uiIds.container === 'insert-tree') {
+                n.style.opacity = status === 'new' ? '1' : '0';
+            }
+
+            if (status === 'active') {
+                n.classList.add('active');
+            } else if (status === 'visited') {
+                n.classList.add('visited');
+            } else if (status === 'target') {
+                n.classList.add('target');
+            } else if (status === 'stack') {
+                n.style.borderColor = '#fff';
+                n.style.backgroundColor = '#1e293b'; // Dark gray solid
+                n.style.color = '#888';
+                // n.style.opacity = '0.5'; // Don't use opacity to avoid showing lines
+            }
+        });
+
+        // Handle Hidden Lines
+        if (state.hiddenLines) {
+            state.hiddenLines.forEach(id => {
+                const line = container.querySelector(`#${id}`);
+                if (line) line.style.opacity = '0';
+            });
+        } else {
+             // Reset lines opacity if not hidden (simplified)
+             // This might need more robust handling if multiple animations share lines, 
+             // but here they are separate containers.
+             const lines = container.querySelectorAll('line');
+             lines.forEach(l => {
+                 if (l.id !== 'line-13') l.style.opacity = '1'; // Don't touch special insert line
+             });
+        }
+
+        // Update Log
+        if (uiIds.log && state.log) {
+            document.getElementById(uiIds.log).textContent = state.log;
+        }
+
+        // Special for Insert Line
+        if (uiIds.container === 'insert-tree') {
+            const line = container.querySelector('#line-13');
+            if (line) line.style.opacity = state.showLink ? '1' : '0';
+        }
+
+        // Special for In-order Output
+        if (uiIds.output && state.output !== undefined) {
+            document.getElementById(uiIds.output).textContent = state.output;
+        }
+        
+        // Conclusion
+        if (uiIds.conclusion) {
+            document.getElementById(uiIds.conclusion).style.opacity = state.showConclusion ? '1' : '0';
+        }
+    }
+
+    // Initialize
+    initBinarySearchAnim();
+    initSearchAnim();
+    initInsertAnim();
+    initDeleteAnim();
+    initInOrderAnim();
+    
+    updateSlide();
+
+</script>
+
+<!-- MathJax for formulas -->
+<script>
+    window.MathJax = {
+        tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] }
+    };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
+</body>
+</html>
