@@ -1,0 +1,1654 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>堆：为极值而生的数据结构</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0B1020;
+            --text-color: #EAF2FF;
+            --accent-color: #22D3EE;     /* 青色：核心概念 */
+            --secondary-color: #60A5FA;  /* 蓝色：辅助说明 */
+            --tertiary-color: #A78BFA;   /* 紫色：强调/代码 */
+            --warn-color: #F472B6;       /* 粉红：重点/易错 */
+            --code-bg: #1e293b;
+            --slide-width: 1920px;
+            --slide-height: 1080px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background-color: #000;
+            color: var(--text-color);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        #app {
+            width: var(--slide-width);
+            height: var(--slide-height);
+            background-color: var(--bg-color);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+        }
+
+        /* 背景装饰 */
+        .bg-decoration {
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            background-image: 
+                radial-gradient(circle at 15% 15%, rgba(34, 211, 238, 0.03) 0%, transparent 25%),
+                radial-gradient(circle at 85% 85%, rgba(167, 139, 250, 0.03) 0%, transparent 25%);
+            pointer-events: none;
+        }
+        
+        .grid-overlay {
+            position: absolute;
+            inset: 0;
+            background-size: 60px 60px;
+            background-image: linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+                              linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+            z-index: 0;
+        }
+
+        /* 幻灯片通用 */
+        .slide {
+            position: absolute;
+            inset: 0;
+            display: none;
+            padding: 80px 100px;
+            flex-direction: column;
+            z-index: 1;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+
+        .slide.active { display: flex; opacity: 1; }
+
+        /* 排版元素 */
+        h1 {
+            font-size: 140px;
+            font-weight: 800;
+            line-height: 1.1;
+            margin-bottom: 40px;
+            background: linear-gradient(135deg, #fff 0%, var(--secondary-color) 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        h2 {
+            font-size: 72px;
+            margin-bottom: 50px;
+            color: var(--accent-color);
+            border-bottom: 4px solid rgba(34, 211, 238, 0.3);
+            padding-bottom: 20px;
+            display: inline-block;
+        }
+
+        h3 {
+            font-size: 48px;
+            margin-bottom: 30px;
+            color: var(--secondary-color);
+        }
+
+        p, li {
+            font-size: 38px;
+            line-height: 1.5;
+            margin-bottom: 24px;
+            color: #cbd5e1;
+        }
+
+        strong { color: var(--accent-color); font-weight: 700; }
+        em { color: var(--tertiary-color); font-style: normal; font-weight: bold; }
+
+        ul { list-style: none; }
+        ul li { position: relative; padding-left: 50px; }
+        ul li::before {
+            content: "•";
+            color: var(--accent-color);
+            position: absolute;
+            left: 0;
+            font-weight: bold;
+        }
+
+        ol { counter-reset: item; list-style: none; }
+        ol li { position: relative; padding-left: 60px; }
+        ol li::before {
+            content: counter(item) ".";
+            counter-increment: item;
+            color: var(--accent-color);
+            position: absolute;
+            left: 0;
+            font-weight: bold;
+        }
+
+        /* 布局类 */
+        .layout-center {
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        .layout-2col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 60px;
+            flex: 1;
+            align-content: start;
+        }
+        
+        .layout-2col .col-visual {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+
+        /* 组件 */
+        .card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 24px;
+            padding: 40px;
+            margin-bottom: 30px;
+        }
+        
+        .highlight-box {
+            background: rgba(34, 211, 238, 0.08);
+            border-left: 8px solid var(--accent-color);
+            padding: 30px 40px;
+            border-radius: 0 16px 16px 0;
+            margin: 30px 0;
+        }
+
+        .code-block {
+            font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+            background: var(--code-bg);
+            padding: 30px;
+            border-radius: 16px;
+            border: 1px solid #334155;
+            font-size: 26px;
+            line-height: 1.5;
+            color: #e2e8f0;
+            white-space: pre;
+            overflow-x: auto;
+            overflow-y: auto;
+            max-height: 650px;
+        }
+        .code-block::-webkit-scrollbar { width: 10px; height: 10px; }
+        .code-block::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); border-radius: 5px; }
+        .code-block::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 5px; }
+        .code-block::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.3); }
+
+        .code-kw { color: #c678dd; } 
+        .code-type { color: #e5c07b; } 
+        .code-fn { color: #61afef; }
+        .code-cm { color: #64748b; font-style: italic; } 
+        .code-num { color: #d19a66; }
+        .code-str { color: #98c379; }
+
+        /* 树节点样式 */
+        .tree-node {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: #0B1020; /* 确保背景不透明 */
+            border: 3px solid var(--accent-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            font-weight: bold;
+            color: #fff;
+            position: absolute;
+            z-index: 20; /* 提高层级，确保在SVG线条之上 */
+            box-shadow: 0 0 20px rgba(34, 211, 238, 0.2);
+            transition: all 0.4s ease;
+        }
+        
+        .tree-node.active {
+            background: var(--accent-color);
+            color: #000;
+            transform: scale(1.15);
+            box-shadow: 0 0 40px var(--accent-color);
+            z-index: 10;
+        }
+        
+        .tree-node.highlight-swap {
+            border-color: var(--warn-color);
+            box-shadow: 0 0 30px var(--warn-color), inset 0 0 20px rgba(244, 114, 182, 0.5);
+            background: #0B1020; /* 必须不透明以遮挡线条 */
+        }
+
+        .tree-container {
+            position: relative;
+            width: 100%;
+            height: 500px;
+        }
+
+        /* 数组演示样式 */
+        .array-container {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+            gap: 4px;
+        }
+        .arr-box { 
+            width: 70px; 
+            height: 70px; 
+            border: 2px solid #555; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            font-family: monospace; 
+            font-size: 28px; 
+            position: relative;
+            background: rgba(255,255,255,0.05);
+            transition: all 0.3s;
+        }
+        .arr-box .idx {
+            position: absolute;
+            bottom: -30px;
+            font-size: 18px;
+            color: #64748b;
+        }
+        .arr-box.active {
+            border-color: var(--accent-color);
+            background: rgba(34,211,238,0.2);
+            box-shadow: 0 0 15px rgba(34,211,238,0.2);
+        }
+        .arr-box.swap {
+            border-color: var(--warn-color);
+            background: rgba(244, 114, 182, 0.2);
+        }
+
+        .footer {
+            position: absolute;
+            bottom: 30px;
+            right: 40px;
+            font-size: 24px;
+            color: rgba(255, 255, 255, 0.3);
+            z-index: 10;
+        }
+        
+        /* 动画控制栏 */
+        .anim-controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            margin-top: 10px;
+        }
+        .anim-controls button {
+            padding: 8px 16px;
+            font-size: 20px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: var(--text-color);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 50px;
+        }
+        .anim-controls button:hover {
+            background: var(--accent-color);
+            color: #000;
+            border-color: var(--accent-color);
+        }
+        .anim-controls button:active { transform: scale(0.95); }
+
+        /* 表格样式 */
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 30px;
+        }
+        .comparison-table th {
+            text-align: left;
+            padding: 20px;
+            border-bottom: 2px solid #334155;
+            color: var(--secondary-color);
+        }
+        .comparison-table td {
+            padding: 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            text-align: left;
+        }
+        .comparison-table tr:last-child td {
+            border-bottom: none;
+        }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <div class="bg-decoration"></div>
+    <div class="grid-overlay"></div>
+
+    <!-- P01: 封面 -->
+    <section class="slide active layout-center" data-title="封面">
+        <div style="text-align: center;">
+            <svg width="300" height="300" viewBox="0 0 300 300" style="margin-bottom: 40px; filter: drop-shadow(0 0 30px rgba(34,211,238,0.2)); overflow: visible;">
+                <!-- Triangle/Pyramid Shape -->
+                <path d="M150 20 L20 250 L280 250 Z" fill="rgba(34, 211, 238, 0.1)" stroke="var(--accent-color)" stroke-width="4" />
+                <!-- Crown on top -->
+                <path d="M110 60 L130 90 L150 40 L170 90 L190 60 L190 100 L110 100 Z" fill="var(--warn-color)" stroke="none" transform="translate(0, -30)">
+                    <animate attributeName="transform" values="translate(0, -30); translate(0, -40); translate(0, -30)" dur="2s" repeatCount="indefinite" />
+                </path>
+                <!-- Nodes inside -->
+                <circle cx="150" cy="80" r="25" fill="#0B1020" stroke="var(--accent-color)" stroke-width="3" />
+                <text x="150" y="90" text-anchor="middle" fill="#fff" font-size="24" font-weight="bold">MAX</text>
+                <circle cx="90" cy="180" r="20" fill="#0B1020" stroke="var(--secondary-color)" stroke-width="2" />
+                <circle cx="210" cy="180" r="20" fill="#0B1020" stroke="var(--secondary-color)" stroke-width="2" />
+                <text x="150" y="290" text-anchor="middle" fill="#64748b" font-size="16" letter-spacing="4">PRIORITY QUEUE</text>
+            </svg>
+            <h1>算法与数据结构</h1>
+            <p style="font-size: 65px; color: var(--secondary-color);">堆：为极值而生的数据结构</p>
+        </div>
+    </section>
+
+    <!-- P03: 引言 - 为什么需要堆 -->
+    <section class="slide" data-title="引言">
+        <h2>从 BST 到 堆 (Heap)</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="card">
+                    <h3><i class="fas fa-search"></i> BST：全能选手</h3>
+                    <p>BST 擅长查找<strong>任意值</strong>，保持全局有序。</p>
+                    <p>查找 Max/Min 复杂度：$O(\log N)$</p>
+                </div>
+                <div class="card" style="border-left: 8px solid var(--warn-color); background: rgba(244, 114, 182, 0.05);">
+                    <h3><i class="fas fa-crown"></i> 堆：极值专家</h3>
+                    <p>如果业务<strong>只关心最大值/最小值</strong></p>
+                    <ul style="font-size: 32px;">
+                        <li>查找 Max/Min 复杂度：<strong>$O(1)$</strong>。</li>
+                        <li>并不保证整体有序，只保证<strong>父子有序</strong>。</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="col-visual layout-center">
+                <div style="text-align: center;">
+                    <i class="fas fa-trophy" style="font-size: 120px; color: var(--warn-color); margin-bottom: 20px;"></i>
+                    <p style="font-size: 30px;">"我不需要知道第二名是谁，<br>我只要找到第一！"</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P04: 堆的基础概念 -->
+    <section class="slide" data-title="二叉堆定义">
+        <h2>堆的基础概念</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="highlight-box">
+                    <h3><i class="fas fa-cubes"></i> 两个核心性质</h3>
+                    <ul style="font-size: 30px; line-height: 1.8;">
+                        <li><strong>1. 结构性：完全二叉树</strong>
+                            <p style="font-size: 24px; color: #aaa; margin-bottom: 10px;">除最后一层外全满，最后一层节点靠左。</p>
+                        </li>
+                        <li><strong>2. 有序性：堆序性</strong>
+                            <p style="font-size: 24px; color: #aaa; margin-bottom: 10px;">任意节点的值 $\ge$ (或 $\le$) 其子节点。</p>
+                            <ul>
+                                <li style="color: var(--warn-color);"><strong>大顶堆 (Max Heap)</strong>: 根最大 (Parent $\ge$ Child)。</li>
+                                <li style="color: var(--secondary-color);"><strong>小顶堆 (Min Heap)</strong>: 根最小 (Parent $\le$ Child)。</li>
+                            </ul>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            <div class="col-visual layout-center">
+                <!-- Heap Visualization -->
+                <svg width="600" height="500" viewBox="0 0 600 500" style="overflow: visible;">
+                    <!-- Edges -->
+                    <line x1="300" y1="50" x2="180" y2="150" stroke="#fff" stroke-width="4" />
+                    <line x1="300" y1="50" x2="420" y2="150" stroke="#fff" stroke-width="4" />
+                    <line x1="180" y1="150" x2="120" y2="250" stroke="#fff" stroke-width="3" />
+                    <line x1="180" y1="150" x2="240" y2="250" stroke="#fff" stroke-width="3" />
+                    <line x1="420" y1="150" x2="360" y2="250" stroke="#fff" stroke-width="3" />
+                    
+                    <!-- Root -->
+                    <g transform="translate(300, 50)">
+                        <circle r="40" fill="#0B1020" stroke="var(--warn-color)" stroke-width="4" />
+                        <text y="10" text-anchor="middle" fill="#fff" font-size="28" font-weight="bold">98</text>
+                        <text x="60" y="10" fill="var(--warn-color)" font-size="20">Root</text>
+                    </g>
+                    <!-- L1 -->
+                    <g transform="translate(180, 150)">
+                        <circle r="35" fill="#0B1020" stroke="#fff" stroke-width="3" />
+                        <text y="10" text-anchor="middle" fill="#fff" font-size="24">85</text>
+                    </g>
+                    <g transform="translate(420, 150)">
+                        <circle r="35" fill="#0B1020" stroke="#fff" stroke-width="3" />
+                        <text y="10" text-anchor="middle" fill="#fff" font-size="24">70</text>
+                    </g>
+                    <!-- L2 -->
+                    <g transform="translate(120, 250)">
+                        <circle r="30" fill="#0B1020" stroke="#fff" stroke-width="2" />
+                        <text y="8" text-anchor="middle" fill="#fff" font-size="20">60</text>
+                    </g>
+                    <g transform="translate(240, 250)">
+                        <circle r="30" fill="#0B1020" stroke="#fff" stroke-width="2" />
+                        <text y="8" text-anchor="middle" fill="#fff" font-size="20">20</text>
+                    </g>
+                    <g transform="translate(360, 250)">
+                        <circle r="30" fill="#0B1020" stroke="#fff" stroke-width="2" />
+                        <text y="8" text-anchor="middle" fill="#fff" font-size="20">55</text>
+                    </g>
+                    <text x="300" y="350" text-anchor="middle" fill="#aaa" font-size="24">大顶堆示例：任何父节点 $\ge$ 子节点</text>
+                </svg>
+            </div>
+        </div>
+    </section>
+
+    <!-- P05: 物理存储 -->
+    <section class="slide" data-title="物理存储">
+        <h2>物理存储：数组实现</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <p>完全二叉树可以完美映射到数组，<strong>无需链表和指针</strong>。</p>
+                <div class="card">
+                    <h3><i class="fas fa-calculator"></i> 索引关系 (0-based)</h3>
+                    <ul style="font-size: 32px; font-family: monospace;">
+                        <li>Parent(i) = floor((i - 1) / 2)</li>
+                        <li>Left(i) &nbsp;&nbsp;= 2*i + 1</li>
+                        <li>Right(i) &nbsp;= 2*i + 2</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="col-visual layout-center">
+                <div style="width: 100%; position: relative; height: 550px;">
+                    <!-- 1. Array (Physical Storage) -->
+                    <div style="position: absolute; top: 100px; left: 0; right: 0; display: flex; justify-content: center; gap: 2px;">
+                        <div class="arr-box active" style="width: 70px; height: 70px;"><span style="color:var(--accent-color);">90</span><div class="idx" style="color:var(--warn-color);">0</div></div>
+                        <div class="arr-box" style="width: 70px; height: 70px;">80<div class="idx" style="color:var(--warn-color);">1</div></div>
+                        <div class="arr-box" style="width: 70px; height: 70px;">70<div class="idx" style="color:var(--warn-color);">2</div></div>
+                        <div class="arr-box" style="width: 70px; height: 70px; color:#aaa;">60<div class="idx" style="color:var(--warn-color);">3</div></div>
+                        <div class="arr-box" style="width: 70px; height: 70px; color:#aaa;">50<div class="idx" style="color:var(--warn-color);">4</div></div>
+                        <div class="arr-box" style="width: 70px; height: 70px; color:#aaa;">40<div class="idx" style="color:var(--warn-color);">5</div></div>
+                    </div>
+
+                    <!-- 2. Arrow -->
+                    <div style="position: absolute; top: 220px; left: 50%; transform: translateX(-50%); color: var(--secondary-color); z-index: 10;">
+                        <i class="fas fa-arrow-down" style="font-size: 30px;"></i>
+                    </div>
+
+                    <!-- 3. Tree (Logical View) -->
+                    <svg width="500" height="320" viewBox="0 0 500 320" style="position: absolute; top: 300px; left: 50%; transform: translateX(-50%); overflow: visible;">
+                        <!-- Edges -->
+                        <line x1="250" y1="40" x2="150" y2="130" stroke="#555" stroke-width="3"/> <!-- 0->1 -->
+                        <line x1="250" y1="40" x2="350" y2="130" stroke="#555" stroke-width="3"/> <!-- 0->2 -->
+                        <line x1="150" y1="130" x2="90" y2="220" stroke="#555" stroke-width="3"/> <!-- 1->3 -->
+                        <line x1="150" y1="130" x2="210" y2="220" stroke="#555" stroke-width="3"/> <!-- 1->4 -->
+                        <line x1="350" y1="130" x2="290" y2="220" stroke="#555" stroke-width="3"/> <!-- 2->5 -->
+                        
+                        <!-- Nodes -->
+                        <!-- Node 0 -->
+                        <g>
+                            <circle cx="250" cy="40" r="30" fill="#0B1020" stroke="var(--accent-color)" stroke-width="3"/>
+                            <text x="250" y="50" text-anchor="middle" fill="#fff" font-size="24" font-weight="bold">90</text>
+                            <text x="250" y="-5" text-anchor="middle" fill="var(--warn-color)" font-size="20" font-weight="bold">0</text>
+                        </g>
+                        
+                        <!-- Node 1 -->
+                        <g>
+                            <circle cx="150" cy="130" r="30" fill="#0B1020" stroke="#fff" stroke-width="2"/>
+                            <text x="150" y="140" text-anchor="middle" fill="#fff" font-size="24">80</text>
+                            <text x="150" y="85" text-anchor="middle" fill="var(--warn-color)" font-size="20">1</text>
+                        </g>
+                        
+                        <!-- Node 2 -->
+                        <g>
+                            <circle cx="350" cy="130" r="30" fill="#0B1020" stroke="#fff" stroke-width="2"/>
+                            <text x="350" y="140" text-anchor="middle" fill="#fff" font-size="24">70</text>
+                            <text x="350" y="85" text-anchor="middle" fill="var(--warn-color)" font-size="20">2</text>
+                        </g>
+                        
+                        <!-- Node 3 -->
+                        <g>
+                            <circle cx="90" cy="220" r="25" fill="#0B1020" stroke="#fff" stroke-width="2"/>
+                            <text x="90" y="228" text-anchor="middle" fill="#aaa" font-size="20">60</text>
+                            <text x="90" y="180" text-anchor="middle" fill="var(--warn-color)" font-size="18">3</text>
+                        </g>
+                        
+                        <!-- Node 4 -->
+                        <g>
+                            <circle cx="210" cy="220" r="25" fill="#0B1020" stroke="#fff" stroke-width="2"/>
+                            <text x="210" y="228" text-anchor="middle" fill="#aaa" font-size="20">50</text>
+                            <text x="210" y="180" text-anchor="middle" fill="var(--warn-color)" font-size="18">4</text>
+                        </g>
+                        
+                        <!-- Node 5 -->
+                        <g>
+                            <circle cx="290" cy="220" r="25" fill="#0B1020" stroke="#fff" stroke-width="2"/>
+                            <text x="290" y="228" text-anchor="middle" fill="#aaa" font-size="20">40</text>
+                            <text x="290" y="180" text-anchor="middle" fill="var(--warn-color)" font-size="18">5</text>
+                        </g>
+                    </svg>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P05.5: 核心操作 -->
+    <section class="slide" data-title="核心操作">
+        <h2>核心操作：节点上浮与下沉</h2>
+        <div class="layout-2col" style="align-items: start;">
+            <!-- Left: Sift Up -->
+            <div class="col-visual" style="display: flex; flex-direction: column; align-items: center;">
+                <div class="card" style="border-left: 8px solid var(--accent-color); width: 100%; min-height: 280px; margin-bottom: 20px;">
+                    <h3 style="margin-bottom: 15px;"><i class="fas fa-arrow-up"></i> 上浮 (Sift Up/ Swim)</h3>
+                    <p style="font-size: 28px; margin-bottom: 15px;">某个节点“太大了”，比父亲还大，应该往上爬，直到不再比父亲大。</p>
+                    <div style="font-size: 24px; color: #aaa; background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px;">
+                        <strong>典型出现</strong>：<br>插入（新元素先放在数组末尾/树的最后一个位置）。
+                    </div>
+                </div>
+                
+                <!-- Swim SVG -->
+                <svg width="450" height="380" viewBox="0 0 450 380" style="overflow: visible;">
+                    <!-- Lines (Static background) -->
+                    <g opacity="0.3">
+                        <line x1="225" y1="50" x2="145" y2="130" stroke="#fff" stroke-width="2"/>
+                        <line x1="225" y1="50" x2="305" y2="130" stroke="#fff" stroke-width="2"/>
+                        <line x1="145" y1="130" x2="105" y2="210" stroke="#fff" stroke-width="2"/>
+                        <line x1="145" y1="130" x2="185" y2="210" stroke="#fff" stroke-width="2"/>
+                        <line x1="305" y1="130" x2="265" y2="210" stroke="#fff" stroke-width="2"/>
+                        <line x1="305" y1="130" x2="345" y2="210" stroke="#fff" stroke-width="2"/>
+                    </g>
+
+                    <!-- Static Nodes (Uninvolved) -->
+                    <g>
+                         <!-- L1-L (Index 1) -->
+                        <circle cx="145" cy="130" r="25" fill="#0B1020" stroke="#fff" stroke-width="2"/>
+                        <text x="145" y="138" text-anchor="middle" fill="#fff" font-size="16">20</text>
+                        
+                        <!-- L2-L (Index 3) -->
+                        <circle cx="105" cy="210" r="20" fill="#0B1020" stroke="#fff" stroke-width="1"/>
+                        <text x="105" y="216" text-anchor="middle" fill="#fff" font-size="14">30</text>
+                        
+                        <!-- L2-M1 (Index 4) -->
+                        <circle cx="185" cy="210" r="20" fill="#0B1020" stroke="#fff" stroke-width="1"/>
+                        <text x="185" y="216" text-anchor="middle" fill="#fff" font-size="14">40</text>
+                        
+                        <!-- L2-M2 (Index 5) -->
+                        <circle cx="265" cy="210" r="20" fill="#0B1020" stroke="#fff" stroke-width="1"/>
+                        <text x="265" y="216" text-anchor="middle" fill="#fff" font-size="14">60</text>
+                    </g>
+
+                    <!-- Animated Nodes -->
+                    <!-- Node 6 (Value 5): Swim Up 2 Levels -->
+                    <g>
+                        <circle r="28" fill="#0B1020" stroke="var(--accent-color)" stroke-width="4">
+                            <!-- 345,210 -> 305,130 -> 225,50 -->
+                            <animate attributeName="cx" values="345; 305; 305; 225; 225; 345" keyTimes="0; 0.3; 0.5; 0.8; 0.95; 1" dur="4s" repeatCount="indefinite"/>
+                            <animate attributeName="cy" values="210; 130; 130; 50;  50;  210" keyTimes="0; 0.3; 0.5; 0.8; 0.95; 1" dur="4s" repeatCount="indefinite"/>
+                        </circle>
+                        <text text-anchor="middle" fill="#fff" font-size="20" font-weight="bold" dy="8">
+                            <animate attributeName="x" values="345; 305; 305; 225; 225; 345" keyTimes="0; 0.3; 0.5; 0.8; 0.95; 1" dur="4s" repeatCount="indefinite"/>
+                            <animate attributeName="y" values="210; 130; 130; 50;  50;  210" keyTimes="0; 0.3; 0.5; 0.8; 0.95; 1" dur="4s" repeatCount="indefinite"/>
+                            5
+                        </text>
+                    </g>
+
+                    <!-- Node 2 (Value 50): Swap Down Once -->
+                    <g>
+                        <circle r="28" fill="#0B1020" stroke="#555" stroke-width="2">
+                            <!-- 305,130 -> 345,210 -> stay -->
+                            <animate attributeName="cx" values="305; 345; 345; 345; 345; 305" keyTimes="0; 0.3; 0.5; 0.8; 0.95; 1" dur="4s" repeatCount="indefinite"/>
+                            <animate attributeName="cy" values="130; 210; 210; 210; 210; 130" keyTimes="0; 0.3; 0.5; 0.8; 0.95; 1" dur="4s" repeatCount="indefinite"/>
+                        </circle>
+                        <text text-anchor="middle" fill="#aaa" font-size="16" dy="5">
+                            <animate attributeName="x" values="305; 345; 345; 345; 345; 305" keyTimes="0; 0.3; 0.5; 0.8; 0.95; 1" dur="4s" repeatCount="indefinite"/>
+                            <animate attributeName="y" values="130; 210; 210; 210; 210; 130" keyTimes="0; 0.3; 0.5; 0.8; 0.95; 1" dur="4s" repeatCount="indefinite"/>
+                            50
+                        </text>
+                    </g>
+
+                    <!-- Node 0 (Value 10): Swap Down Later -->
+                    <g>
+                        <circle r="25" fill="#0B1020" stroke="#555" stroke-width="2">
+                            <!-- 225,50 -> stay -> 305,130 -->
+                            <animate attributeName="cx" values="225; 225; 225; 305; 305; 225" keyTimes="0; 0.3; 0.5; 0.8; 0.95; 1" dur="4s" repeatCount="indefinite"/>
+                            <animate attributeName="cy" values="50;  50;  50;  130; 130; 50"  keyTimes="0; 0.3; 0.5; 0.8; 0.95; 1" dur="4s" repeatCount="indefinite"/>
+                        </circle>
+                        <text text-anchor="middle" fill="#aaa" font-size="16" dy="5">
+                            <animate attributeName="x" values="225; 225; 225; 305; 305; 225" keyTimes="0; 0.3; 0.5; 0.8; 0.95; 1" dur="4s" repeatCount="indefinite"/>
+                            <animate attributeName="y" values="50;  50;  50;  130; 130; 50"  keyTimes="0; 0.3; 0.5; 0.8; 0.95; 1" dur="4s" repeatCount="indefinite"/>
+                            10
+                        </text>
+                    </g>
+
+                    <text x="360" y="100" fill="var(--accent-color)" font-size="18" text-anchor="start">Step 1: 5 < 50</text>
+                    <text x="360" y="130" fill="var(--accent-color)" font-size="18" text-anchor="start">Step 2: 5 < 10</text>
+                </svg>
+            </div>
+
+            <!-- Right: Sift Down -->
+            <div class="col-visual" style="display: flex; flex-direction: column; align-items: center;">
+                <div class="card" style="border-left: 8px solid var(--warn-color); width: 100%; min-height: 280px; margin-bottom: 20px;">
+                    <h3 style="margin-bottom: 15px;"><i class="fas fa-arrow-down"></i> 下沉 (Sift Down/ Sink)</h3>
+                    <p style="font-size: 28px; margin-bottom: 15px;">某个节点“太大”破坏了小顶堆性质，比孩子大，应该往下掉。</p>
+                    <div style="font-size: 24px; color: #aaa; background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px;">
+                        <strong>典型出现</strong>：<br>删除堆顶（把最后一个元素搬到根，根变大了，需要往下修）。
+                    </div>
+                </div>
+
+                <!-- Sink SVG -->
+                <svg width="450" height="380" viewBox="0 0 450 380" style="overflow: visible;">
+                     <!-- Lines (Static background) -->
+                    <g opacity="0.3">
+                        <line x1="225" y1="50" x2="145" y2="130" stroke="#fff" stroke-width="2"/>
+                        <line x1="225" y1="50" x2="305" y2="130" stroke="#fff" stroke-width="2"/>
+                        <line x1="145" y1="130" x2="105" y2="210" stroke="#fff" stroke-width="2"/>
+                        <line x1="145" y1="130" x2="185" y2="210" stroke="#fff" stroke-width="2"/>
+                        <line x1="305" y1="130" x2="265" y2="210" stroke="#fff" stroke-width="2"/>
+                        <line x1="305" y1="130" x2="345" y2="210" stroke="#fff" stroke-width="2"/>
+                    </g>
+
+                    <!-- Static Nodes (Uninvolved) -->
+                    <g>
+                         <!-- L1-R (Index 2) -->
+                        <circle cx="305" cy="130" r="25" fill="#0B1020" stroke="#fff" stroke-width="2"/>
+                        <text x="305" y="138" text-anchor="middle" fill="#fff" font-size="16">10</text>
+                        
+                        <!-- L2-M1 (Index 4) -->
+                        <circle cx="185" cy="210" r="20" fill="#0B1020" stroke="#fff" stroke-width="1"/>
+                        <text x="185" y="216" text-anchor="middle" fill="#fff" font-size="14">40</text>
+                        
+                        <!-- L2-M2 (Index 5) -->
+                        <circle cx="265" cy="210" r="20" fill="#0B1020" stroke="#fff" stroke-width="1"/>
+                        <text x="265" y="216" text-anchor="middle" fill="#fff" font-size="14">50</text>
+                        
+                        <!-- L2-R (Index 6) -->
+                        <circle cx="345" cy="210" r="20" fill="#0B1020" stroke="#fff" stroke-width="1"/>
+                        <text x="345" y="216" text-anchor="middle" fill="#fff" font-size="14">60</text>
+                    </g>
+
+                    <!-- Animated Nodes -->
+                    <!-- Node 0 (Value 99): Sink Down 2 Levels (0->1->3) -->
+                    <g>
+                        <circle r="28" fill="#0B1020" stroke="var(--warn-color)" stroke-width="4">
+                            <!-- 225,50 -> 145,130 -> 105,210 -->
+                            <animate attributeName="cx" values="225; 145; 145; 105; 105; 225" keyTimes="0; 0.3; 0.5; 0.8; 0.95; 1" dur="4s" repeatCount="indefinite"/>
+                            <animate attributeName="cy" values="50;  130; 130; 210; 210; 50"  keyTimes="0; 0.3; 0.5; 0.8; 0.95; 1" dur="4s" repeatCount="indefinite"/>
+                        </circle>
+                        <text text-anchor="middle" fill="#fff" font-size="20" font-weight="bold" dy="8">
+                            <animate attributeName="x" values="225; 145; 145; 105; 105; 225" keyTimes="0; 0.3; 0.5; 0.8; 0.95; 1" dur="4s" repeatCount="indefinite"/>
+                            <animate attributeName="y" values="50;  130; 130; 210; 210; 50"  keyTimes="0; 0.3; 0.5; 0.8; 0.95; 1" dur="4s" repeatCount="indefinite"/>
+                            99
+                        </text>
+                    </g>
+
+                    <!-- Node 1 (Value 5): Swap Up Once -->
+                    <g>
+                        <circle r="25" fill="#0B1020" stroke="#555" stroke-width="2">
+                            <!-- 145,130 -> 225,50 -> stay -->
+                            <animate attributeName="cx" values="145; 225; 225; 225; 225; 145" keyTimes="0; 0.3; 0.5; 0.8; 0.95; 1" dur="4s" repeatCount="indefinite"/>
+                            <animate attributeName="cy" values="130; 50;  50;  50;  50;  130" keyTimes="0; 0.3; 0.5; 0.8; 0.95; 1" dur="4s" repeatCount="indefinite"/>
+                        </circle>
+                        <text text-anchor="middle" fill="#aaa" font-size="16" dy="5">
+                            <animate attributeName="x" values="145; 225; 225; 225; 225; 145" keyTimes="0; 0.3; 0.5; 0.8; 0.95; 1" dur="4s" repeatCount="indefinite"/>
+                            <animate attributeName="y" values="130; 50;  50;  50;  50;  130" keyTimes="0; 0.3; 0.5; 0.8; 0.95; 1" dur="4s" repeatCount="indefinite"/>
+                            5
+                        </text>
+                    </g>
+
+                    <!-- Node 3 (Value 30): Swap Up Later -->
+                    <g>
+                        <circle r="20" fill="#0B1020" stroke="#555" stroke-width="2">
+                            <!-- 105,210 -> stay -> 145,130 -->
+                            <animate attributeName="cx" values="105; 105; 105; 145; 145; 105" keyTimes="0; 0.3; 0.5; 0.8; 0.95; 1" dur="4s" repeatCount="indefinite"/>
+                            <animate attributeName="cy" values="210; 210; 210; 130; 130; 210" keyTimes="0; 0.3; 0.5; 0.8; 0.95; 1" dur="4s" repeatCount="indefinite"/>
+                        </circle>
+                        <text text-anchor="middle" fill="#aaa" font-size="14" dy="4">
+                            <animate attributeName="x" values="105; 105; 105; 145; 145; 105" keyTimes="0; 0.3; 0.5; 0.8; 0.95; 1" dur="4s" repeatCount="indefinite"/>
+                            <animate attributeName="y" values="210; 210; 210; 130; 130; 210" keyTimes="0; 0.3; 0.5; 0.8; 0.95; 1" dur="4s" repeatCount="indefinite"/>
+                            30
+                        </text>
+                    </g>
+                    
+                    <text x="-30" y="80" fill="var(--warn-color)" font-size="18" text-anchor="start">Step 1: 99 > 5</text>
+                    <text x="-30" y="110" fill="var(--warn-color)" font-size="18" text-anchor="start">Step 2: 99 > 30</text>
+                </svg>
+            </div>
+        </div>
+    </section>
+
+    <!-- P06: 插入操作 -->
+    <section class="slide" data-title="插入操作">
+        <h2>插入 (Push)</h2>
+        <div class="layout-2col">
+            <div class="col-content" style="display: flex; flex-direction: column; height: 100%;">
+                <div class="card" style="padding: 20px; margin-bottom: 15px;">
+                    <h3 style="margin-bottom: 15px; font-size: 40px;">公式：Append + Swim</h3>
+                    <ol style="font-size: 28px; line-height: 1.5;">
+                        <li><strong>Append</strong>：将新元素放到数组<strong>末尾</strong>。
+                        </li>
+                        <li><strong>Swim</strong>：执行<strong>上浮</strong>操作恢复堆序。
+                        </li>
+                    </ol>
+                    <p style="font-size: 32px; margin-top: 20px; color: var(--accent-color);">
+                        时间复杂度：$O(\log N)$
+                    </p>
+                </div>
+                
+                <!-- Animation moved here (Left Column) -->
+                <div class="card" style="width: 100%; background: transparent; border: none; display: flex; flex-direction: column; flex: 1; min-height: 0; justify-content: space-between;">
+                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <h3 style="margin: 0; font-size: 28px;">2. 动画演示：插入 99</h3>
+                        <div class="anim-controls">
+                            <button onclick="Anim.prev()"><i class="fas fa-step-backward"></i></button>
+                            <button onclick="Anim.toggle()"><i class="fas fa-play"></i></button>
+                            <button onclick="Anim.next()"><i class="fas fa-step-forward"></i></button>
+                            <button onclick="Anim.reset()"><i class="fas fa-undo"></i></button>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; flex: 1; min-height: 0; align-items: flex-start; margin-top: 50px;">
+                        <!-- transform-origin 改回 center top 防止向下延伸遮挡数组 -->
+                        <div class="tree-container" id="swim-tree" style="flex: 1; transform: scale(0.85); transform-origin: center top; height: 100%;"></div>
+                        <div id="swim-desc" style="flex: 0 0 280px; text-align: left; font-size: 30px; color: var(--accent-color); padding-left: 20px; padding-top: 60px; line-height: 1.4;">Ready</div>
+                    </div>
+                    
+                    <!-- 数组置底，并提高 z-index 防止被遮挡 -->
+                    <div class="array-container" id="swim-array" style="position: absolute; left: 200px;bottom: 50px; z-index: 50;"></div>
+                </div>
+            </div>
+            
+            <div class="col-visual">
+                <!-- Code moved here (Right Column) -->
+                <div class="code-block" style="font-size: 20px; padding: 20px; margin-top: 0; width: 100%; height: auto; max-height: 100%;">
+<span class="code-cm">// 辅助宏定义</span>
+<span class="code-kw">#define</span> <span class="code-fn">PARENT</span>(i) ((i - <span class="code-num">1</span>) / <span class="code-num">2</span>)
+
+<span class="code-cm">// 插入操作：修改 size 需要传指针</span>
+<span class="code-kw">void</span> <span class="code-fn">push</span>(<span class="code-type">int</span>* heap, <span class="code-type">int</span>* size, <span class="code-type">int</span> val) {
+    <span class="code-cm">// 1. 放到末尾 (先赋值再 +1)</span>
+    heap[(*size)++] = val;
+    
+    <span class="code-cm">// 2. 上浮恢复堆序</span>
+    <span class="code-fn">swim</span>(heap, *size - <span class="code-num">1</span>);
+}
+
+<span class="code-cm">// 上浮：只是一个原子操作</span>
+<span class="code-kw">void</span> <span class="code-fn">swim</span>(<span class="code-type">int</span>* heap, <span class="code-type">int</span> cur) {
+    <span class="code-kw">while</span> (cur > <span class="code-num">0</span> && heap[cur] > heap[<span class="code-fn">PARENT</span>(cur)]) {
+        <span class="code-fn">swap</span>(&heap[cur], &heap[<span class="code-fn">PARENT</span>(cur)]);
+        cur = <span class="code-fn">PARENT</span>(cur);
+    }
+}</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P07: 删除操作 -->
+    <section class="slide" data-title="删除操作">
+        <h2>删除堆顶 (Pop)</h2>
+        <div class="layout-2col">
+            <div class="col-content" style="display: flex; flex-direction: column; height: 100%;">
+                <div class="card" style="padding: 25px; margin-bottom: 15px;">
+                    <h3 style="margin-bottom: 15px; font-size: 40px;">公式：Replace + Sink</h3>
+                    <ol style="font-size: 28px; line-height: 1.5;">
+                        <li><strong>Remove</strong>：移除堆顶（拿到最大值）。</li>
+                        <li><strong>Replace</strong>：用<strong>末尾元素</strong>补到堆顶。
+                        </li>
+                        <li><strong>Sink</strong>：执行<strong>下沉</strong>操作恢复堆序。</li>
+                    </ol>
+                    <p style="font-size: 32px; margin-top: 15px; color: var(--warn-color);">
+                        时间复杂度：$O(\log N)$
+                    </p>
+                </div>
+                
+                <!-- Animation moved here (Left Column) -->
+                <div class="card" style="width: 100%; background: transparent; border: none; display: flex; flex-direction: column; flex: 1; min-height: 0; justify-content: space-between;">
+                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <h3 style="margin: 0; font-size: 28px;">2. 动画演示：Pop Max</h3>
+                        <div class="anim-controls">
+                            <button onclick="Anim.prev()"><i class="fas fa-step-backward"></i></button>
+                            <button onclick="Anim.toggle()"><i class="fas fa-play"></i></button>
+                            <button onclick="Anim.next()"><i class="fas fa-step-forward"></i></button>
+                            <button onclick="Anim.reset()"><i class="fas fa-undo"></i></button>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; flex: 1; min-height: 0; align-items: flex-start; margin-top: 50px;">
+                        <div class="tree-container" id="sink-tree" style="flex: 1; transform: scale(0.85); transform-origin: center top; height: 100%;"></div>
+                        <div id="sink-desc" style="flex: 0 0 280px; text-align: left; font-size: 30px; color: var(--warn-color); padding-left: 20px; padding-top: 60px; line-height: 1.4;">Ready</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-visual">
+                <!-- Code moved here (Right Column) -->
+                <div class="code-block" style="font-size: 20px; padding: 20px; margin-top: 0; width: 100%; height: auto; max-height: 100%;"><span class="code-cm">// 辅助宏定义</span>
+<span class="code-kw">#define</span> <span class="code-fn">LEFT</span>(i) (<span class="code-num">2</span> * i + <span class="code-num">1</span>)
+<span class="code-type">int</span> <span class="code-fn">pop</span>(<span class="code-type">int</span>* heap, <span class="code-type">int</span>* size) {
+    <span class="code-type">int</span> ret = heap[<span class="code-num">0</span>];
+    <span class="code-cm">// 1. 末尾补到堆顶</span>
+    heap[<span class="code-num">0</span>] = heap[--(*size)];
+    <span class="code-cm">// 2. 下沉恢复堆序</span>
+    <span class="code-fn">sink</span>(heap, *size, <span class="code-num">0</span>);
+    return ret;
+}
+
+<span class="code-kw">void</span> <span class="code-fn">sink</span>(<span class="code-type">int</span>* heap, <span class="code-type">int</span> n, <span class="code-type">int</span> i) {
+    <span class="code-kw">while</span> (<span class="code-fn">LEFT</span>(i) < n) {
+        <span class="code-type">int</span> child = <span class="code-fn">LEFT</span>(i);
+        <span class="code-cm">// 选较大的孩子</span>
+        <span class="code-kw">if</span> (child + <span class="code-num">1</span> < n && heap[child+<span class="code-num">1</span>] > heap[child]) child++;
+        <span class="code-kw">if</span> (heap[i] >= heap[child]) <span class="code-kw">break</span>;
+        <span class="code-fn">swap</span>(&heap[i], &heap[child]);
+        i = child;
+    }
+}</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P08: 建堆 -->
+    <section class="slide" data-title="建堆">
+        <h2>建堆：插入与下沉的效率之争</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="card" style="padding: 20px; margin-bottom: 20px;">
+                    <h3 style="font-size: 36px; margin-bottom: 15px;"><i class="fas fa-arrow-up"></i> 方案 A：逐个插入 (Swim)</h3>
+                    <p style="font-size: 32px; margin-bottom: 10px;">从空堆开始，依次对 N 个元素执行 Push 操作</p>
+                    <ul style="color: #cbd5e1; margin-bottom: 15px; padding-left: 30px;">
+                        <li style="margin-bottom: 5px; font-size: 28px;">新元素加在末尾，需要一路“上浮”到根</li>
+                        <li style="font-size: 28px;">大部分节点（叶子）都要经历漫长的上浮路径</li>
+                    </ul>
+                    <p style="font-size: 28px; color: var(--warn-color); font-weight: bold;">复杂度：$O(N \log N)$</p>
+                </div>
+                
+                <div class="card" style="padding: 20px; border-left: 8px solid var(--accent-color);">
+                    <h3 style="font-size: 36px; margin-bottom: 15px;"><i class="fas fa-arrow-down"></i> 方案 B：批量下沉 (Sink)</h3>
+                    <p style="font-size: 32px; margin-bottom: 10px;">原地调整：从<strong>最后一个非叶子节点</strong>开始，倒序遍历执行 Sink</p>
+                    <ul style="color: #cbd5e1; margin-bottom: 15px; padding-left: 30px;">
+                        <li style="margin-bottom: 5px; font-size: 28px;"><strong>利用特性</strong>：叶子节点（占 $N/2$）天然堆有序，无需操作</li>
+                        <li style="font-size: 28px;">越往上层节点越少，虽然下沉路径变长，但需要操作的节点数呈指数级减少，数学级数求和收敛于 $O(N)$</li>
+                    </ul>
+                    <p style="font-size: 26px; color: var(--accent-color); font-weight: bold;">复杂度：$O(N)$ <span style="font-size: 20px; color: #aaa; font-weight: normal;">(更优)</span></p>
+                </div>
+            </div>
+            <div class="col-visual">
+                <div class="card" style="width: 100%; height: 100%; background: transparent; border: none; display: flex; flex-direction: column;">
+                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3 style="margin: 0; font-size: 28px;">演示：下沉法建堆 ($O(N)$)</h3>
+                        <div class="anim-controls">
+                            <button onclick="Anim.prev()"><i class="fas fa-step-backward"></i></button>
+                            <button onclick="Anim.toggle()"><i class="fas fa-play"></i></button>
+                            <button onclick="Anim.next()"><i class="fas fa-step-forward"></i></button>
+                            <button onclick="Anim.reset()"><i class="fas fa-undo"></i></button>
+                        </div>
+                    </div>
+                    <div class="tree-container" id="build-tree" style="flex: 1; margin-top: 100px; transform: scale(0.9); transform-origin: center top;"></div>
+                    <div id="build-desc" style="text-align: center; font-size: 24px; color: var(--secondary-color); min-height: 40px;">Ready</div>
+                    <div class="array-container" id="build-array"></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P08.5: 建堆代码实现 -->
+    <section class="slide" data-title="建堆代码">
+        <h2>建堆代码实现</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="card">
+                    <p style="font-size: 32px;">从<strong>最后一个非叶子节点</strong>开始，倒序执行下沉</p>
+                    <ul>
+                        <li style="font-size:28px;"><strong>起点</strong>：`i = n / 2 - 1`</li>
+                        <li style="font-size:28px;"><strong>方向</strong>：`i` 递减到 `0`</li>
+                        <li style="font-size:28px;"><strong>操作</strong>：对每个 `i` 执行 `sink(heap, n, i)`</li>
+                    </ul>
+                </div>
+                <div class="highlight-box" style="margin-top: 30px;">
+                    <p style="font-size: 28px;">
+                        <strong style="font-size: 32px;">为什么是 $O(N)$？</strong><br>
+                        因为叶子节点（占一半）不需要下沉；倒数第二层最多下沉 1 层...<br>
+                        节点越少，下沉深度越深；节点越多，下沉深度越浅。<br>
+                        数学证明：<span style="color: var(--warn-color);">$\sum \frac{n}{2^{h+1}} \cdot h \approx O(n)$</span>
+                    </p>
+                </div>
+            </div>
+            <div class="col-visual">
+                <div class="code-block" style="font-size: 24px; padding: 30px;"><span class="code-cm">// 下沉操作 (复用之前的 sink 函数)</span>
+<span class="code-kw">void</span> <span class="code-fn">sink</span>(<span class="code-type">int</span>* heap, <span class="code-type">int</span> n, <span class="code-type">int</span> i) {
+    <span class="code-kw">while</span> (<span class="code-num">2</span>*i + <span class="code-num">1</span> < n) {
+        <span class="code-type">int</span> child = <span class="code-num">2</span>*i + <span class="code-num">1</span>;
+        <span class="code-cm">// 选较大的孩子</span>
+        <span class="code-kw">if</span> (child + <span class="code-num">1</span> < n && heap[child+<span class="code-num">1</span>] > heap[child]) 
+            child++;
+        <span class="code-kw">if</span> (heap[i] >= heap[child]) <span class="code-kw">break</span>;
+        <span class="code-fn">swap</span>(&heap[i], &heap[child]);
+        i = child;
+    }
+}
+
+<span class="code-cm">// 建堆：O(N)</span>
+<span class="code-kw">void</span> <span class="code-fn">build_heap</span>(<span class="code-type">int</span>* heap, <span class="code-type">int</span> n) {
+    <span class="code-cm">// 从最后一个非叶子节点开始</span>
+    <span class="code-kw">for</span> (<span class="code-type">int</span> i = n / <span class="code-num">2</span> - <span class="code-num">1</span>; i >= <span class="code-num">0</span>; i--) {
+        <span class="code-fn">sink</span>(heap, n, i);
+    }
+}</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P09: 堆排序 -->
+    <section class="slide" data-title="堆排序">
+        <h2>堆排序 (Heap Sort)</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="card">
+                    <ol style="font-size: 28px; line-height: 1.6;">
+                        <li><strong>建堆 (Build)</strong>：<br>先将数组转化为大顶堆 ($O(N)$)。</li>
+                        <li><strong>交换 (Swap)</strong>：<br>将堆顶与末尾互换 -> <span style="color:var(--warn-color);">最大值归位</span></li>
+                        <li><strong>下沉 (Sink)</strong>：<br>堆大小减 1，剩余部分执行下沉恢复堆序</li>
+                        <li><strong>循环</strong>：<br>重复步骤 2-3，直到堆为空</li>
+                    </ol>
+                    <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.1);">
+                        <p style="font-size: 28px; margin-bottom: 10px;">
+                            <span style="display:inline-block; width: 140px; color: #aaa;">时间：</span>
+                            <span style="color: var(--accent-color); font-weight: bold;">$O(N \log N)$</span>
+                        </p>
+                        <p style="font-size: 28px;">
+                            <span style="display:inline-block; width: 140px; color: #aaa;">空间：</span>
+                            <span style="color: var(--accent-color); font-weight: bold;">$O(1)$</span> (原地)
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-visual">
+                <div class="code-block" style="font-size: 24px; padding: 30px;">
+<span class="code-kw">void</span> <span class="code-fn">heap_sort</span>(<span class="code-type">int</span>* arr, <span class="code-type">int</span> n) {
+    <span class="code-cm">// 1. 建堆 (变成大顶堆)</span>
+    <span class="code-kw">for</span> (<span class="code-type">int</span> i = n/<span class="code-num">2</span> - <span class="code-num">1</span>; i >= <span class="code-num">0</span>; i--)
+        <span class="code-fn">sift_down</span>(arr, n, i);
+
+    <span class="code-cm">// 2. 排序 (Swap + Sink)</span>
+    <span class="code-kw">for</span> (<span class="code-type">int</span> i = n - <span class="code-num">1</span>; i > <span class="code-num">0</span>; i--) {
+        <span class="code-cm">// 把最大值(堆顶)换到末尾</span>
+        <span class="code-fn">swap</span>(&arr[<span class="code-num">0</span>], &arr[i]);
+        
+        <span class="code-cm">// 剩余元素(大小为 i) 恢复堆序</span>
+        <span class="code-fn">sift_down</span>(arr, i, <span class="code-num">0</span>);
+    }
+}</div>
+                <div style="text-align: center; margin-top: 20px; font-size: 24px; color: var(--secondary-color);">
+                    <i class="fas fa-check-circle"></i> 从数组最后开始逐步有序
+                </div>
+            </div>
+        </div>
+    </section>
+
+
+
+    <!-- P10.5: 适用场景 -->
+    <section class="slide" data-title="适用场景">
+        <h2>堆的适用场景</h2>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 40px; margin-top: 20px; height: 75vh;">
+            
+            <!-- Card 1: 优先队列 -->
+            <div class="card" style="display: flex; flex-direction: column; align-items: center; text-align: center; padding: 30px;">
+                <div style="width: 100px; height: 100px; background: rgba(34, 211, 238, 0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 25px;">
+                    <i class="fas fa-list-ol" style="font-size: 50px; color: var(--accent-color);"></i>
+                </div>
+                <h3 style="font-size: 40px; margin-bottom: 10px;">优先队列</h3>
+                <p style="color: var(--secondary-color); font-size: 24px; margin-bottom: 20px;">Priority Queue</p>
+                
+                <div style="text-align: left; width: 100%;">
+                    <p style="font-size: 28px; line-height: 1.4; margin-bottom: 15px;">普通队列是 FIFO，优先队列是 <strong style="color: var(--accent-color);">BIFO</strong> (Best-In First-Out)。</p>
+                    <ul style="font-size: 26px; color: #cbd5e1; margin-bottom: 20px;">
+                        <li>谁优先级高，谁先出队。</li>
+                        <li>插入 $O(\log N)$，取出 $O(\log N)$。</li>
+                    </ul>
+                </div>
+
+                <div style="margin-top: auto; width: 100%; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 12px;">
+                    <p style="font-size: 24px; margin: 0; color: var(--accent-color);"><i class="fas fa-bolt"></i> 例子：操作系统任务调度</p>
+                </div>
+            </div>
+
+            <!-- Card 2: Top-K 问题 -->
+            <div class="card" style="display: flex; flex-direction: column; align-items: center; text-align: center; padding: 30px;">
+                 <div style="width: 100px; height: 100px; background: rgba(244, 114, 182, 0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 25px;">
+                    <i class="fas fa-trophy" style="font-size: 50px; color: var(--warn-color);"></i>
+                </div>
+                <h3 style="font-size: 40px; margin-bottom: 10px;">Top-K 问题</h3>
+                <p style="color: var(--secondary-color); font-size: 24px; margin-bottom: 20px;">海量数据处理</p>
+                
+                <div style="text-align: left; width: 100%;">
+                    <p style="font-size: 28px; line-height: 1.4; margin-bottom: 15px;">从 N 个元素中找到前 K 大/小的元素。</p>
+                    <ul style="font-size: 26px; color: #cbd5e1; margin-bottom: 20px;">
+                        <li>排序法：$O(N \log N)$</li>
+                        <li><strong>堆解法：$O(N \log K)$</strong> (维护大小为 K 的堆)</li>
+                    </ul>
+                </div>
+
+                <div style="margin-top: auto; width: 100%; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 12px;">
+                    <p style="font-size: 24px; margin: 0; color: var(--warn-color);"><i class="fas fa-fire"></i> 例子：微博热搜、游戏榜单</p>
+                </div>
+            </div>
+
+            <!-- Card 3: 图算法加速 -->
+            <div class="card" style="display: flex; flex-direction: column; align-items: center; text-align: center; padding: 30px;">
+                 <div style="width: 100px; height: 100px; background: rgba(167, 139, 250, 0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 25px;">
+                    <i class="fas fa-route" style="font-size: 50px; color: var(--tertiary-color);"></i>
+                </div>
+                <h3 style="font-size: 40px; margin-bottom: 10px;">图算法加速</h3>
+                <p style="color: var(--secondary-color); font-size: 24px; margin-bottom: 20px;">Dijkstra & Prim</p>
+                
+                <div style="text-align: left; width: 100%;">
+                    <p style="font-size: 28px; line-height: 1.4; margin-bottom: 15px;">在图论算法中，利用堆快速获取“当前距离最近”的节点。</p>
+                    <ul style="font-size: 26px; color: #cbd5e1; margin-bottom: 20px;">
+                        <li><strong>Dijkstra</strong>：寻找最短路径。</li>
+                        <li><strong>性能提升</strong>：将查找最小值从 $O(V)$ 优化到 $O(1)$。</li>
+                    </ul>
+                </div>
+
+                <div style="margin-top: auto; width: 100%; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 12px;">
+                    <p style="font-size: 24px; margin: 0; color: var(--tertiary-color);"><i class="fas fa-map-marker-alt"></i> 例子：地图导航、网络路由</p>
+                </div>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- P11: 题目 -->
+    <section class="slide" data-title="LeetCode 实战">
+        <h2>LeetCode 295: 数据流的中位数</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <p><strong>问题</strong>：动态添加数字，随时返回中位数。</p>
+                <div class="highlight-box">
+                    <h3><i class="fas fa-lightbulb"></i> 双堆法思路</h3>
+                    <p style="font-size: 34px;">维护两个堆，各存一半数据：</p>
+                    <ul>
+                        <li style="font-size: 32px;"><strong>大顶堆 (MaxHeap)</strong>：存<strong>较小</strong>的一半数。<br><span style="color:#aaa;">堆顶是这一半的最大值（左边最靠近中间的）。</span></li>
+                        <li style="font-size: 32px;"><strong>小顶堆 (MinHeap)</strong>：存<strong>较大</strong>的一半数。<br><span style="color:#aaa;">堆顶是这一半的最小值（右边最靠近中间的）。</span></li>
+                    </ul>
+                    <p style="margin-top: 20px; font-size: 34px;"><strong>中位数</strong> = 两个堆顶的平均值 (或元素多的那个堆顶)。</p>
+                </div>
+            </div>
+            <div class="col-visual layout-center">
+                <svg width="600" height="400" viewBox="0 0 600 400" style="overflow: visible;">
+                    <!-- Line -->
+                    <line x1="50" y1="200" x2="550" y2="200" stroke="#334155" stroke-width="4" stroke-dasharray="10,5" />
+                    
+                    <!-- Left Heap (Max) -->
+                    <g transform="translate(150, 200)">
+                        <path d="M -100 100 L 0 0 L 100 100 Z" fill="rgba(34, 211, 238, 0.1)" stroke="var(--accent-color)" stroke-width="3" />
+                        <text x="0" y="130" text-anchor="middle" fill="#aaa">较小的一半</text>
+                        <text x="0" y="80" text-anchor="middle" fill="var(--accent-color)" font-weight="bold">MaxHeap</text>
+                        <circle cx="0" cy="0" r="10" fill="var(--accent-color)" />
+                        <text x="-20" y="-20" fill="var(--accent-color)" font-size="24">Top</text>
+                    </g>
+
+                    <!-- Right Heap (Min) -->
+                    <g transform="translate(450, 200)">
+                        <path d="M -100 100 L 0 0 L 100 100 Z" fill="rgba(244, 114, 182, 0.1)" stroke="var(--warn-color)" stroke-width="3" transform="scale(1, -1)" />
+                        <text x="0" y="-130" text-anchor="middle" fill="#aaa">较大的一半</text>
+                        <text x="0" y="-80" text-anchor="middle" fill="var(--warn-color)" font-weight="bold">MinHeap</text>
+                        <circle cx="0" cy="0" r="10" fill="var(--warn-color)" />
+                        <text x="20" y="30" fill="var(--warn-color)" font-size="24">Top</text>
+                    </g>
+
+                    <!-- Median Text -->
+                    <text x="300" y="190" text-anchor="middle" fill="#fff" font-size="24">中位数在此产生</text>
+                </svg>
+            </div>
+        </div>
+    </section>
+
+    <!-- P11.5: 代码实现 -->
+    <section class="slide" data-title="代码实现">
+        <h2>代码实现：双堆求中位数 (详解)</h2>
+        <div class="layout-2col">
+            <div class="col-content" style="flex: 0 0 45%;">
+                <div class="card">
+                    <h3><i class="fas fa-sitemap"></i> 宏观设计</h3>
+                    <p style="font-size: 26px; margin-bottom: 20px;">把数据流切成两半，保持有序：</p>
+                    <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 10px; font-size: 24px;">
+                        <span style="color: var(--accent-color);">[ 小数区 ... <strong>Max</strong> ]</span> 
+                        <span style="color: #888;">&lt;-- 中位数 --&gt;</span>
+                        <span style="color: var(--warn-color);">[ <strong>Min</strong> ... 大数区 ]</span>
+                    </div>
+                    <ul style="margin-top: 20px; line-height: 1.5;">
+                        <li style="font-size: 28px;"><strong>左边 (MaxHeap)</strong>：存较小的一半。</li>
+                        <li style="font-size: 28px;"><strong>右边 (MinHeap)</strong>：存较大的一半。</li>
+                        <li style="font-size: 28px;"><strong>规定</strong>：左边数量 $\ge$ 右边 (最多多1个)。</li>
+                    </ul>
+                </div>
+                
+                <div class="highlight-box" style="margin-top: 20px; padding: 20px;">
+                    <p style="font-size: 28px; color: #ccc;">
+                        如果不比较直接插入，可能会把“大数”错放到左边。<br>
+                        <strong>策略：</strong>新来的先去左边“过一下”，选出最大的送去右边；如果右边人多了，再匀一个回左边。
+                    </p>
+                </div>
+            </div>
+            <div class="col-visual" style="flex: 1;">
+                <div class="code-block" style="font-size: 20px;">
+<span class="code-cm">// 假设已封装堆操作: push_max, pop_max, push_min, pop_min</span>
+
+<span class="code-kw">void</span> <span class="code-fn">addNum</span>(<span class="code-type">MedianFinder</span>* obj, <span class="code-type">int</span> num) {
+    <span class="code-cm">/* 1. 筛选：新元素必须经过"比较"才能去右边 */</span>
+    <span class="code-cm">// 先扔进左边(大顶堆)</span>
+    <span class="code-fn">push_max</span>(obj->left, num);
+    <span class="code-cm">// 选出左边最大的，送给右边(小顶堆)</span>
+    <span class="code-type">int</span> max_val = <span class="code-fn">pop_max</span>(obj->left);
+    <span class="code-fn">push_min</span>(obj->right, max_val);
+
+    <span class="code-cm">/* 2. 平衡：右边不能比左边多 */</span>
+    <span class="code-kw">if</span> (obj->right_size > obj->left_size) {
+        <span class="code-cm">// 把右边最小的拿出来，还给左边</span>
+        <span class="code-type">int</span> min_val = <span class="code-fn">pop_min</span>(obj->right);
+        <span class="code-fn">push_max</span>(obj->left, min_val);
+    }
+}
+
+<span class="code-type">double</span> <span class="code-fn">findMedian</span>(<span class="code-type">MedianFinder</span>* obj) {
+    <span class="code-cm">// 如果左边多 1 个，中位数就是左边堆顶</span>
+    <span class="code-kw">if</span> (obj->left_size > obj->right_size) {
+        <span class="code-kw">return</span> <span class="code-fn">peek_max</span>(obj->left);
+    }
+    <span class="code-cm">// 否则是两个堆顶的平均值</span>
+    <span class="code-kw">return</span> (<span class="code-fn">peek_max</span>(obj->left) + <span class="code-fn">peek_min</span>(obj->right)) / <span class="code-num">2.0</span>;
+}</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P10: 对比 -->
+    <section class="slide" data-title="对比">
+        <h2>巅峰对决：堆 VS BST</h2>
+        <div class="layout-center" style="margin-top: 40px;">
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th width="20%">维度</th>
+                        <th width="40%" style="color: var(--accent-color);">二叉堆 (Heap)</th>
+                        <th width="40%" style="color: var(--warn-color);">二叉搜索树 (BST)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>主要目标</strong></td>
+                        <td>快速找<strong>极值</strong> (Top 1)</td>
+                        <td>快速找<strong>任意值</strong>、排序</td>
+                    </tr>
+                    <tr>
+                        <td><strong>查找 Max/Min</strong></td>
+                        <td><strong style="color: var(--accent-color); font-size: 40px;">$O(1)$</strong></td>
+                        <td>$O(\log N)$ (或者 $O(H)$)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>查找任意值</strong></td>
+                        <td>$O(N)$ (无序，只能遍历)</td>
+                        <td><strong style="color: var(--warn-color);">$O(\log N)$</strong></td>
+                    </tr>
+                    <tr>
+                        <td><strong>有序性</strong></td>
+                        <td>弱序 (仅父子有序)</td>
+                        <td>强序 (左 < 根 < 右)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>应用场景</strong></td>
+                        <td>优先队列、Top K、中位数</td>
+                        <td>Set/Map 实现、数据库索引</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- P12: 小结 -->
+    <section class="slide" data-title="课堂小结">
+        <h2>课堂小结</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="card">
+                    <h3><i class="fas fa-star" style="color: var(--accent-color);"></i> 核心回顾</h3>
+                    <ul style="font-size: 32px; line-height: 2;">
+                        <li><strong>数据结构</strong>：完全二叉树 + 堆序性。</li>
+                        <li><strong>存储</strong>：数组 (Index 0-based)。</li>
+                        <li><strong>关键算法</strong>：
+                            <ul>
+                                <li>Swim (插入): $O(\log N)$</li>
+                                <li>Sink (删除/建堆): $O(\log N)$</li>
+                                <li>Heapify: $O(N)$</li>
+                            </ul>
+                        </li>
+                        <li><strong>适用性</strong>：只看极值，不看整体。</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="col-visual layout-center">
+                 <div class="card" style="background: rgba(34, 211, 238, 0.05); border: 1px dashed var(--accent-color); text-align: center;">
+                    <h3><i class="fas fa-quote-left"></i></h3>
+                    <p style="font-size: 36px; font-style: italic; margin: 20px 0;">
+                        有时候，我们不必掌握全局的顺序，<br>
+                        只需要知道当下最重要的是什么。
+                    </p>
+                    <p style="text-align: right; color: #666;">—— 优先队列的哲学</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <div class="footer">
+        <span id="page-number">1 / 13</span>
+    </div>
+</div>
+
+<script>
+    const slides = document.querySelectorAll('.slide');
+    const pageNumberEl = document.getElementById('page-number');
+    const totalSlides = slides.length;
+
+    function getPageFromUrl() {
+        const params = new URLSearchParams(window.location.search);
+        const page = parseInt(params.get('page'));
+        if (!isNaN(page) && page >= 1 && page <= totalSlides) {
+            return page - 1;
+        }
+        return 0;
+    }
+
+    let currentSlide = getPageFromUrl();
+
+    function updateSlide() {
+        slides.forEach((slide, index) => {
+            slide.classList.remove('active');
+            if (index === currentSlide) {
+                slide.classList.add('active');
+            }
+        });
+        pageNumberEl.textContent = `${currentSlide + 1} / ${totalSlides}`;
+        
+        try {
+            const url = new URL(window.location.href);
+            url.searchParams.set('page', currentSlide + 1);
+            window.history.replaceState(null, '', url.href);
+        } catch (e) {}
+
+        Anim.setActive(currentSlide);
+    }
+
+    function nextSlide() {
+        if (currentSlide < totalSlides - 1) {
+            currentSlide++;
+            updateSlide();
+        }
+    }
+
+    function prevSlide() {
+        if (currentSlide > 0) {
+            currentSlide--;
+            updateSlide();
+        }
+    }
+
+    document.addEventListener('keydown', (e) => {
+        if (['ArrowRight', ' ', 'Enter'].includes(e.key)) {
+            nextSlide();
+        } else if (e.key === 'ArrowLeft') {
+            prevSlide();
+        } else if (['ArrowUp', 'PageUp'].includes(e.key)) {
+             Anim.prev();
+        } else if (['ArrowDown', 'PageDown'].includes(e.key)) {
+             Anim.next();
+        } else if (e.key.toLowerCase() === 'r') {
+             Anim.reset();
+        }
+    });
+
+    function resizeApp() {
+        const app = document.getElementById('app');
+        const scale = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+        app.style.transform = `scale(${scale})`;
+    }
+    window.addEventListener('resize', resizeApp);
+    resizeApp();
+
+    // ==========================================
+    // Animation Engine (Simplified for brevity, logic same as before)
+    // ==========================================
+    class AnimationManager {
+        constructor() {
+            this.animations = {}; 
+            this.currentAnim = null;
+            this.currentStep = 0;
+            this.timer = null;
+            this.isPlaying = false;
+        }
+
+        register(slideIndex, snapshots, renderFn, uiIds) {
+            this.animations[slideIndex] = { snapshots, render: renderFn, uiIds };
+        }
+
+        setActive(slideIndex) {
+            this.stop();
+            if (this.animations[slideIndex]) {
+                this.currentAnim = this.animations[slideIndex];
+                this.currentStep = 0;
+                this.render();
+            } else {
+                this.currentAnim = null;
+            }
+        }
+
+        next() {
+            this.stop();
+            if (!this.currentAnim) return;
+            if (this.currentStep < this.currentAnim.snapshots.length - 1) {
+                this.currentStep++;
+                this.render();
+            }
+        }
+
+        prev() {
+            this.stop();
+            if (!this.currentAnim) return;
+            if (this.currentStep > 0) {
+                this.currentStep--;
+                this.render();
+            }
+        }
+
+        reset() {
+            this.stop();
+            if (!this.currentAnim) return;
+            this.currentStep = 0;
+            this.render();
+        }
+
+        toggle() {
+            if (this.isPlaying) this.stop();
+            else this.play();
+        }
+
+        play() {
+            if (!this.currentAnim) return;
+            if (this.currentStep >= this.currentAnim.snapshots.length - 1) {
+                this.currentStep = 0;
+                this.render();
+            }
+            this.isPlaying = true;
+            this.tick();
+        }
+
+        stop() {
+            this.isPlaying = false;
+            if (this.timer) clearTimeout(this.timer);
+        }
+
+        tick() {
+            if (!this.isPlaying) return;
+            const delay = this.currentAnim.snapshots[this.currentStep].delay || 1000;
+            this.timer = setTimeout(() => {
+                if (!this.isPlaying) return;
+                if (this.currentStep < this.currentAnim.snapshots.length - 1) {
+                    this.currentStep++;
+                    this.render();
+                    this.tick();
+                } else {
+                    this.stop();
+                }
+            }, delay);
+        }
+
+        render() {
+            if (!this.currentAnim) return;
+            const state = this.currentAnim.snapshots[this.currentStep];
+            this.currentAnim.render(state, this.currentAnim.uiIds);
+        }
+    }
+
+    const Anim = new AnimationManager();
+
+    // ==========================================
+    // Heap Visualization Logic
+    // ==========================================
+    
+    function createSnapshot(data, desc, delay = 1000, extra = {}) {
+        return { data: [...data], desc, delay, ...extra };
+    }
+
+    function getNodeCoords(index, startY = 30, levelHeight = 80, spread = 1.0) {
+        const level = Math.floor(Math.log2(index + 1));
+        const offset = index - (Math.pow(2, level) - 1);
+        
+        // 压缩垂直间距：startY + level * levelHeight
+        const y = startY + level * levelHeight;
+        let x = 0;
+        
+        // 更自然的八字形布局
+        if (level === 0) {
+            x = 300;
+        } else if (level === 1) {
+            // Level 1: 左右分开
+            x = 300 + (offset === 0 ? -140 : 140) * spread; 
+        } else if (level === 2) {
+            // Level 2: 基于父节点位置偏移
+            const parentX = (offset < 2) ? (300 - 140 * spread) : (300 + 140 * spread);
+            const childOffset = ((offset % 2 === 0) ? -50 : 50) * spread;
+            x = parentX + childOffset;
+        } else {
+            // Generic fallback
+            const numInLevel = Math.pow(2, level);
+             x = 300 + (offset - numInLevel/2 + 0.5) * 40 * spread;
+        }
+
+        return {x, y};
+    }
+
+    function renderHeapAnim(state, uiIds) {
+        const treeContainer = document.getElementById(uiIds.tree);
+        const arrContainer = uiIds.array ? document.getElementById(uiIds.array) : null;
+        const descEl = document.getElementById(uiIds.desc);
+        
+        // Custom settings for Swim animation (Page 6)
+        let startY = 30;
+        let levelHeight = 80;
+        let spread = 1.0;
+
+        if (uiIds.tree === 'swim-tree' || uiIds.tree === 'sink-tree') {
+            startY = -40;      // 稍微上移
+            levelHeight = 90;  // 增加垂直间距，让叶子节点离父节点远一点
+        }
+
+        if (uiIds.tree === 'build-tree') {
+            startY = -30;      // 稍微再上移一点
+            levelHeight = 120; // 显著增加垂直间距
+            spread = 1.3;      // 增加水平间距
+        }
+
+        if (uiIds.tree === 'sink-tree') {
+            // 第7页：删除操作，因为去掉了数组，可以更自由地布局
+            // 左移 & 下移
+            const sinkTreeContainer = document.getElementById('sink-tree');
+            if(sinkTreeContainer) {
+                 sinkTreeContainer.style.transform = "scale(0.85) translate(-40px, 40px)";
+            }
+        }
+
+        if (descEl) descEl.textContent = state.desc;
+
+        // Render Array
+        if (arrContainer) {
+            let arrHtml = '';
+            state.data.forEach((val, i) => {
+                let classes = 'arr-box';
+                if (state.highlight && state.highlight.includes(i)) classes += ' active';
+                if (state.swap && state.swap.includes(i)) classes += ' swap';
+                arrHtml += `<div class="${classes}">${val}<div class="idx">${i}</div></div>`;
+            });
+            arrContainer.innerHTML = arrHtml;
+        }
+
+        // Render Tree
+        let treeHtml = `<svg style="position: absolute; width: 100%; height: 100%; z-index: 0; overflow: visible;">`;
+        
+        // Lines
+        state.data.forEach((_, i) => {
+            if (i === 0) return;
+            const parent = Math.floor((i - 1) / 2);
+            if (parent < state.data.length) {
+                const pC = getNodeCoords(parent, startY, levelHeight, spread);
+                const cC = getNodeCoords(i, startY, levelHeight, spread);
+                // Ensure coordinates are valid numbers
+                if (!isNaN(pC.x) && !isNaN(pC.y) && !isNaN(cC.x) && !isNaN(cC.y)) {
+                    treeHtml += `<line x1="${pC.x}" y1="${pC.y}" x2="${cC.x}" y2="${cC.y}" stroke="#fff" stroke-width="3" />`;
+                }
+            }
+        });
+        treeHtml += `</svg>`;
+
+        // Nodes
+        state.data.forEach((val, i) => {
+            const coords = getNodeCoords(i, startY, levelHeight, spread);
+            let classes = 'tree-node';
+            if (state.highlight && state.highlight.includes(i)) classes += ' active';
+            if (state.swap && state.swap.includes(i)) classes += ' highlight-swap';
+            
+            treeHtml += `<div class="${classes}" style="left: ${coords.x - 35}px; top: ${coords.y - 35}px;">${val}</div>`;
+        });
+
+        treeContainer.innerHTML = treeHtml;
+    }
+
+    // --- Swim Animation Data (Index 5) ---
+    function initSwimAnim() {
+        const initial = [90, 80, 70, 60, 50, 40];
+        const val = 99;
+        const snapshots = [];
+
+        snapshots.push(createSnapshot(initial, "当前大顶堆，准备插入 99", 1000));
+        
+        const data = [...initial, val];
+        snapshots.push(createSnapshot(data, "1. 插入到数组末尾", 1000, { highlight: [6] }));
+        
+        snapshots.push(createSnapshot(data, "2. 与父节点(idx=2, val=70) 比较", 1000, { highlight: [6, 2] }));
+        snapshots.push(createSnapshot(data, "99 > 70，交换！", 1000, { swap: [6, 2] }));
+        
+        [data[6], data[2]] = [data[2], data[6]];
+        snapshots.push(createSnapshot(data, "交换完成，继续向上", 1000, { highlight: [2] }));
+
+        snapshots.push(createSnapshot(data, "3. 与父节点(idx=0, val=90) 比较", 1000, { highlight: [2, 0] }));
+        snapshots.push(createSnapshot(data, "99 > 90，交换！", 1000, { swap: [2, 0] }));
+        
+        [data[2], data[0]] = [data[0], data[2]];
+        snapshots.push(createSnapshot(data, "交换完成，到达根节点", 1000, { highlight: [0] }));
+        
+        snapshots.push(createSnapshot(data, "4. 插入完成", 0, { highlight: [0] }));
+
+        // Slide 5 is "插入操作"
+        Anim.register(5, snapshots, renderHeapAnim, { tree: 'swim-tree', array: 'swim-array', desc: 'swim-desc' });
+    }
+
+    // --- Sink Animation Data (Index 6) ---
+    function initSinkAnim() {
+        const initial = [99, 80, 90, 60, 50, 40, 70];
+        const snapshots = [];
+        
+        snapshots.push(createSnapshot(initial, "准备删除最大值 (Root: 99)", 1000, { highlight: [0] }));
+
+        const data = [...initial];
+        snapshots.push(createSnapshot(data, "1. 根节点与末尾(70)交换", 1000, { swap: [0, 6] }));
+        
+        [data[0], data[6]] = [data[6], data[0]];
+        const popped = data.pop(); 
+        snapshots.push(createSnapshot(data, "2. 移除末尾(99)", 1000, { highlight: [0] }));
+
+        snapshots.push(createSnapshot(data, "3. 对比孩子：80 和 90", 1000, { highlight: [0, 1, 2] }));
+        snapshots.push(createSnapshot(data, "较大的孩子是 90 (idx=2)", 1000, { highlight: [2] }));
+        snapshots.push(createSnapshot(data, "70 < 90，交换！", 1000, { swap: [0, 2] }));
+        
+        [data[0], data[2]] = [data[2], data[0]];
+        snapshots.push(createSnapshot(data, "交换完成，继续下沉", 1000, { highlight: [2] }));
+
+        snapshots.push(createSnapshot(data, "4. 对比孩子：40 (idx=5)", 1000, { highlight: [2, 5] }));
+        snapshots.push(createSnapshot(data, "70 > 40，无需交换", 1000));
+        
+        snapshots.push(createSnapshot(data, "5. 下沉结束", 0, { highlight: [2] }));
+
+        // Slide 6 is "删除操作"
+        Anim.register(6, snapshots, renderHeapAnim, { tree: 'sink-tree', array: 'sink-array', desc: 'sink-desc' });
+    }
+
+    // --- Build Heap Animation Data (Index 7) ---
+    function initBuildHeapAnim() {
+        // 大顶堆演示
+        // tree structure:
+        //       3 (idx 0)
+        //    14(1)     1(2)
+        // 10(3) 8(4) 16(5) 4(6)
+        const initial = [3, 14, 1, 10, 8, 16, 4]; 
+        
+        const snapshots = [];
+        snapshots.push(createSnapshot(initial, "初始乱序数组 (n=7)", 1000));
+        
+        let data = [...initial];
+        
+        // 1. last non-leaf = floor(7/2) - 1 = 2. Node(1). 
+        // children of 2: 16(5), 4(6). Max=16.
+        snapshots.push(createSnapshot(data, "i=2 (Val:1): 下沉", 1000, { highlight: [2] }));
+        snapshots.push(createSnapshot(data, "对比子节点: 16 > 4", 1000, { highlight: [2, 5, 6] }));
+        snapshots.push(createSnapshot(data, "1 < 16，交换", 1000, { swap: [2, 5] }));
+        [data[2], data[5]] = [data[5], data[2]]; // [3, 14, 16, 10, 8, 1, 4]
+        snapshots.push(createSnapshot(data, "i=2 下沉完毕", 1000, { highlight: [2, 5] }));
+
+        // 2. Idx 1: Val 14. Child: 10(3), 8(4). Max=10.
+        snapshots.push(createSnapshot(data, "i=1 (Val:14): 下沉", 1000, { highlight: [1] }));
+        snapshots.push(createSnapshot(data, "对比子节点: 10, 8", 1000, { highlight: [1, 3, 4] }));
+        snapshots.push(createSnapshot(data, "14 > 10，无需交换", 1000, { highlight: [1] }));
+
+        // 3. Idx 0: Val 3. Child: 14(1), 16(2). Max=16.
+        snapshots.push(createSnapshot(data, "i=0 (Val:3): 下沉", 1000, { highlight: [0] }));
+        snapshots.push(createSnapshot(data, "对比子节点: 14, 16", 1000, { highlight: [0, 1, 2] }));
+        snapshots.push(createSnapshot(data, "3 < 16，交换", 1000, { swap: [0, 2] }));
+        [data[0], data[2]] = [data[2], data[0]]; // [16, 14, 3, 10, 8, 1, 4]
+        
+        // Continue sinking 3 at idx 2. Child: 1(5), 4(6). Max=4.
+        snapshots.push(createSnapshot(data, "交换后 3 (idx=2) 继续下沉", 1000, { highlight: [2] }));
+        snapshots.push(createSnapshot(data, "对比子节点: 1, 4", 1000, { highlight: [2, 5, 6] }));
+        snapshots.push(createSnapshot(data, "3 < 4，交换", 1000, { swap: [2, 6] }));
+        [data[2], data[6]] = [data[6], data[2]]; // [16, 14, 4, 10, 8, 1, 3]
+        
+        snapshots.push(createSnapshot(data, "建堆完成！(MaxHeap)", 0, { highlight: [0,1,2,3,4,5,6] }));
+
+        // Slide 7 is "建堆"
+        Anim.register(7, snapshots, renderHeapAnim, { tree: 'build-tree', array: 'build-array', desc: 'build-desc' });
+    }
+
+    initSwimAnim();
+    initSinkAnim();
+    initBuildHeapAnim();
+    updateSlide();
+
+</script>
+
+<!-- MathJax -->
+<script>
+    window.MathJax = {
+        tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] }
+    };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
+</body>
+</html>
