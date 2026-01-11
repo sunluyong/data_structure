@@ -397,13 +397,13 @@
                     <h3><i class="fas fa-cubes"></i> 两个核心性质</h3>
                     <ul style="font-size: 30px; line-height: 1.8;">
                         <li><strong>1. 结构性：完全二叉树</strong>
-                            <p style="font-size: 24px; color: #aaa; margin-bottom: 10px;">除最后一层外全满，最后一层节点靠左。</p>
+                            <p style="font-size: 24px; color: #aaa; margin-bottom: 10px;">除最后一层外全满，最后一层节点靠左</p>
                         </li>
                         <li><strong>2. 有序性：堆序性</strong>
-                            <p style="font-size: 24px; color: #aaa; margin-bottom: 10px;">任意节点的值 $\ge$ (或 $\le$) 其子节点。</p>
+                            <p style="font-size: 24px; color: #aaa; margin-bottom: 10px;">任意节点的值 $\ge$ (或 $\le$) 其子节点</p>
                             <ul>
-                                <li style="color: var(--warn-color);"><strong>大顶堆 (Max Heap)</strong>: 根最大 (Parent $\ge$ Child)。</li>
-                                <li style="color: var(--secondary-color);"><strong>小顶堆 (Min Heap)</strong>: 根最小 (Parent $\le$ Child)。</li>
+                                <li style="color: var(--warn-color); font-size: 30px;"><strong>大顶堆 (Max Heap)</strong>: 根最大 (Parent $\ge$ Child)</li>
+                                <li style="color: var(--secondary-color); font-size: 30px;"><strong>小顶堆 (Min Heap)</strong>: 根最小 (Parent $\le$ Child)</li>    
                             </ul>
                         </li>
                     </ul>
@@ -461,10 +461,10 @@
                 <p>完全二叉树可以完美映射到数组，<strong>无需链表和指针</strong>。</p>
                 <div class="card">
                     <h3><i class="fas fa-calculator"></i> 索引关系 (0-based)</h3>
-                    <ul style="font-size: 32px; font-family: monospace;">
-                        <li>Parent(i) = floor((i - 1) / 2)</li>
-                        <li>Left(i) &nbsp;&nbsp;= 2*i + 1</li>
-                        <li>Right(i) &nbsp;= 2*i + 2</li>
+                    <ul>
+                        <li style="font-size: 36px; font-family: monospace;">Parent(i) = floor((i - 1) / 2)</li>
+                        <li style="font-size: 36px; font-family: monospace;">Left(i) &nbsp;&nbsp;= 2*i + 1</li>
+                        <li style="font-size: 36px; font-family: monospace;">Right(i) &nbsp;= 2*i + 2</li>  
                     </ul>
                 </div>
             </div>
@@ -550,7 +550,7 @@
             <div class="col-visual" style="display: flex; flex-direction: column; align-items: center;">
                 <div class="card" style="border-left: 8px solid var(--accent-color); width: 100%; min-height: 280px; margin-bottom: 20px;">
                     <h3 style="margin-bottom: 15px;"><i class="fas fa-arrow-up"></i> 上浮 (Sift Up/ Swim)</h3>
-                    <p style="font-size: 28px; margin-bottom: 15px;">某个节点“太大了”，比父亲还大，应该往上爬，直到不再比父亲大。</p>
+                    <p style="font-size: 28px; margin-bottom: 15px;">小根堆中某个节点“太小了”，比父亲还小，应该往上爬，直到不再比父亲小。</p>
                     <div style="font-size: 24px; color: #aaa; background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px;">
                         <strong>典型出现</strong>：<br>插入（新元素先放在数组末尾/树的最后一个位置）。
                     </div>
@@ -639,7 +639,7 @@
             <div class="col-visual" style="display: flex; flex-direction: column; align-items: center;">
                 <div class="card" style="border-left: 8px solid var(--warn-color); width: 100%; min-height: 280px; margin-bottom: 20px;">
                     <h3 style="margin-bottom: 15px;"><i class="fas fa-arrow-down"></i> 下沉 (Sift Down/ Sink)</h3>
-                    <p style="font-size: 28px; margin-bottom: 15px;">某个节点“太大”破坏了小顶堆性质，比孩子大，应该往下掉。</p>
+                    <p style="font-size: 28px; margin-bottom: 15px;">小根堆某个节点“太大了”，比孩子还要大，应该往下沉，直到不必孩子大。</p>
                     <div style="font-size: 24px; color: #aaa; background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px;">
                         <strong>典型出现</strong>：<br>删除堆顶（把最后一个元素搬到根，根变大了，需要往下修）。
                     </div>
@@ -734,9 +734,9 @@
                 <div class="card" style="padding: 20px; margin-bottom: 15px;">
                     <h3 style="margin-bottom: 15px; font-size: 40px;">公式：Append + Swim</h3>
                     <ol style="font-size: 28px; line-height: 1.5;">
-                        <li><strong>Append</strong>：将新元素放到数组<strong>末尾</strong>。
+                        <li style="font-size: 32px;"><strong>Append</strong>：将新元素放到数组<strong>末尾</strong>。
                         </li>
-                        <li><strong>Swim</strong>：执行<strong>上浮</strong>操作恢复堆序。
+                        <li style="font-size: 32px;"><strong>Swim</strong>：执行<strong>上浮</strong>操作恢复堆序。
                         </li>
                     </ol>
                     <p style="font-size: 32px; margin-top: 20px; color: var(--accent-color);">
@@ -759,7 +759,7 @@
                     <div style="display: flex; flex: 1; min-height: 0; align-items: flex-start; margin-top: 50px;">
                         <!-- transform-origin 改回 center top 防止向下延伸遮挡数组 -->
                         <div class="tree-container" id="swim-tree" style="flex: 1; transform: scale(0.85); transform-origin: center top; height: 100%;"></div>
-                        <div id="swim-desc" style="flex: 0 0 280px; text-align: left; font-size: 30px; color: var(--accent-color); padding-left: 20px; padding-top: 60px; line-height: 1.4;">Ready</div>
+                        <div id="swim-desc" style="flex: 0 0 280px; text-align: left; font-size: 26px; color: var(--accent-color); padding-left: 60px; padding-top: 60px; line-height: 1.4;">Ready</div>
                     </div>
                     
                     <!-- 数组置底，并提高 z-index 防止被遮挡 -->
@@ -800,11 +800,11 @@
             <div class="col-content" style="display: flex; flex-direction: column; height: 100%;">
                 <div class="card" style="padding: 25px; margin-bottom: 15px;">
                     <h3 style="margin-bottom: 15px; font-size: 40px;">公式：Replace + Sink</h3>
-                    <ol style="font-size: 28px; line-height: 1.5;">
-                        <li><strong>Remove</strong>：移除堆顶（拿到最大值）。</li>
-                        <li><strong>Replace</strong>：用<strong>末尾元素</strong>补到堆顶。
+                    <ol>
+                        <li style="font-size: 32px;"><strong>Remove</strong>：移除堆顶（拿到最大值）。</li>
+                        <li style="font-size: 32px;"><strong>Replace</strong>：用<strong>末尾元素</strong>补到堆顶。
                         </li>
-                        <li><strong>Sink</strong>：执行<strong>下沉</strong>操作恢复堆序。</li>
+                        <li style="font-size: 32px;"><strong>Sink</strong>：执行<strong>下沉</strong>操作恢复堆序。</li>
                     </ol>
                     <p style="font-size: 32px; margin-top: 15px; color: var(--warn-color);">
                         时间复杂度：$O(\log N)$
@@ -825,7 +825,7 @@
                     
                     <div style="display: flex; flex: 1; min-height: 0; align-items: flex-start; margin-top: 50px;">
                         <div class="tree-container" id="sink-tree" style="flex: 1; transform: scale(0.85); transform-origin: center top; height: 100%;"></div>
-                        <div id="sink-desc" style="flex: 0 0 280px; text-align: left; font-size: 30px; color: var(--warn-color); padding-left: 20px; padding-top: 60px; line-height: 1.4;">Ready</div>
+                        <div id="sink-desc" style="flex: 0 0 280px; text-align: left; font-size: 26px; color: var(--warn-color); padding-left: 60px; padding-top: 60px; line-height: 1.4;">Ready</div>
                     </div>
                 </div>
             </div>
@@ -859,7 +859,7 @@
 
     <!-- P08: 建堆 -->
     <section class="slide" data-title="建堆">
-        <h2>建堆：插入与下沉的效率之争</h2>
+        <h2>建堆：插入与下沉的效率</h2>
         <div class="layout-2col">
             <div class="col-content">
                 <div class="card" style="padding: 20px; margin-bottom: 20px;">
@@ -876,8 +876,8 @@
                     <h3 style="font-size: 36px; margin-bottom: 15px;"><i class="fas fa-arrow-down"></i> 方案 B：批量下沉 (Sink)</h3>
                     <p style="font-size: 32px; margin-bottom: 10px;">原地调整：从<strong>最后一个非叶子节点</strong>开始，倒序遍历执行 Sink</p>
                     <ul style="color: #cbd5e1; margin-bottom: 15px; padding-left: 30px;">
-                        <li style="margin-bottom: 5px; font-size: 28px;"><strong>利用特性</strong>：叶子节点（占 $N/2$）天然堆有序，无需操作</li>
-                        <li style="font-size: 28px;">越往上层节点越少，虽然下沉路径变长，但需要操作的节点数呈指数级减少，数学级数求和收敛于 $O(N)$</li>
+                        <li style="margin-bottom: 5px; font-size: 28px;"><strong>利用特性</strong>：叶子节点（占 $N/2$）天然有序，无需操作</li>
+                        <li style="font-size: 28px;">越往上层节点越少，需要操作的节点数呈指数级减少，数学级数求和收敛于 $O(N)$</li>
                     </ul>
                     <p style="font-size: 26px; color: var(--accent-color); font-weight: bold;">复杂度：$O(N)$ <span style="font-size: 20px; color: #aaa; font-weight: normal;">(更优)</span></p>
                 </div>
@@ -894,8 +894,8 @@
                         </div>
                     </div>
                     <div class="tree-container" id="build-tree" style="flex: 1; margin-top: 100px; transform: scale(0.9); transform-origin: center top;"></div>
-                    <div id="build-desc" style="text-align: center; font-size: 24px; color: var(--secondary-color); min-height: 40px;">Ready</div>
-                    <div class="array-container" id="build-array"></div>
+                    <div id="build-desc" style="text-align: center; font-size: 24px; color: var(--secondary-color); min-height: 40px;position:relative;top:-40px;">Ready</div>
+                    <div class="array-container" id="build-array" style="position:relative;top:-40px;"></div>
                 </div>
             </div>
         </div>
@@ -909,9 +909,9 @@
                 <div class="card">
                     <p style="font-size: 32px;">从<strong>最后一个非叶子节点</strong>开始，倒序执行下沉</p>
                     <ul>
-                        <li style="font-size:28px;"><strong>起点</strong>：`i = n / 2 - 1`</li>
-                        <li style="font-size:28px;"><strong>方向</strong>：`i` 递减到 `0`</li>
-                        <li style="font-size:28px;"><strong>操作</strong>：对每个 `i` 执行 `sink(heap, n, i)`</li>
+                        <li style="font-size:28px;"><strong>起点</strong>：i = n / 2 - 1</li>
+                        <li style="font-size:28px;"><strong>方向</strong>：i 递减到 0</li>
+                        <li style="font-size:28px;"><strong>操作</strong>：对每个 i 执行 sink(heap, n, i)</li>
                     </ul>
                 </div>
                 <div class="highlight-box" style="margin-top: 30px;">
@@ -948,17 +948,72 @@
         </div>
     </section>
 
-    <!-- P09: 堆排序 -->
+    <!-- P09: 递归实现建堆 -->
+    <section class="slide" data-title="递归实现建堆">
+        <h2>递归实现建堆</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="card">
+                    <p style="font-size: 32px;">递归版本的建堆，代码更简洁优雅</p>
+                    <ul>
+                        <li style="font-size:28px;"><strong>递归 sink</strong>：比较当前节点与子节点，交换后递归处理</li>
+                        <li style="font-size:28px;"><strong>迭代建堆</strong>：从最后一个非叶子节点开始，顺序调整</li>
+                        <li style="font-size:28px;"><strong>复杂度</strong>：仍然是 $O(N)$，递归深度 $O(\log N)$</li>
+                    </ul>
+                </div>
+                <div class="highlight-box" style="margin-top: 30px;">
+                    <p style="font-size: 28px;">
+                        <strong style="font-size: 32px;">递归 vs 迭代</strong><br>
+                        递归版本代码更易读，但可能存在栈溢出风险（深度 $\log N$）。<br>
+                        迭代版本更安全，是生产环境的首选。
+                    </p>
+                </div>
+            </div>
+            <div class="col-visual">
+                <div class="code-block" style="font-size: 24px; padding: 30px;"><span class="code-cm">// 递归下沉操作</span>
+<span class="code-kw">void</span> <span class="code-fn">heapify</span>(<span class="code-type">int</span>* heap, <span class="code-type">int</span> n, <span class="code-type">int</span> i) {
+    <span class="code-type">int</span> largest = i;
+    <span class="code-type">int</span> left = <span class="code-num">2</span> * i + <span class="code-num">1</span>;
+    <span class="code-type">int</span> right = <span class="code-num">2</span> * i + <span class="code-num">2</span>;
+
+    <span class="code-cm">// 找出最大节点</span>
+    <span class="code-kw">if</span> (left < n && heap[left] > heap[largest])
+        largest = left;
+    <span class="code-kw">if</span> (right < n && heap[right] > heap[largest])
+        largest = right;
+
+    <span class="code-cm">// 如果最大不是当前节点，交换并递归</span>
+    <span class="code-kw">if</span> (largest != i) {
+        <span class="code-fn">swap</span>(&heap[i], &heap[largest]);
+        <span class="code-fn">heapify</span>(heap, n, largest);
+    }
+}
+
+<span class="code-cm">// 递归建堆：O(N)</span>
+<span class="code-kw">void</span> <span class="code-fn">build_heap</span>(<span class="code-type">int</span>* heap, <span class="code-type">int</span> n) {
+    <span class="code-cm">// 从最后一个非叶子节点开始</span>
+    <span class="code-kw">for</span> (<span class="code-type">int</span> i = n / <span class="code-num">2</span> - <span class="code-num">1</span>; i >= <span class="code-num">0</span>; i--) {
+        <span class="code-fn">heapify</span>(heap, n, i);
+    }
+}</div>
+                <div style="text-align: center; margin-top: 20px; font-size: 24px; color: var(--secondary-color);">
+                    <i class="fas fa-code"></i> 递归让逻辑更清晰
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P10: 堆排序 -->
     <section class="slide" data-title="堆排序">
         <h2>堆排序 (Heap Sort)</h2>
         <div class="layout-2col">
             <div class="col-content">
                 <div class="card">
-                    <ol style="font-size: 28px; line-height: 1.6;">
-                        <li><strong>建堆 (Build)</strong>：<br>先将数组转化为大顶堆 ($O(N)$)。</li>
-                        <li><strong>交换 (Swap)</strong>：<br>将堆顶与末尾互换 -> <span style="color:var(--warn-color);">最大值归位</span></li>
-                        <li><strong>下沉 (Sink)</strong>：<br>堆大小减 1，剩余部分执行下沉恢复堆序</li>
-                        <li><strong>循环</strong>：<br>重复步骤 2-3，直到堆为空</li>
+                    <ol style="font-size: 28px; line-height: 1.2;">
+                        <li><strong>建堆 (Build)</strong>：<br><span style="font-size: 32px;">先将数组转化为大顶堆 ($O(N)$)</span></li>
+                        <li><strong>交换 (Swap)</strong>：<br><span style="font-size: 32px;">将堆顶与末尾互换 -> <span style="color:var(--warn-color);">最大值归位</span></span></li>
+                        <li><strong>下沉 (Sink)</strong>：<br><span style="font-size: 32px;">堆大小减 1，剩余部分执行下沉恢复堆序</span></li>
+                        <li><strong>循环</strong>：<br><span style="font-size: 32px;">重复步骤 2-3，直到堆为空</span></li>
                     </ol>
                     <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.1);">
                         <p style="font-size: 28px; margin-bottom: 10px;">
@@ -977,7 +1032,7 @@
 <span class="code-kw">void</span> <span class="code-fn">heap_sort</span>(<span class="code-type">int</span>* arr, <span class="code-type">int</span> n) {
     <span class="code-cm">// 1. 建堆 (变成大顶堆)</span>
     <span class="code-kw">for</span> (<span class="code-type">int</span> i = n/<span class="code-num">2</span> - <span class="code-num">1</span>; i >= <span class="code-num">0</span>; i--)
-        <span class="code-fn">sift_down</span>(arr, n, i);
+        <span class="code-fn">sink</span>(arr, n, i);
 
     <span class="code-cm">// 2. 排序 (Swap + Sink)</span>
     <span class="code-kw">for</span> (<span class="code-type">int</span> i = n - <span class="code-num">1</span>; i > <span class="code-num">0</span>; i--) {
@@ -985,7 +1040,7 @@
         <span class="code-fn">swap</span>(&arr[<span class="code-num">0</span>], &arr[i]);
         
         <span class="code-cm">// 剩余元素(大小为 i) 恢复堆序</span>
-        <span class="code-fn">sift_down</span>(arr, i, <span class="code-num">0</span>);
+        <span class="code-fn">sink</span>(arr, i, <span class="code-num">0</span>);
     }
 }</div>
                 <div style="text-align: center; margin-top: 20px; font-size: 24px; color: var(--secondary-color);">
@@ -994,8 +1049,6 @@
             </div>
         </div>
     </section>
-
-
 
     <!-- P10.5: 适用场景 -->
     <section class="slide" data-title="适用场景">
@@ -1013,8 +1066,8 @@
                 <div style="text-align: left; width: 100%;">
                     <p style="font-size: 28px; line-height: 1.4; margin-bottom: 15px;">普通队列是 FIFO，优先队列是 <strong style="color: var(--accent-color);">BIFO</strong> (Best-In First-Out)。</p>
                     <ul style="font-size: 26px; color: #cbd5e1; margin-bottom: 20px;">
-                        <li>谁优先级高，谁先出队。</li>
-                        <li>插入 $O(\log N)$，取出 $O(\log N)$。</li>
+                        <li style="font-size: 36px;">谁优先级高，谁先出队。</li>
+                        <li style="font-size: 36px;">插入 $O(\log N)$，取出 $O(\log N)$。</li>
                     </ul>
                 </div>
 
@@ -1034,8 +1087,8 @@
                 <div style="text-align: left; width: 100%;">
                     <p style="font-size: 28px; line-height: 1.4; margin-bottom: 15px;">从 N 个元素中找到前 K 大/小的元素。</p>
                     <ul style="font-size: 26px; color: #cbd5e1; margin-bottom: 20px;">
-                        <li>排序法：$O(N \log N)$</li>
-                        <li><strong>堆解法：$O(N \log K)$</strong> (维护大小为 K 的堆)</li>
+                        <li style="font-size: 36px;">排序法：$O(N \log N)$</li>
+                        <li style="font-size: 36px;"><strong>堆解法：$O(N \log K)$</strong> (维护大小为 K 的堆)</li>
                     </ul>
                 </div>
 
@@ -1055,8 +1108,8 @@
                 <div style="text-align: left; width: 100%;">
                     <p style="font-size: 28px; line-height: 1.4; margin-bottom: 15px;">在图论算法中，利用堆快速获取“当前距离最近”的节点。</p>
                     <ul style="font-size: 26px; color: #cbd5e1; margin-bottom: 20px;">
-                        <li><strong>Dijkstra</strong>：寻找最短路径。</li>
-                        <li><strong>性能提升</strong>：将查找最小值从 $O(V)$ 优化到 $O(1)$。</li>
+                        <li style="font-size: 36px;"><strong>Dijkstra</strong>：寻找最短路径。</li>
+                        <li style="font-size: 36px;"><strong>性能提升</strong>：将查找最小值从 $O(V)$ 优化到 $O(1)$。</li> 
                     </ul>
                 </div>
 
@@ -1116,7 +1169,7 @@
 
     <!-- P11.5: 代码实现 -->
     <section class="slide" data-title="代码实现">
-        <h2>代码实现：双堆求中位数 (详解)</h2>
+        <h2>代码实现：双堆求中位数</h2>
         <div class="layout-2col">
             <div class="col-content" style="flex: 0 0 45%;">
                 <div class="card">
@@ -1142,8 +1195,7 @@
                 </div>
             </div>
             <div class="col-visual" style="flex: 1;">
-                <div class="code-block" style="font-size: 20px;">
-<span class="code-cm">// 假设已封装堆操作: push_max, pop_max, push_min, pop_min</span>
+                <div class="code-block" style="font-size: 20px;"><span class="code-cm">// 假设已封装堆操作: push_max, pop_max, push_min, pop_min</span>
 
 <span class="code-kw">void</span> <span class="code-fn">addNum</span>(<span class="code-type">MedianFinder</span>* obj, <span class="code-type">int</span> num) {
     <span class="code-cm">/* 1. 筛选：新元素必须经过"比较"才能去右边 */</span>
@@ -1181,7 +1233,7 @@
                 <thead>
                     <tr>
                         <th width="20%">维度</th>
-                        <th width="40%" style="color: var(--accent-color);">二叉堆 (Heap)</th>
+                        <th width="40%" style="color: var(--accent-color);">堆 (Heap)</th>
                         <th width="40%" style="color: var(--warn-color);">二叉搜索树 (BST)</th>
                     </tr>
                 </thead>
@@ -1239,12 +1291,18 @@
             </div>
             <div class="col-visual layout-center">
                  <div class="card" style="background: rgba(34, 211, 238, 0.05); border: 1px dashed var(--accent-color); text-align: center;">
-                    <h3><i class="fas fa-quote-left"></i></h3>
-                    <p style="font-size: 36px; font-style: italic; margin: 20px 0;">
-                        有时候，我们不必掌握全局的顺序，<br>
-                        只需要知道当下最重要的是什么。
+                    <div style="margin-bottom: 20px;">
+                        <i class="fas fa-tree" style="font-size: 80px; color: var(--accent-color);"></i>
+                    </div>
+                    <h3 style="font-size: 36px; margin-bottom: 15px; color: var(--accent-color);">下节预告</h3>
+                    <p style="font-size: 28px; font-weight: bold; color: var(--tertiary-color); margin-bottom: 15px;">哈夫曼树 (Huffman Tree)</p>
+                    <p style="font-size: 24px; color: #aaa; margin-bottom: 20px; line-height: 1.4;">
+                        堆的经典应用：<br>用最小堆构建最优编码树
                     </p>
-                    <p style="text-align: right; color: #666;">—— 优先队列的哲学</p>
+                    <ul style="font-size: 22px; color: #cbd5e1; text-align: left; padding-left: 30px;">
+                        <li style="margin-bottom: 8px;">无损压缩：高频字符用短码</li>
+                        <li style="margin-bottom: 8px;">贪心策略：每次选两个最小的合并</li>
+                    </ul>
                 </div>
             </div>
         </div>
