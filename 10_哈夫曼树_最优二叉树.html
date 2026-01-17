@@ -1,0 +1,1120 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>哈夫曼树：数据压缩的奥秘</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0B1020;
+            --text-color: #EAF2FF;
+            --accent-color: #22D3EE;     /* 青色：核心概念 */
+            --secondary-color: #60A5FA;  /* 蓝色：辅助说明 */
+            --tertiary-color: #A78BFA;   /* 紫色：强调/代码 */
+            --warn-color: #F472B6;       /* 粉红：重点/易错 */
+            --code-bg: #1e293b;
+            --slide-width: 1920px;
+            --slide-height: 1080px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background-color: #000;
+            color: var(--text-color);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        #app {
+            width: var(--slide-width);
+            height: var(--slide-height);
+            background-color: var(--bg-color);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+        }
+
+        /* 背景装饰 */
+        .bg-decoration {
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(34, 211, 238, 0.03) 0%, transparent 30%),
+                radial-gradient(circle at 90% 80%, rgba(167, 139, 250, 0.03) 0%, transparent 30%);
+            pointer-events: none;
+        }
+        
+        .grid-overlay {
+            position: absolute;
+            inset: 0;
+            background-size: 60px 60px;
+            background-image: linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+                              linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+            z-index: 0;
+        }
+
+        /* 幻灯片通用 */
+        .slide {
+            position: absolute;
+            inset: 0;
+            display: none;
+            padding: 80px 100px;
+            flex-direction: column;
+            z-index: 1;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+
+        .slide.active { display: flex; opacity: 1; }
+
+        /* 排版元素 */
+        h1 {
+            font-size: 140px;
+            font-weight: 800;
+            line-height: 1.1;
+            margin-bottom: 40px;
+            background: linear-gradient(135deg, #fff 0%, var(--secondary-color) 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        h2 {
+            font-size: 72px;
+            margin-bottom: 50px;
+            color: var(--accent-color);
+            border-bottom: 4px solid rgba(34, 211, 238, 0.3);
+            padding-bottom: 20px;
+            display: inline-block;
+        }
+
+        h3 {
+            font-size: 48px;
+            margin-bottom: 30px;
+            color: var(--secondary-color);
+        }
+
+        p, li {
+            font-size: 38px;
+            line-height: 1.5;
+            margin-bottom: 24px;
+            color: #cbd5e1;
+        }
+
+        strong { color: var(--accent-color); font-weight: 700; }
+        em { color: var(--tertiary-color); font-style: normal; font-weight: bold; }
+
+        ul { list-style: none; }
+        ul li { position: relative; padding-left: 50px; }
+        ul li::before {
+            content: "•";
+            color: var(--accent-color);
+            position: absolute;
+            left: 0;
+            font-weight: bold;
+        }
+
+        ol { counter-reset: item; list-style: none; }
+        ol li { position: relative; padding-left: 60px; }
+        ol li::before {
+            content: counter(item) ".";
+            counter-increment: item;
+            color: var(--accent-color);
+            position: absolute;
+            left: 0;
+            font-weight: bold;
+        }
+
+        /* 布局类 */
+        .layout-center {
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        .layout-2col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 60px;
+            flex: 1;
+            align-content: start;
+        }
+        
+        .layout-2col .col-visual {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+
+        /* 组件 */
+        .card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 24px;
+            padding: 40px;
+            margin-bottom: 30px;
+        }
+        
+        .highlight-box {
+            background: rgba(34, 211, 238, 0.08);
+            border-left: 8px solid var(--accent-color);
+            padding: 30px 40px;
+            border-radius: 0 16px 16px 0;
+            margin: 30px 0;
+        }
+
+        .code-block {
+            font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+            background: var(--code-bg);
+            padding: 30px;
+            border-radius: 16px;
+            border: 1px solid #334155;
+            font-size: 26px;
+            line-height: 1.5;
+            color: #e2e8f0;
+            white-space: pre;
+            overflow-x: auto;
+            overflow-y: auto;
+            max-height: 730px;
+        }
+        .code-block::-webkit-scrollbar { width: 10px; height: 10px; }
+        .code-block::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); border-radius: 5px; }
+        .code-block::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 5px; }
+
+        .code-kw { color: #c678dd; } 
+        .code-type { color: #e5c07b; } 
+        .code-fn { color: #61afef; }
+        .code-cm { color: #64748b; font-style: italic; } 
+        .code-num { color: #d19a66; }
+        .code-str { color: #98c379; }
+
+        .footer {
+            position: absolute;
+            bottom: 30px;
+            right: 40px;
+            font-size: 24px;
+            color: rgba(255, 255, 255, 0.3);
+            z-index: 10;
+        }
+        
+        /* 动画控制栏 */
+        .anim-controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            margin-top: 10px;
+        }
+        .anim-controls button {
+            padding: 8px 16px;
+            font-size: 20px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: var(--text-color);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 50px;
+        }
+        .anim-controls button:hover {
+            background: var(--accent-color);
+            color: #000;
+            border-color: var(--accent-color);
+        }
+
+        /* 哈夫曼树特定样式 */
+        .huff-node {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            background: #0B1020;
+            border: 3px solid var(--accent-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            font-weight: bold;
+            color: #fff;
+            position: absolute;
+            transition: all 0.5s ease;
+            box-shadow: 0 0 15px rgba(34, 211, 238, 0.2);
+            z-index: 2;
+        }
+        .huff-node.leaf {
+            background: #0B1020;
+            box-shadow: inset 0 0 20px rgba(34, 211, 238, 0.3);
+        }
+        .huff-node.merged {
+            border-color: var(--warn-color);
+            box-shadow: 0 0 20px var(--warn-color);
+        }
+        .huff-node.focus {
+            transform: scale(1.1);
+            background: var(--accent-color);
+            color: #000;
+        }
+        .huff-char {
+            position: absolute;
+            bottom: -30px;
+            font-size: 20px;
+            color: var(--secondary-color);
+        }
+        .edge-label {
+            font-size: 20px;
+            fill: var(--tertiary-color);
+            background: #0B1020;
+            font-weight: bold;
+        }
+
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <div class="bg-decoration"></div>
+    <div class="grid-overlay"></div>
+
+    <!-- P01: 封面 -->
+    <section class="slide active layout-center" data-title="封面">
+        <div style="text-align: center;">
+            <svg width="400" height="350" viewBox="0 0 400 350" style="margin-bottom: 40px; filter: drop-shadow(0 0 30px rgba(34,211,238,0.2)); overflow: visible;">
+                <!-- Edges -->
+                <line x1="200" y1="50" x2="100" y2="150" stroke="#555" stroke-width="3" />
+                <line x1="200" y1="50" x2="300" y2="150" stroke="#555" stroke-width="3" />
+                <line x1="100" y1="150" x2="50" y2="250" stroke="#555" stroke-width="3" />
+                <line x1="100" y1="150" x2="150" y2="250" stroke="#555" stroke-width="3" />
+                
+                <!-- Edge Labels -->
+                <rect x="140" y="90" width="20" height="20" fill="#0B1020" />
+                <text x="150" y="105" text-anchor="middle" fill="var(--tertiary-color)" font-size="16" font-weight="bold">0</text>
+                
+                <rect x="240" y="90" width="20" height="20" fill="#0B1020" />
+                <text x="250" y="105" text-anchor="middle" fill="var(--tertiary-color)" font-size="16" font-weight="bold">1</text>
+                
+                <rect x="65" y="190" width="20" height="20" fill="#0B1020" />
+                <text x="75" y="205" text-anchor="middle" fill="var(--tertiary-color)" font-size="16" font-weight="bold">0</text>
+                
+                <rect x="115" y="190" width="20" height="20" fill="#0B1020" />
+                <text x="125" y="205" text-anchor="middle" fill="var(--tertiary-color)" font-size="16" font-weight="bold">1</text>
+
+                <!-- Nodes -->
+                <!-- Root -->
+                <circle cx="200" cy="50" r="35" fill="#0B1020" stroke="var(--accent-color)" stroke-width="4" />
+                <text x="200" y="58" text-anchor="middle" fill="#fff" font-size="20" font-weight="bold">26</text>
+                
+                <!-- Internal Node -->
+                <circle cx="100" cy="150" r="35" fill="#0B1020" stroke="var(--accent-color)" stroke-width="3" />
+                <text x="100" y="158" text-anchor="middle" fill="#fff" font-size="20" font-weight="bold">14</text>
+                
+                <!-- Leaf C -->
+                <circle cx="300" cy="150" r="35" fill="#0B1020" stroke="var(--warn-color)" stroke-width="3" />
+                <text x="300" y="158" text-anchor="middle" fill="#fff" font-size="18" font-weight="bold">C:12</text>
+
+                <!-- Leaf A -->
+                <circle cx="50" cy="250" r="35" fill="#0B1020" stroke="var(--accent-color)" stroke-width="2" />
+                <text x="50" y="258" text-anchor="middle" fill="#fff" font-size="18" font-weight="bold">A:5</text>
+
+                <!-- Leaf B -->
+                <circle cx="150" cy="250" r="35" fill="#0B1020" stroke="var(--accent-color)" stroke-width="2" />
+                <text x="150" y="258" text-anchor="middle" fill="#fff" font-size="18" font-weight="bold">B:9</text>
+                
+                <text x="200" y="340" text-anchor="middle" fill="#64748b" font-size="16" letter-spacing="4">OPTIMAL BINARY TREE</text>
+            </svg>
+            <h1>数据结构与算法</h1>
+            <p style="font-size: 65px; color: var(--secondary-color);">哈夫曼树：数据压缩的奥秘</p>
+        </div>
+    </section>
+
+    <!-- P02: 引入与痛点 -->
+    <section class="slide" data-title="引入">
+        <h2>从文件压缩说起</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="card">
+                    <h3><i class="fas fa-file-archive"></i> 场景：发送电报</h3>
+                    <p>假设我们要发送一段文字：<strong>"BAD CAD FEED"</strong></p>
+                </div>
+                <div class="card" style="border-left: 8px solid var(--warn-color);">
+                    <h3><i class="fas fa-ruler-horizontal"></i> 传统方式：定长编码</h3>
+                    <p>每个字符用固定长度的二进制表示</p>
+                    <div style="background: rgba(255,255,255,0.05); padding: 15px; font-family: monospace; font-size: 24px;">
+                        A: 000, B: 001, C: 010 ...<br>
+                        总长度 = 字符数 × 编码长度
+                    </div>
+                </div>
+            </div>
+            <div class="col-visual layout-center">
+                <div style="text-align: center;">
+                    <p style="font-size: 40px; margin-bottom: 30px;">思考：<strong style="color: var(--accent-color);">能否更短？</strong></p>
+                    <div style="font-size: 32px; text-align: left; background: rgba(34,211,238,0.05); padding: 30px; border-radius: 16px;">
+                        <p>如果是英语文章，<strong>'e'</strong> 出现频率最高，<strong>'z'</strong> 出现频率极低。</p>
+                        <hr style="border-color: rgba(255,255,255,0.1); margin: 20px 0;">
+                        <p style="color: var(--tertiary-color);">
+                            <i class="fas fa-lightbulb"></i> <strong>变长编码</strong>思路：<br>
+                            高频字符 -> <strong>短</strong>编码 <span style="font-size: 0.8em; color: #e2e8f0; margin-left: 10px;">(如 'e' → 10)</span><br>
+                            低频字符 -> <strong>长</strong>编码 <span style="font-size: 0.8em; color: #e2e8f0; margin-left: 10px;">(如 'z' → 110011)</span>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P03: 数学建模 -->
+    <section class="slide" data-title="数学建模">
+        <h2>数学建模：从直觉得到定义</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="card" style="padding: 25px; margin-bottom: 20px;">
+                    <h3 style="font-size: 40px; margin-bottom: 15px;"><i class="fas fa-exchange-alt"></i> 问题的转化</h3>
+                    <p style="font-size: 30px; margin-bottom: 15px;">为了实现变长编码，通常借助<strong>二叉树</strong>结构：</p>
+                    <ul style="font-size: 28px; margin-top: 10px; line-height: 1.6;">
+                        <li style="margin-bottom: 10px;"><span style="color:var(--secondary-color)">编码长度</span> <i class="fas fa-arrow-right" style="font-size: 0.8em; margin: 0 10px;"></i> <span style="color:var(--accent-color)">节点深度 (路径长度)</span></li>
+                        <li style="margin-bottom: 10px;"><span style="color:var(--secondary-color)">字符频率</span> <i class="fas fa-arrow-right" style="font-size: 0.8em; margin: 0 10px;"></i> <span style="color:var(--accent-color)">节点权重</span></li>
+                    </ul>
+                    <p style="margin-top: 15px; font-size: 30px; margin-bottom: 0;">目标：总长度（ <strong>$\sum$ 频率 $\times$ 长度</strong> ）最小。</p>
+                </div>
+                <div class="card" style="padding: 25px; margin-bottom: 0;">
+                    <h3 style="font-size: 40px; margin-bottom: 15px;"><i class="fas fa-calculator"></i> 核心指标：WPL</h3>
+                    <p style="font-size: 30px; margin-bottom: 15px;"><strong>带权路径长度 (Weighted Path Length)</strong></p>
+                    <p style="font-size: 32px; margin: 10px 0;">
+                        $$ WPL = \sum_{i=1}^{n} w_i \times l_i $$
+                    </p>
+                    <p style="color: var(--accent-color); font-size: 30px; margin-bottom: 0;"><strong>哈夫曼树定义：WPL 最小的二叉树。</strong></p>
+                </div>
+
+                
+            </div>
+            <div class="col-visual layout-center">
+                <div style="text-align: center; transform: scale(1.3);">
+                    <svg width="400" height="350" viewBox="0 0 400 350" style="filter: drop-shadow(0 0 30px rgba(34,211,238,0.2)); overflow: visible;">
+                        <!-- Edges -->
+                        <line x1="200" y1="50" x2="100" y2="150" stroke="#555" stroke-width="3" />
+                        <line x1="200" y1="50" x2="300" y2="150" stroke="#555" stroke-width="3" />
+                        <line x1="100" y1="150" x2="50" y2="250" stroke="#555" stroke-width="3" />
+                        <line x1="100" y1="150" x2="150" y2="250" stroke="#555" stroke-width="3" />
+                        
+                        <!-- Edge Labels -->
+                        <rect x="140" y="90" width="20" height="20" fill="#0B1020" />
+                        <text x="150" y="105" text-anchor="middle" fill="var(--tertiary-color)" font-size="16" font-weight="bold">0</text>
+                        
+                        <rect x="240" y="90" width="20" height="20" fill="#0B1020" />
+                        <text x="250" y="105" text-anchor="middle" fill="var(--tertiary-color)" font-size="16" font-weight="bold">1</text>
+                        
+                        <rect x="65" y="190" width="20" height="20" fill="#0B1020" />
+                        <text x="75" y="205" text-anchor="middle" fill="var(--tertiary-color)" font-size="16" font-weight="bold">0</text>
+                        
+                        <rect x="115" y="190" width="20" height="20" fill="#0B1020" />
+                        <text x="125" y="205" text-anchor="middle" fill="var(--tertiary-color)" font-size="16" font-weight="bold">1</text>
+
+                        <!-- Nodes -->
+                        <!-- Root -->
+                        <circle cx="200" cy="50" r="35" fill="#0B1020" stroke="var(--accent-color)" stroke-width="4" />
+                        <text x="200" y="58" text-anchor="middle" fill="#fff" font-size="20" font-weight="bold">26</text>
+                        
+                        <!-- Internal Node -->
+                        <circle cx="100" cy="150" r="35" fill="#0B1020" stroke="var(--accent-color)" stroke-width="3" />
+                        <text x="100" y="158" text-anchor="middle" fill="#fff" font-size="20" font-weight="bold">14</text>
+                        
+                        <!-- Leaf C -->
+                        <circle cx="300" cy="150" r="35" fill="#0B1020" stroke="var(--warn-color)" stroke-width="3" />
+                        <text x="300" y="158" text-anchor="middle" fill="#fff" font-size="18" font-weight="bold">C:12</text>
+
+                        <!-- Leaf A -->
+                        <circle cx="50" cy="250" r="35" fill="#0B1020" stroke="var(--accent-color)" stroke-width="2" />
+                        <text x="50" y="258" text-anchor="middle" fill="#fff" font-size="18" font-weight="bold">A:5</text>
+
+                        <!-- Leaf B -->
+                        <circle cx="150" cy="250" r="35" fill="#0B1020" stroke="var(--accent-color)" stroke-width="2" />
+                        <text x="150" y="258" text-anchor="middle" fill="#fff" font-size="18" font-weight="bold">B:9</text>
+                    </svg>
+                </div>
+                <div class="highlight-box" style="width: 100%; margin-top: 30px; padding: 25px;">
+                    <h3 style="font-size: 32px; margin-bottom: 15px;"><i class="fas fa-brain"></i> 核心思想</h3>
+                    <p style="font-size: 28px; color: var(--warn-color); text-align: center; margin-bottom: 15px;">"权值大的靠上，权值小的靠下"</p>
+                    <p style="font-size: 24px; line-height: 1.4;">这样可以保证高频字符编码短，低频字符编码长，总长度最小。</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P06: 哈夫曼编码 -->
+    <section class="slide" data-title="哈夫曼编码">
+        <h2>哈夫曼编码 (Huffman Coding)</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="card">
+                    <h3><i class="fas fa-code-branch"></i> 生成规则</h3>
+                    <ul style="font-size: 32px; line-height: 1.6;">
+                        <li><strong>左分支标 0、右分支标 1</strong></li>
+                        <li><strong>路径即编码</strong>：从根到叶子路径上的01序列</li>
+                    </ul>
+                </div>
+                <div class="highlight-box">
+                    <h3><i class="fas fa-shield-alt"></i> 前缀特性 (Prefix Property)</h3>
+                    <p style="font-size: 28px;">
+                        <strong>任何一个字符的编码都不是另一个字符编码的前缀。</strong>
+                    </p>
+                    <p style="font-size: 28px; color: #aaa; margin-top: 10px;">
+                        例如：如果 A 是 0，那么 B 绝不可能是 01。<br>
+                        因为字符都在<strong>叶子节点</strong>，不会出现在路径中间。<br>
+                        <span style="color: var(--accent-color);">保证了解码的唯一性，无需分隔符。</span>
+                    </p>
+                </div>
+            </div>
+            <div class="col-visual layout-center">
+                <svg width="600" height="500" viewBox="0 0 600 500" style="overflow: visible;">
+                    <!-- Lines -->
+                    <line x1="300" y1="50" x2="150" y2="150" stroke="#fff" stroke-width="2"/>
+                    <line x1="300" y1="50" x2="450" y2="150" stroke="#fff" stroke-width="2"/>
+                    <line x1="150" y1="150" x2="80" y2="250" stroke="#fff" stroke-width="2"/>
+                    <line x1="150" y1="150" x2="220" y2="250" stroke="#fff" stroke-width="2"/>
+                    <!-- New Level Lines -->
+                    <line x1="220" y1="250" x2="160" y2="350" stroke="#fff" stroke-width="2"/>
+                    <line x1="220" y1="250" x2="280" y2="350" stroke="#fff" stroke-width="2"/>
+                    
+                    <!-- Labels -->
+                    <rect x="190" y="80" width="30" height="30" fill="#0B1020"/><text x="205" y="100" text-anchor="middle" fill="var(--accent-color)" font-size="24">0</text>
+                    <rect x="380" y="80" width="30" height="30" fill="#0B1020"/><text x="395" y="100" text-anchor="middle" fill="var(--accent-color)" font-size="24">1</text>
+
+                    <!-- Labels Level 2 -->
+                    <rect x="100" y="190" width="24" height="24" fill="#0B1020"/><text x="112" y="208" text-anchor="middle" fill="var(--accent-color)" font-size="20">0</text>
+                    <rect x="195" y="190" width="24" height="24" fill="#0B1020"/><text x="207" y="208" text-anchor="middle" fill="var(--accent-color)" font-size="20">1</text>
+                    
+                    <!-- Labels Level 3 -->
+                    <rect x="180" y="290" width="24" height="24" fill="#0B1020"/><text x="192" y="308" text-anchor="middle" fill="var(--accent-color)" font-size="20">0</text>
+                    <rect x="260" y="290" width="24" height="24" fill="#0B1020"/><text x="272" y="308" text-anchor="middle" fill="var(--accent-color)" font-size="20">1</text>
+                    
+                    <!-- Nodes -->
+                    <circle cx="300" cy="50" r="30" fill="#0B1020" stroke="#fff" stroke-width="2"/>
+                    <circle cx="150" cy="150" r="30" fill="#0B1020" stroke="#fff" stroke-width="2"/>
+                    <circle cx="220" cy="250" r="30" fill="#0B1020" stroke="#fff" stroke-width="2"/>
+                    
+                    <!-- Leaf A -->
+                    <circle cx="450" cy="150" r="30" fill="var(--accent-color)" stroke="#fff" stroke-width="2"/>
+                    <text x="450" y="158" text-anchor="middle" fill="#000" font-weight="bold" font-size="20">A:15</text>
+                    <text x="450" y="200" text-anchor="middle" fill="#aaa">Code: 1</text>
+
+                    <!-- Leaf B -->
+                    <circle cx="80" cy="250" r="30" fill="var(--accent-color)" stroke="#fff" stroke-width="2"/>
+                    <text x="80" y="258" text-anchor="middle" fill="#000" font-weight="bold" font-size="20">B:5</text>
+                    <text x="80" y="300" text-anchor="middle" fill="#aaa">Code: 00</text>
+
+                    <!-- Leaf C -->
+                    <circle cx="160" cy="350" r="30" fill="var(--accent-color)" stroke="#fff" stroke-width="2"/>
+                    <text x="160" y="358" text-anchor="middle" fill="#000" font-weight="bold" font-size="20">C:3</text>
+                    <text x="160" y="400" text-anchor="middle" fill="#aaa">Code: 010</text>
+
+                    <!-- Leaf D -->
+                    <circle cx="280" cy="350" r="30" fill="var(--accent-color)" stroke="#fff" stroke-width="2"/>
+                    <text x="280" y="358" text-anchor="middle" fill="#000" font-weight="bold" font-size="20">D:4</text>
+                    <text x="280" y="400" text-anchor="middle" fill="#aaa">Code: 011</text>
+                </svg>
+            </div>
+        </div>
+    </section>
+
+    <!-- P04: 构建算法 -->
+    <section class="slide" data-title="构建算法">
+        <h2>哈夫曼树构造：贪心策略</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="card" style="padding: 30px;">
+                    <h3 style="text-align: left; font-size: 28px; margin-bottom: 20px;"><i class="fas fa-forward"></i> 算法步骤</h3>
+                    <ol style="font-size: 24px; line-height: 1.5; text-align: left;">
+                        <li style="font-size: 36px;"><strong>构成森林</strong>：将每个字符看作一棵单节点树</li>
+                        <li style="font-size: 36px;"><strong>选两最小</strong>：从森林中选出根权值最小两棵树</li>
+                        <li style="font-size: 36px;"><strong>合并新树</strong>：
+                            <ul style="margin-top: 10px; margin-bottom: 10px;">
+                                <li style="font-size: 36px;">创造新父节点，权值为两子之和</li>
+                                <li style="font-size: 36px;">两棵小树作为左右子树</li>
+                            </ul>
+                        </li>
+                        <li style="font-size: 36px;"><strong>删旧添新</strong>：从森林中删除选中的两棵树，加入新树</li>
+                        <li style="font-size: 36px;"><strong>重复</strong>：直到森林只剩一棵树</li>
+                    </ol>
+                </div>
+            </div>
+            <div class="col-visual">
+                 <div class="card" style="width: 100%; height: 700px; background: transparent; border: none; position: relative; padding: 0;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3 id="anim-step-desc" style="margin: 0; font-size: 24px; color: var(--accent-color);">准备开始</h3>
+                        <div class="anim-controls">
+                            <button onclick="Anim.prev()"><i class="fas fa-step-backward"></i></button>
+                            <button onclick="Anim.toggle()"><i class="fas fa-play"></i></button>
+                            <button onclick="Anim.next()"><i class="fas fa-step-forward"></i></button>
+                            <button onclick="Anim.reset()"><i class="fas fa-undo"></i></button>
+                        </div>
+                    </div>
+                    
+                    <div id="huff-container" style="width: 100%; height: 100%; position: relative; border: 1px dashed rgba(255,255,255,0.1); border-radius: 20px;">
+                        <svg id="huff-lines" width="100%" height="100%" style="position: absolute; top:0; left:0; z-index: 1; pointer-events: none;"></svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P05: 难点思考 (新增) -->
+    <section class="slide" data-title="难点思考">
+        <h2>难点：为什么要“放回去”？</h2>
+        <div class="layout-2col" style="gap: 40px; align-items: stretch;">
+            <div class="col-content" style="display: flex; flex-direction: column; gap: 30px;">
+                <div class="card" style="padding: 30px; margin: 0;">
+                    <h3 style="font-size: 36px; margin-bottom: 20px;"><i class="fas fa-question-circle"></i> 核心疑问</h3>
+                    <p style="font-size: 32px; margin: 0;">在合并两个最小节点后，为什么必须把新节点<strong>放回森林</strong>，而不是直接拿着它和下一个最小的节点继续合并？</p>
+                </div>
+                <div class="highlight-box" style="margin: 0; padding: 30px;">
+                    <h3 style="font-size: 36px; margin-bottom: 20px;"><i class="fas fa-lightbulb"></i> 深度解析</h3>
+                    <p style="font-size: 36px; margin-bottom: 15px;"><strong>哈夫曼树不是“滚雪球”，而是“森林进化”：</strong></p>
+                    <ul style="margin: 0;">
+                        <li style="margin-bottom: 10px;font-size: 32px;">新生成的子树（节点）权值可能<strong>很大</strong>。</li>
+                        <li style="margin: 0;font-size: 32px;">贪心策略要求：<span style="color: var(--accent-color);">每一刻</span>都必须选全局最小的两个，<strong>无论它是原来的叶子，还是新生成的子树</strong>。</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="col-visual layout-center">
+                <div class="card" style="width: 100%; padding: 30px; height: 100%; display: flex; flex-direction: column; justify-content: center;">
+                    <h3 style="margin-bottom: 20px; font-size: 36px;">反例演示</h3>
+                    <div style="text-align: left;line-height: 1.6;">
+                        <p style="margin-bottom: 15px;">假设有权值：<strong style="color: var(--secondary-color);">4, 12, 13, 14</strong></p>
+                        <hr style="border-color: rgba(255,255,255,0.1); margin: 15px 0;">
+                        
+                        <p style="margin-bottom: 15px;"><strong>第一步：</strong>取出 <span class="code-num">4</span>, <span class="code-num">12</span> → 合并为 <strong style="color: var(--warn-color);">16</strong></p>
+                        
+                        <div style="background: rgba(255,0,0,0.1); padding: 15px; margin: 15px 0; border-radius: 8px;">
+                            <p style="margin-bottom: 10px; font-size: 36px;"><i class="fas fa-times-circle" style="color: var(--warn-color);"></i> <strong>错误做法 (滚雪球)：</strong></p>
+                            <p style="margin-bottom: 5px; font-size: 32px;">直接用新节点 <strong style="color: var(--warn-color);">16</strong> 去和剩下的 <span class="code-num">13</span> 合并？</p>
+                            <p style="margin: 0; font-size: 32px;">→ (16 + 13) = 29 <span style="color: #aaa; font-size: 0.8em;">(大于 13+14 = 27)</span></p>
+                        </div>
+
+                        <div style="background: rgba(34,211,238,0.1); padding: 15px; margin: 15px 0; border-radius: 8px;">
+                            <p style="margin-bottom: 10px; font-size: 36px;"><i class="fas fa-check-circle" style="color: var(--accent-color);"></i> <strong>正确做法 (放回重排)：</strong></p>
+                            <p style="margin-bottom: 5px; font-size: 32px;">池子变为：{ <span class="code-num">13</span>, <span class="code-num">14</span>, <strong style="color: var(--warn-color);">16</strong> }</p>
+                            <p style="margin-bottom: 5px; font-size: 32px;">最小的是 <span class="code-num">13</span> 和 <span class="code-num">14</span> → 合并为 <strong>27</strong></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P07: 代码实现 -->
+    <section class="slide" data-title="代码实现">
+        <h2>代码实现：利用小顶堆</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <p style="margin-bottom: 50px;">为了每次快速找到<strong>“最小的两个权值”</strong>，使用<strong>优先队列（小顶堆）</strong>是最佳选择。</p>
+                <div class="card">
+                    <h3><i class="fas fa-laptop-code"></i> 数据结构定义</h3>
+                    <pre style="font-family: monospace; font-size: 24px; color: #a5b3ce; background: transparent;">
+<span class="code-kw">typedef</span> <span class="code-kw">struct</span> <span class="code-type">TreeNode</span> {
+    <span class="code-type">int</span> weight;
+    <span class="code-type">char</span> val; <span class="code-cm">// 仅叶子节点有效</span>
+    <span class="code-kw">struct</span> <span class="code-type">TreeNode</span> *left, *right;
+} <span class="code-type">TreeNode</span>;
+
+<span class="code-cm">// 优先队列节点（存指针）</span>
+<span class="code-cm">// PriorityQueue&lt;TreeNode*&gt; minHeap;</span>
+                    </pre>
+                </div>
+            </div>
+            <div class="col-visual">
+                <div class="code-block" style="font-size: 22px;"><span class="code-type">TreeNode*</span> <span class="code-fn">buildHuffmanTree</span>(<span class="code-type">int</span>* weights, <span class="code-type">char</span>* chars, <span class="code-type">int</span> n) {
+    <span class="code-cm">// 1. 将所有字符作为节点放入小顶堆</span>
+    <span class="code-type">PriorityQueue</span> pq = <span class="code-fn">createMinHeap</span>();
+    <span class="code-kw">for</span>(<span class="code-type">int</span> i=0; i&lt;n; i++) 
+        <span class="code-fn">push</span>(pq, <span class="code-fn">newNode</span>(weights[i], chars[i]));
+
+    <span class="code-cm">// 2. 循环合并</span>
+    <span class="code-kw">while</span> (<span class="code-fn">size</span>(pq) > <span class="code-num">1</span>) {
+        <span class="code-cm">// 取出最小的两个</span>
+        <span class="code-type">TreeNode</span>* left = <span class="code-fn">pop</span>(pq);
+        <span class="code-type">TreeNode</span>* right = <span class="code-fn">pop</span>(pq);
+        <span class="code-cm">// 合并</span>
+        <span class="code-type">TreeNode</span>* parent = <span class="code-fn">newNode</span>(left->weight + right->weight, <span class="code-num">0</span>);
+        parent->left = left;
+        parent->right = right;
+        <span class="code-cm">// 放回</span>
+        <span class="code-fn">push</span>(pq, parent);
+    }
+    <span class="code-kw">return</span> <span class="code-fn">pop</span>(pq); <span class="code-cm">// 返回根节点</span>
+}</div></div>
+        </div>
+    </section>
+
+    <!-- P08: 题目 -->
+    <section class="slide" data-title="LeetCode 实战">
+        <h2 style="margin-bottom: 30px;">LeetCode 1167: 连接棒材的最低费用</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="card" style="padding: 20px;">
+                    <h3 style="font-size: 36px; margin-bottom: 10px;"><i class="fas fa-question-circle"></i> 题目描述</h3>
+                    <p style="font-size: 30px;">有一些长度不一的木棒，每次可以将两根木棒连接成一根，费用是两根木棒长度之和。</p>
+                    <p style="font-size: 30px;">问：连接所有木棒成一根的最小总费用？</p>
+                    <div style="background: rgba(255,255,255,0.05); padding: 15px; margin-top: 15px; border-radius: 8px; font-size: 24px; line-height: 1.4;">
+                        <p style="margin-bottom: 8px;font-size: 32px;"><strong>示例：</strong>输入 <code>sticks = [2,4,3]</code></p>
+                        <p style="color: var(--accent-color); margin-bottom: 5px;font-size: 30px;">
+                            <i class="fas fa-check"></i> 先连 2+3=5，再连 5+4=9，总 14 (最优)
+                        </p>
+                        <p style="color: #94a3b8; margin-bottom: 0;font-size: 30px;">
+                            <i class="fas fa-times"></i> 先连 4+3=7，再连 7+2=9，总 16 (非最优)
+                        </p>
+                    </div>
+                </div>
+                <div class="highlight-box" style="padding: 20px;">
+                    <h3 style="font-size: 36px; margin-bottom: 10px;"><i class="fas fa-key"></i> 解析</h3>
+                    <p style="font-size: 32px; margin-bottom: 0;">这完全等价于<strong>构造哈夫曼树</strong>的过程！</p>
+                    <ul style=line-height:1;">
+                        <li style="font-size: 32px; margin-bottom: 0;">每次费用 = 新生成的父节点权值。</li>
+                        <li style="font-size: 32px; margin-bottom: 0;">总费用 = 所有非叶子节点的权值之和 = WPL。</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="col-visual">
+                <div class="code-block" style="font-size: 22px;"><span class="code-type">int</span> <span class="code-fn">connectSticks</span>(<span class="code-type">int</span>* sticks, <span class="code-type">int</span> sticksSize) {
+    <span class="code-kw">if</span> (sticksSize == <span class="code-num">0</span>) <span class="code-kw">return</span> <span class="code-num">0</span>;
+    
+    <span class="code-cm">// 1. 建小顶堆</span>
+    <span class="code-type">MinHeap</span>* heap = <span class="code-fn">createHeap</span>(sticksSize);
+    <span class="code-kw">for</span> (<span class="code-type">int</span> i = <span class="code-num">0</span>; i < sticksSize; i++) {
+        <span class="code-fn">push</span>(heap, sticks[i]);
+    }
+    
+    <span class="code-cm">// 2. 贪心合并</span>
+    <span class="code-type">int</span> cost = <span class="code-num">0</span>;
+    <span class="code-kw">while</span> (<span class="code-fn">size</span>(heap) > <span class="code-num">1</span>) {
+        <span class="code-type">int</span> x = <span class="code-fn">pop</span>(heap);
+        <span class="code-type">int</span> y = <span class="code-fn">pop</span>(heap);
+        <span class="code-type">int</span> sum = x + y;
+        cost += sum;
+        <span class="code-fn">push</span>(heap, sum);
+    }
+    <span class="code-kw">return</span> cost;
+}</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P09: 总结 -->
+    <section class="slide" data-title="总结">
+        <h2>总结</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="card">
+                    <h3><i class="fas fa-star" style="color: var(--accent-color);"></i> 知识点回顾</h3>
+                    <ul style="font-size: 32px; line-height: 2;">
+                        <li><strong>定义</strong>：WPL 最小的二叉树（最优二叉树）</li>
+                        <li><strong>性质</strong>：权值大的靠近根；只有度为 0 和 2 的节点（Full Binary Tree）</li>
+                        <li><strong>应用</strong>：哈夫曼编码（无损数据压缩）</li>
+                        <li><strong>算法</strong>：贪心法 + 优先队列 $O(N \log N)$</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="col-visual layout-center">
+                 <div class="card" style="background: rgba(34, 211, 238, 0.05); border: 1px dashed var(--accent-color); text-align: center;">
+                    <h3><i class="fas fa-quote-left"></i></h3>
+                    <p style="font-size: 36px; font-style: italic; margin: 20px 0;">
+                        让高频的更短，让低频的更长。<br>
+                        这是资源的极致优化。
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <div class="footer">
+        <span id="page-number">1 / 10</span>
+    </div>
+</div>
+
+<script>
+    const slides = document.querySelectorAll('.slide');
+    const pageNumberEl = document.getElementById('page-number');
+    const totalSlides = slides.length;
+
+    function getPageFromUrl() {
+        const params = new URLSearchParams(window.location.search);
+        const page = parseInt(params.get('page'));
+        if (!isNaN(page) && page >= 1 && page <= totalSlides) {
+            return page - 1;
+        }
+        return 0;
+    }
+
+    let currentSlide = getPageFromUrl();
+
+    function updateSlide() {
+        slides.forEach((slide, index) => {
+            slide.classList.remove('active');
+            if (index === currentSlide) {
+                slide.classList.add('active');
+            }
+        });
+        pageNumberEl.textContent = `${currentSlide + 1} / ${totalSlides}`;
+        
+        try {
+            const url = new URL(window.location.href);
+            url.searchParams.set('page', currentSlide + 1);
+            window.history.replaceState(null, '', url.href);
+        } catch (e) {}
+
+        Anim.setActive(currentSlide);
+    }
+
+    function nextSlide() {
+        if (currentSlide < totalSlides - 1) {
+            currentSlide++;
+            updateSlide();
+        }
+    }
+
+    function prevSlide() {
+        if (currentSlide > 0) {
+            currentSlide--;
+            updateSlide();
+        }
+    }
+
+    document.addEventListener('keydown', (e) => {
+        if (['ArrowRight', ' ', 'Enter'].includes(e.key)) {
+            nextSlide();
+        } else if (e.key === 'ArrowLeft') {
+            prevSlide();
+        } else if (['ArrowUp', 'PageUp'].includes(e.key)) {
+             Anim.prev();
+        } else if (['ArrowDown', 'PageDown'].includes(e.key)) {
+             Anim.next();
+        } else if (e.key.toLowerCase() === 'r') {
+             Anim.reset();
+        }
+    });
+
+    function resizeApp() {
+        const app = document.getElementById('app');
+        const scale = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+        app.style.transform = `scale(${scale})`;
+    }
+    window.addEventListener('resize', resizeApp);
+    resizeApp();
+
+    // ==========================================
+    // Animation Engine
+    // ==========================================
+    class AnimationManager {
+        constructor() {
+            this.animations = {}; 
+            this.currentAnim = null;
+            this.currentStep = 0;
+            this.timer = null;
+            this.isPlaying = false;
+        }
+
+        register(slideIndex, snapshots, renderFn) {
+            this.animations[slideIndex] = { snapshots, render: renderFn };
+        }
+
+        setActive(slideIndex) {
+            this.stop();
+            if (this.animations[slideIndex]) {
+                this.currentAnim = this.animations[slideIndex];
+                this.currentStep = 0;
+                this.render();
+            } else {
+                this.currentAnim = null;
+            }
+        }
+
+        next() {
+            this.stop();
+            if (!this.currentAnim) return;
+            if (this.currentStep < this.currentAnim.snapshots.length - 1) {
+                this.currentStep++;
+                this.render();
+            }
+        }
+
+        prev() {
+            this.stop();
+            if (!this.currentAnim) return;
+            if (this.currentStep > 0) {
+                this.currentStep--;
+                this.render();
+            }
+        }
+
+        reset() {
+            this.stop();
+            if (!this.currentAnim) return;
+            this.currentStep = 0;
+            this.render();
+        }
+
+        toggle() {
+            if (this.isPlaying) this.stop();
+            else this.play();
+        }
+
+        play() {
+            if (!this.currentAnim) return;
+            if (this.currentStep >= this.currentAnim.snapshots.length - 1) {
+                this.currentStep = 0;
+                this.render();
+            }
+            this.isPlaying = true;
+            this.tick();
+        }
+
+        stop() {
+            this.isPlaying = false;
+            if (this.timer) clearTimeout(this.timer);
+        }
+
+        tick() {
+            if (!this.isPlaying) return;
+            const delay = this.currentAnim.snapshots[this.currentStep].delay || 1000;
+            this.timer = setTimeout(() => {
+                if (!this.isPlaying) return;
+                if (this.currentStep < this.currentAnim.snapshots.length - 1) {
+                    this.currentStep++;
+                    this.render();
+                    this.tick();
+                } else {
+                    this.stop();
+                }
+            }, delay);
+        }
+
+        render() {
+            if (!this.currentAnim) return;
+            const state = this.currentAnim.snapshots[this.currentStep];
+            this.currentAnim.render(state);
+        }
+    }
+
+    const Anim = new AnimationManager();
+
+    // ==========================================
+    // Huffman Animation Logic
+    // ==========================================
+    
+    // Node structure for visualization: { id, val, x, y, children: [id1, id2], isMerged }
+    function renderHuffman(state) {
+        const container = document.getElementById('huff-container');
+        const linesSvg = document.getElementById('huff-lines');
+        const descEl = document.getElementById('anim-step-desc');
+        
+        if (descEl) descEl.textContent = state.desc;
+
+        // Render Lines
+        let linesHtml = '';
+        state.nodes.forEach(node => {
+            if (node.children && node.children.length === 2) {
+                const child1 = state.nodes.find(n => n.id === node.children[0]);
+                const child2 = state.nodes.find(n => n.id === node.children[1]);
+                if (child1 && child2) {
+                     linesHtml += `<line x1="${node.x + 35}" y1="${node.y + 35}" x2="${child1.x + 35}" y2="${child1.y + 35}" stroke="#fff" stroke-width="3" />`;
+                     linesHtml += `<line x1="${node.x + 35}" y1="${node.y + 35}" x2="${child2.x + 35}" y2="${child2.y + 35}" stroke="#fff" stroke-width="3" />`;
+                }
+            }
+        });
+        linesSvg.innerHTML = linesHtml;
+
+        // Render Nodes
+        // Remove old nodes that are not in state (optional optimization, but simple clearing works)
+        // To support transition, we match by ID
+        const existingNodes = Array.from(container.getElementsByClassName('huff-node'));
+        const existingIds = existingNodes.map(el => el.getAttribute('data-id'));
+        
+        // Remove nodes not in state
+        existingNodes.forEach(el => {
+            if (!state.nodes.find(n => n.id == el.getAttribute('data-id'))) {
+                el.remove();
+            }
+        });
+
+        // Add or Update nodes
+        state.nodes.forEach(node => {
+            let el = container.querySelector(`.huff-node[data-id="${node.id}"]`);
+            if (!el) {
+                el = document.createElement('div');
+                el.className = 'huff-node';
+                el.setAttribute('data-id', node.id);
+                el.innerHTML = `${node.val}`;
+                if (node.char) {
+                    el.innerHTML += `<div class="huff-char">${node.char}</div>`;
+                }
+                if (!node.children) {
+                    el.classList.add('leaf');
+                }
+                container.appendChild(el);
+            }
+            
+            // Update Position & Style
+            el.style.left = `${node.x}px`;
+            el.style.top = `${node.y}px`;
+            
+            if (node.isMerged) el.classList.add('merged');
+            else el.classList.remove('merged');
+            
+            if (state.focusIds && state.focusIds.includes(node.id)) {
+                el.classList.add('focus');
+            } else {
+                el.classList.remove('focus');
+            }
+        });
+    }
+
+    function initHuffmanAnim() {
+        const snapshots = [];
+        
+        // Initial State: Forest of 4 nodes
+        // weights: 2, 4, 5, 7
+        // Adjusted coordinates for 2-col layout (shifted left ~150px)
+        const nodesStep0 = [
+            { id: 1, val: 2, char: 'D', x: 50, y: 400 },
+            { id: 2, val: 4, char: 'B', x: 230, y: 400 },
+            { id: 3, val: 5, char: 'C', x: 410, y: 400 },
+            { id: 4, val: 7, char: 'A', x: 590, y: 400 }
+        ];
+        snapshots.push({ nodes: JSON.parse(JSON.stringify(nodesStep0)), desc: "初始状态：森林中有 4 棵树 (按权值排序)", delay: 1000 });
+
+        // Step 1: Find min 2
+        snapshots.push({ 
+            nodes: JSON.parse(JSON.stringify(nodesStep0)), 
+            desc: "1. 找到权值最小的两个节点：2 和 4", 
+            focusIds: [1, 2],
+            delay: 1000 
+        });
+
+        // Step 2: Merge 2 & 4 -> 6
+        // New node 6 at a higher position
+        const nodesStep2 = [
+            { id: 1, val: 2, char: 'D', x: 95, y: 250, isMerged: true }, 
+            { id: 2, val: 4, char: 'B', x: 185, y: 250, isMerged: true }, 
+            { id: 3, val: 5, char: 'C', x: 410, y: 400 },
+            { id: 4, val: 7, char: 'A', x: 590, y: 400 },
+            { id: 5, val: 6, x: 140, y: 100, children: [1, 2] } // New Parent
+        ];
+        snapshots.push({ 
+            nodes: JSON.parse(JSON.stringify(nodesStep2)), 
+            desc: "2. 合并：生成新节点 6 (2+4)，原节点作为子树", 
+            focusIds: [5],
+            delay: 1000 
+        });
+
+        // Step 3: Put back & Re-sort
+        // Forest now: 5, 6, 7.  (Visual sort: 5, 6, 7)
+        // Positions: 50, 230, 410
+        const nodesStep3 = [
+            { id: 1, val: 2, char: 'D', x: 185, y: 550, isMerged: true }, 
+            { id: 2, val: 4, char: 'B', x: 275, y: 550, isMerged: true },
+            { id: 3, val: 5, char: 'C', x: 50, y: 400 },
+            { id: 4, val: 7, char: 'A', x: 410, y: 400 },
+            { id: 5, val: 6, x: 230, y: 400, children: [1, 2] } 
+        ];
+        snapshots.push({ 
+            nodes: JSON.parse(JSON.stringify(nodesStep3)), 
+            desc: "3. 放回森林：现有权值 {5, 6, 7}", 
+            delay: 1000 
+        });
+
+        // Step 4: Find min 2 (5 and 6)
+        snapshots.push({ 
+            nodes: JSON.parse(JSON.stringify(nodesStep3)), 
+            desc: "4. 再次寻找最小：5 和 6", 
+            focusIds: [3, 5],
+            delay: 1000 
+        });
+
+        // Step 5: Merge 5 & 6 -> 11
+        // Parent 11 at (50+230)/2 = 140
+        const nodesStep5 = [
+            { id: 1, val: 2, char: 'D', x: 185, y: 400, isMerged: true }, // shifted relative to parent 6
+            { id: 2, val: 4, char: 'B', x: 275, y: 400, isMerged: true },
+            { id: 3, val: 5, char: 'C', x: 95, y: 250, isMerged: true },
+            { id: 4, val: 7, char: 'A', x: 410, y: 400 },
+            { id: 5, val: 6, x: 230, y: 250, children: [1, 2], isMerged: true },
+            { id: 6, val: 11, x: 162, y: 100, children: [3, 5] } // New Parent
+        ];
+        snapshots.push({ 
+            nodes: JSON.parse(JSON.stringify(nodesStep5)), 
+            desc: "5. 合并：生成新节点 11 (5+6)", 
+            focusIds: [6],
+            delay: 1000 
+        });
+
+        // Step 6: Put back (Forest: 7, 11)
+        // Positions: 50, 230
+        const nodesStep6 = [
+            { id: 1, val: 2, char: 'D', x: 275, y: 550, isMerged: true },
+            { id: 2, val: 4, char: 'B', x: 365, y: 550, isMerged: true },
+            { id: 3, val: 5, char: 'C', x: 185, y: 400, isMerged: true },
+            { id: 4, val: 7, char: 'A', x: 50, y: 400 }, // 7 moves to left
+            { id: 5, val: 6, x: 320, y: 400, children: [1, 2], isMerged: true },
+            { id: 6, val: 11, x: 250, y: 250, children: [3, 5] } 
+        ];
+        snapshots.push({ 
+            nodes: JSON.parse(JSON.stringify(nodesStep6)), 
+            desc: "6. 放回森林：现有权值 {7, 11}", 
+            delay: 1000 
+        });
+
+        // Step 7: Find min (7 and 11)
+        snapshots.push({ 
+            nodes: JSON.parse(JSON.stringify(nodesStep6)), 
+            desc: "7. 最后两个节点：7 和 11", 
+            focusIds: [4, 6],
+            delay: 1000 
+        });
+
+        // Step 8: Merge -> 18 (Root)
+        // Final Tree Layout
+        // Root(18) at 350, 100
+        const nodesStep8 = [
+             { id: 4, val: 7, char: 'A', x: 200, y: 170, isMerged: true },
+             
+             { id: 3, val: 5, char: 'C', x: 400, y: 320, isMerged: true },
+             { id: 1, val: 2, char: 'D', x: 500, y: 470, isMerged: true },
+             { id: 2, val: 4, char: 'B', x: 600, y: 470, isMerged: true },
+             { id: 5, val: 6, x: 550, y: 320, children: [1, 2], isMerged: true },
+             { id: 6, val: 11, x: 475, y: 170, children: [3, 5], isMerged: true },
+             
+             { id: 7, val: 18, x: 350, y: 20, children: [4, 6] }
+        ];
+
+        snapshots.push({ 
+            nodes: JSON.parse(JSON.stringify(nodesStep8)), 
+            desc: "8. 最终合并：生成根节点 18。构建完成！", 
+            focusIds: [7],
+            delay: 0 
+        });
+
+        Anim.register(4, snapshots, renderHuffman);
+    }
+
+    initHuffmanAnim();
+    updateSlide();
+
+</script>
+
+<!-- MathJax -->
+<script>
+    window.MathJax = {
+        tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] }
+    };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
+</body>
+</html>

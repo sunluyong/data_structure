@@ -1,0 +1,1161 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>字典树：高效的前缀搜索</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0B1020;
+            --text-color: #EAF2FF;
+            --accent-color: #22D3EE;     /* 青色：核心概念 */
+            --secondary-color: #60A5FA;  /* 蓝色：辅助说明 */
+            --tertiary-color: #A78BFA;   /* 紫色：强调/代码 */
+            --warn-color: #F472B6;       /* 粉红：重点/易错 */
+            --code-bg: #1e293b;
+            --slide-width: 1920px;
+            --slide-height: 1080px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background-color: #000;
+            color: var(--text-color);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        #app {
+            width: var(--slide-width);
+            height: var(--slide-height);
+            background-color: var(--bg-color);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+        }
+
+        /* 背景装饰 */
+        .bg-decoration {
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            background-image: 
+                radial-gradient(circle at 15% 15%, rgba(34, 211, 238, 0.03) 0%, transparent 25%),
+                radial-gradient(circle at 85% 85%, rgba(167, 139, 250, 0.03) 0%, transparent 25%);
+            pointer-events: none;
+        }
+        
+        .grid-overlay {
+            position: absolute;
+            inset: 0;
+            background-size: 60px 60px;
+            background-image: linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+                              linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+            z-index: 0;
+        }
+
+        /* 幻灯片通用 */
+        .slide {
+            position: absolute;
+            inset: 0;
+            display: none;
+            padding: 40px 60px; /* 调整 padding 以获得更多空间 */
+            flex-direction: column;
+            z-index: 1;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+
+        .slide.active { display: flex; opacity: 1; }
+
+        /* 排版元素 */
+        h1 {
+            font-size: 160px;
+            font-weight: 800;
+            line-height: 1.1;
+            margin-bottom: 40px;
+            background: linear-gradient(135deg, #fff 0%, var(--secondary-color) 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        h2 {
+            font-size: 76px;
+            margin-bottom: 30px;
+            color: var(--accent-color);
+            border-bottom: 4px solid rgba(34, 211, 238, 0.3);
+            padding-bottom: 15px;
+            display: inline-block;
+        }
+
+        h3 {
+            font-size: 52px;
+            margin-bottom: 20px;
+            color: var(--secondary-color);
+        }
+
+        p, li {
+            font-size: 44px; /* 调整字号 */
+            line-height: 1.4;
+            margin-bottom: 16px;
+            color: #cbd5e1;
+        }
+
+        strong { color: var(--accent-color); font-weight: 700; }
+        em { color: var(--tertiary-color); font-style: normal; font-weight: bold; }
+
+        ul { list-style: none; }
+        ul li { position: relative; padding-left: 40px; }
+        ul li::before {
+            content: "•";
+            color: var(--accent-color);
+            position: absolute;
+            left: 0;
+            font-weight: bold;
+        }
+
+        ol { counter-reset: item; list-style: none; }
+        ol li { position: relative; padding-left: 50px; }
+        ol li::before {
+            content: counter(item) ".";
+            counter-increment: item;
+            color: var(--accent-color);
+            position: absolute;
+            left: 0;
+            font-weight: bold;
+        }
+
+        /* 布局类 */
+        .layout-center {
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        .layout-2col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 50px;
+            flex: 1;
+            align-content: start;
+        }
+        
+        .layout-2col .col-visual {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+
+        /* 组件 */
+        .card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 20px;
+        }
+        
+        .highlight-box {
+            background: rgba(34, 211, 238, 0.08);
+            border-left: 8px solid var(--accent-color);
+            padding: 25px 35px;
+            border-radius: 0 16px 16px 0;
+            margin: 20px 0;
+        }
+
+        .code-block {
+            font-family: 'JetBrains Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+            background: var(--code-bg);
+            padding: 30px;
+            border-radius: 16px;
+            border: 1px solid #334155;
+            font-size: 32px;
+            line-height: 1.5;
+            color: #e2e8f0;
+            white-space: pre;
+            overflow-x: auto;
+            overflow-y: auto;
+            max-height: 750px; /* 增加高度限制 */
+        }
+        .code-block::-webkit-scrollbar { width: 10px; height: 10px; }
+        .code-block::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); border-radius: 5px; }
+        .code-block::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 5px; }
+        .code-block::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.3); }
+
+        .code-kw { color: #c678dd; } 
+        .code-type { color: #e5c07b; } 
+        .code-fn { color: #61afef; }
+        .code-cm { color: #64748b; font-style: italic; } 
+        .code-num { color: #d19a66; }
+        .code-str { color: #98c379; }
+
+        /* Trie 节点样式 */
+        .trie-node {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: #0B1020;
+            border: 2px solid var(--secondary-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: #fff;
+            position: absolute;
+            z-index: 10;
+            transition: all 0.3s ease;
+        }
+        
+        .trie-node.active {
+            border-color: var(--accent-color);
+            background: #164e63; /* 不透明深青色 */
+            box-shadow: 0 0 15px var(--accent-color);
+            transform: scale(1.1);
+        }
+
+        .trie-node.end-word {
+            background: var(--accent-color);
+            color: #000;
+            font-weight: bold;
+        }
+        
+        .trie-link {
+            stroke: var(--text-color);
+            stroke-width: 2;
+            opacity: 0.3;
+            transition: all 0.3s;
+        }
+        
+        .trie-link.active {
+            stroke: var(--accent-color);
+            stroke-width: 3;
+            opacity: 1;
+        }
+
+        .anim-controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            margin-top: 10px;
+        }
+        .anim-controls button {
+            padding: 8px 16px;
+            font-size: 20px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: var(--text-color);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 50px;
+        }
+        .anim-controls button:hover {
+            background: var(--accent-color);
+            color: #000;
+            border-color: var(--accent-color);
+        }
+        .anim-controls button:active { transform: scale(0.95); }
+
+        .footer {
+            position: absolute;
+            bottom: 20px;
+            right: 40px;
+            font-size: 24px;
+            color: rgba(255, 255, 255, 0.3);
+            z-index: 10;
+        }
+        
+        /* 表格样式 */
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 38px;
+        }
+        .comparison-table th {
+            text-align: left;
+            padding: 20px;
+            border-bottom: 2px solid #334155;
+            color: var(--secondary-color);
+        }
+        .comparison-table td {
+            padding: 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            text-align: left;
+        }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <div class="bg-decoration"></div>
+    <div class="grid-overlay"></div>
+
+    <!-- P01: 封面 -->
+    <section class="slide active layout-center" data-title="封面">
+        <div style="text-align: center;">
+            <svg width="400" height="300" viewBox="0 0 400 300" style="margin-bottom: 40px; filter: drop-shadow(0 0 30px rgba(34,211,238,0.2)); overflow: visible;">
+                <!-- Root -->
+                <circle cx="200" cy="40" r="15" fill="#0B1020" stroke="var(--accent-color)" stroke-width="3" />
+                <!-- Level 1 -->
+                <line x1="200" y1="55" x2="100" y2="120" stroke="var(--secondary-color)" stroke-width="2" />
+                <line x1="200" y1="55" x2="300" y2="120" stroke="var(--secondary-color)" stroke-width="2" />
+                <circle cx="100" cy="120" r="15" fill="#0B1020" stroke="var(--secondary-color)" stroke-width="2" />
+                <circle cx="300" cy="120" r="15" fill="#0B1020" stroke="var(--secondary-color)" stroke-width="2" />
+                <!-- Level 2 -->
+                <line x1="100" y1="135" x2="60" y2="200" stroke="var(--secondary-color)" stroke-width="2" />
+                <line x1="100" y1="135" x2="140" y2="200" stroke="var(--secondary-color)" stroke-width="2" />
+                <line x1="300" y1="135" x2="260" y2="200" stroke="var(--secondary-color)" stroke-width="2" />
+                <line x1="300" y1="135" x2="340" y2="200" stroke="var(--secondary-color)" stroke-width="2" />
+                
+                <circle cx="60" cy="200" r="15" fill="var(--accent-color)" stroke="none" />
+                <circle cx="140" cy="200" r="15" fill="#0B1020" stroke="var(--secondary-color)" stroke-width="2" />
+                <circle cx="260" cy="200" r="15" fill="#0B1020" stroke="var(--secondary-color)" stroke-width="2" />
+                <circle cx="340" cy="200" r="15" fill="var(--accent-color)" stroke="none" />
+                
+                <text x="200" y="280" text-anchor="middle" fill="#64748b" font-size="20" letter-spacing="4">PREFIX TREE</text>
+            </svg>
+            <h1>算法与数据结构</h1>
+            <p style="font-size: 75px; color: var(--secondary-color);">字典树 (Trie)：高效的前缀搜索</p>
+        </div>
+    </section>
+
+    <!-- P02: 引入场景 -->
+    <section class="slide" data-title="引入场景">
+        <h2>搜索引擎的“读心术”</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="card">
+                    <h3><i class="fas fa-search"></i> 场景：自动补全</h3>
+                    <p>当用户输入 <strong style="color: var(--accent-color);">"app"</strong> 时，系统毫秒级联想：</p>
+                    <ul style="font-size: 38px;">
+                        <li>"apple"</li>
+                        <li>"application"</li>
+                        <li>"apply"</li>
+                    </ul>
+                </div>
+                <div class="highlight-box">
+                    <p style="font-size: 38px;">
+                        <i class="fas fa-question-circle" style="color: var(--warn-color);"></i> 
+                        如果有 <strong>10 亿</strong> 个单词，如何快速找到 "app" 开头的词？
+                    </p>
+                    <p style="font-size: 32px; color: #ccc; margin-top: 10px;">
+                        暴力遍历太慢！需用<strong>针对字符串前缀优化</strong>的数据结构。
+                    </p>
+                </div>
+            </div>
+            <div class="col-visual layout-center">
+                <div style="background: white; width: 600px; padding: 10px; border-radius: 12px; box-shadow: 0 0 50px rgba(34,211,238,0.2);">
+                    <div style="display: flex; align-items: center; border-bottom: 2px solid #eee; padding: 10px 20px;">
+                        <i class="fas fa-search" style="color: #999; font-size: 30px; margin-right: 20px;"></i>
+                        <span style="color: #333; font-size: 48px; font-family: sans-serif;">app</span>
+                        <span style="width: 3px; height: 40px; background: #333; animation: blink 1s infinite; margin-left: 2px;"></span>
+                    </div>
+                    <div style="padding: 10px 0;">
+                        <div style="padding: 15px 20px; font-size: 40px; color: #333; font-family: sans-serif; display: flex; justify-content: space-between;">
+                            <span><strong>app</strong>le</span>
+                            <span style="color: #999; font-size: 32px;">macbook</span>
+                        </div>
+                        <div style="padding: 15px 20px; font-size: 40px; color: #333; font-family: sans-serif;">
+                            <span><strong>app</strong>lication</span>
+                        </div>
+                        <div style="padding: 15px 20px; font-size: 40px; color: #333; font-family: sans-serif;">
+                            <span><strong>app</strong>ly</span>
+                        </div>
+                    </div>
+                </div>
+                <style>
+                    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+                </style>
+            </div>
+        </div>
+    </section>
+
+    <!-- P03: 什么是字典树 -->
+    <section class="slide" data-title="什么是字典树">
+        <h2>字典树 (<span style="color: var(--text-color);">Re</span>trie<span style="color: var(--text-color);">ve</span>)</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="card">
+                    <h3><i class="fas fa-project-diagram"></i> 核心定义</h3>
+                    <ul style="font-size: 38px; line-height: 1.6;">
+                        <li><strong>多叉树结构</strong>：每个节点代表一个字符</li>
+                        <li><strong>公共前缀</strong>：同前缀单词共享路径</li>
+                        <li><strong>根节点</strong>：空节点，不包含字符</li>
+                        <li><strong>路径</strong>：根到节点的路径字符=字符串</li>
+                    </ul>
+                </div>
+                <div class="highlight-box">
+                    <h3><i class="fas fa-lightbulb"></i> 空间换时间</h3>
+                    <p style="font-size: 38px;">利用字符串的公共前缀来减少查询时间，最大限度地减少无谓的字符串比较。</p>
+                </div>
+            </div>
+            <div class="col-visual layout-center">
+                <!-- 静态 SVG 示意 -->
+                <svg width="500" height="500" viewBox="0 0 400 400" style="overflow: visible;">
+                    <!-- Root -->
+                    <circle cx="200" cy="50" r="20" stroke="var(--accent-color)" stroke-width="3" fill="#0B1020" />
+                    <text x="240" y="55" fill="#aaa" font-size="20">Root</text>
+                    
+                    <!-- a -->
+                    <line x1="200" y1="70" x2="120" y2="150" stroke="#fff" stroke-width="2" />
+                    <text x="140" y="100" fill="#fff" font-size="24">a</text>
+                    <circle cx="120" cy="150" r="20" stroke="#fff" stroke-width="2" fill="#0B1020" />
+                    
+                    <!-- b -->
+                    <line x1="200" y1="70" x2="280" y2="150" stroke="#fff" stroke-width="2" />
+                    <text x="260" y="100" fill="#fff" font-size="24">b</text>
+                    <circle cx="280" cy="150" r="20" stroke="#fff" stroke-width="2" fill="#0B1020" />
+                    
+                    <!-- z (extra node) -->
+                    <line x1="200" y1="70" x2="200" y2="150" stroke="#fff" stroke-width="2" />
+                    <text x="215" y="110" fill="#fff" font-size="24">z</text>
+                    <circle cx="200" cy="150" r="20" stroke="#fff" stroke-width="2" fill="#0B1020" />
+                    
+                    <!-- n (ant) -->
+                    <line x1="120" y1="170" x2="80" y2="250" stroke="#fff" stroke-width="2" />
+                    <text x="90" y="200" fill="#fff" font-size="24">n</text>
+                    <circle cx="80" cy="250" r="20" stroke="#fff" stroke-width="2" fill="#0B1020" />
+
+                    <!-- t (ant) -->
+                    <line x1="80" y1="270" x2="60" y2="350" stroke="#fff" stroke-width="2" />
+                    <text x="60" y="300" fill="#fff" font-size="24">t</text>
+                    <circle cx="60" cy="350" r="20" stroke="var(--accent-color)" stroke-width="2" fill="var(--accent-color)" />
+                    <text x="60" y="390" fill="var(--accent-color)" font-size="18" text-anchor="middle">ant</text>
+                    
+                    <!-- p (app) -->
+                    <line x1="120" y1="170" x2="160" y2="250" stroke="#fff" stroke-width="2" />
+                    <text x="150" y="200" fill="#fff" font-size="24">p</text>
+                    <circle cx="160" cy="250" r="20" stroke="#fff" stroke-width="2" fill="#0B1020" />
+                    
+                    <!-- p (app) -->
+                    <line x1="160" y1="270" x2="160" y2="350" stroke="#fff" stroke-width="2" />
+                    <text x="170" y="300" fill="#fff" font-size="24">p</text>
+                    <circle cx="160" cy="350" r="20" stroke="var(--accent-color)" stroke-width="2" fill="var(--accent-color)" />
+                    <text x="160" y="390" fill="var(--accent-color)" font-size="18" text-anchor="middle">app</text>
+                </svg>
+            </div>
+        </div>
+    </section>
+
+    <!-- P04: 核心结构 -->
+    <section class="slide" data-title="核心结构">
+        <h2>核心结构：节点的微观世界</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="card">
+                    <h3><i class="fas fa-code"></i> C语言结构体</h3>
+                    <p>每个节点通常包含两个核心要素：</p>
+                    <ol style="margin-top: 20px;">
+                        <li><strong>Next 指针数组</strong>：指向子节点<br><span style="color:#aaa; font-size: 34px;">(如果是全小写字母，大小为 26)</span></li>
+                        <li><strong>结束标记 (isEnd)</strong>：布尔值<br><span style="color:#aaa; font-size: 34px;">(标记当前节点是否为一个单词的结尾)</span></li>
+                    </ol>
+                </div>
+            </div>
+            <div class="col-visual">
+                <div class="code-block" style="font-size: 34px; padding: 40px;"><span class="code-kw">#define</span> ALPHABET_SIZE <span class="code-num">26</span>
+
+<span class="code-kw">typedef struct</span> <span class="code-type">TrieNode</span> {
+    <span class="code-cm">// 指向子节点的指针数组</span>
+    <span class="code-cm">// index 0->'a', 1->'b'...</span>
+    <span class="code-kw">struct</span> <span class="code-type">TrieNode</span> *children[ALPHABET_SIZE];
+    
+    <span class="code-cm">// 标记是否是单词结尾</span>
+    <span class="code-cm">// true 表示从根到此的路径构成一个完整单词</span>
+    <span class="code-type">bool</span> isEndOfWord;
+} <span class="code-type">TrieNode</span>;</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P05: 插入演示 -->
+    <section class="slide" data-title="插入演示">
+        <h2>操作演示：插入 (Insert)</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                 <div class="card" style="margin-bottom: 15px;">
+                    <h3><i class="fas fa-pen-fancy"></i> 流程</h3>
+                    <p style="font-size: 40px;">任务：依次插入 <strong>"cat"</strong> 和 <strong>"car"</strong></p>
+                    <ul style="font-size: 34px; line-height: 1.5;">
+                        <li>从根节点出发，遍历单词字符</li>
+                        <li>若子节点存在：移动到下一层</li>
+                        <li>若不存在：<strong>新建节点</strong>，链接上去</li>
+                        <li>单词结束时，标记 <strong>isEnd = true</strong></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="col-visual layout-center" style="background: rgba(255,255,255,0.02); border-radius: 20px; justify-content: flex-start; padding-top: 20px;">
+                <div class="anim-controls" style="justify-content: center; margin-bottom: 10px;">
+                     <button onclick="Anim.prev()"><i class="fas fa-step-backward"></i></button>
+                     <button onclick="Anim.toggle()"><i class="fas fa-play"></i></button>
+                     <button onclick="Anim.next()"><i class="fas fa-step-forward"></i></button>
+                     <button onclick="Anim.reset()"><i class="fas fa-undo"></i></button>
+                </div>
+                <div id="insert-desc" style="text-align: center; font-size: 28px; color: var(--accent-color); margin-bottom: 10px; min-height: 40px;">Ready</div>
+                 <div id="insert-container" style="position: relative; width: 100%; height: 500px;"></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P06: 代码实现 - 插入 -->
+    <section class="slide" data-title="代码实现：插入">
+        <h2>代码实现：插入 (Insert)</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="card">
+                    <h3><i class="fas fa-list-ol"></i> 关键步骤</h3>
+                    <ul style="font-size: 38px; line-height: 1.8;">
+                        <li><strong>映射索引</strong>：<strong>index = key[i] - 'a'</strong></li>
+                        <li><strong>判空新建</strong>：如果子节点指针为空，<strong>malloc</strong> 新节点</li>
+                        <li><strong>指针移动</strong>：<strong>p = p->children[index]</strong></li>
+                        <li><strong>标记结束</strong>：循环结束后，<strong>p->isEnd = true</strong></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="col-visual">
+                <div class="code-block" style="font-size: 30px;"><span class="code-kw">void</span> <span class="code-fn">insert</span>(<span class="code-type">TrieNode</span> *root, <span class="code-kw">const char</span> *key) {
+    <span class="code-type">TrieNode</span> *pCrawl = root;
+    <span class="code-kw">for</span> (<span class="code-type">int</span> i = <span class="code-num">0</span>; key[i] != <span class="code-str">'\0'</span>; i++) {
+        <span class="code-cm">// 计算下标：'a'->0, 'b'->1...</span>
+        <span class="code-type">int</span> index = key[i] - <span class="code-str">'a'</span>;
+        
+        <span class="code-cm">// 如果路径不存在，创建新节点</span>
+        <span class="code-kw">if</span> (!pCrawl->children[index])
+            pCrawl->children[index] = <span class="code-fn">getNode</span>();
+        <span class="code-cm">// 移动指针到下一层</span>
+        pCrawl = pCrawl->children[index];
+    }
+    <span class="code-cm">// 标记单词结束</span>
+    pCrawl->isEndOfWord = <span class="code-kw">true</span>;
+}</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P07: 查找演示 -->
+    <section class="slide" data-title="查找演示">
+        <h2>操作演示：查找 (Search)</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="card">
+                    <h3><i class="fas fa-binoculars"></i> 两种模式</h3>
+                    <div style="margin-bottom: 60px;">
+                        <h4 style="color: var(--accent-color); font-size: 40px; margin-bottom: 5px;">1. 查单词 (Whole Word)</h4>
+                        <p style="font-size: 36px; margin-bottom: 0;">必须路径存在 且 <strong>isEnd == true</strong>。</p>
+                        <p style="font-size: 32px; color: #888;">例：查 "cat" (存在)</p>
+                    </div>
+                    <div>
+                        <h4 style="color: var(--secondary-color); font-size: 40px; margin-bottom: 5px;">2. 查前缀 (StartsWith)</h4>
+                        <p style="font-size: 36px; margin-bottom: 0;">只要路径存在即可。</p>
+                        <p style="font-size: 32px; color: #888;">例：查 "ca" (存在)</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-visual layout-center" style="background: rgba(255,255,255,0.02); border-radius: 20px;">
+                 <div id="search-container" style="position: relative; width: 100%; height: 500px;"></div>
+                 <div style="position: absolute; bottom: 20px; display: flex; flex-direction: column; align-items: center; width: 100%;">
+                     <div id="search-desc" style="text-align: center; font-size: 28px; color: var(--warn-color); margin-bottom: 15px; min-height: 40px;">Ready</div>
+                     <div class="anim-controls">
+                         <button onclick="Anim.prev()"><i class="fas fa-step-backward"></i></button>
+                         <button onclick="Anim.toggle()"><i class="fas fa-play"></i></button>
+                         <button onclick="Anim.next()"><i class="fas fa-step-forward"></i></button>
+                     </div>
+                 </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P08: 代码实现 - 查找 -->
+    <section class="slide" data-title="代码实现：查找">
+        <h2>代码实现：查找 (Search)</h2>
+        <div class="layout-2col">
+            <div class="col-visual layout-center">
+                <div class="card" style="border-left: 8px solid var(--warn-color); width: 100%;">
+                    <h3><i class="fas fa-exclamation-triangle"></i> 易错点</h3>
+                    <p style="font-size: 40px;">查到了前缀 <strong style="color:var(--warn-color)">!=</strong> 查到了单词。</p>
+                    <hr style="border-color: rgba(255,255,255,0.1); margin: 20px 0;">
+                    <p style="font-size: 34px;text-align: left;line-height: 1.8;">
+                        例如 Trie 中只有 "apple"<br>
+                        查 "app"：循环能走完，停留在 'p' 节点<br>
+                        该节点 <strong>isEnd</strong> 为 false
+                        -> 返回 <strong>false</strong>
+                    </p>
+                </div>
+            </div>
+            <div class="col-content">
+                <div class="code-block" style="font-size: 32px; height: 100%;"><span class="code-type">bool</span> <span class="code-fn">search</span>(<span class="code-type">TrieNode</span> *root, <span class="code-kw">const char</span> *key) {
+    <span class="code-type">TrieNode</span> *pCrawl = root;
+    
+    <span class="code-kw">for</span> (<span class="code-type">int</span> i = <span class="code-num">0</span>; key[i] != <span class="code-str">'\0'</span>; i++) {
+        <span class="code-type">int</span> index = key[i] - <span class="code-str">'a'</span>;
+        <span class="code-cm">// 路径断了 -> 不存在</span>
+        <span class="code-kw">if</span> (!pCrawl->children[index])
+            <span class="code-kw">return false</span>;
+            
+        pCrawl = pCrawl->children[index];
+    }
+    <span class="code-cm">// 必须同时满足：路径走通 且 标记了结束</span>
+    <span class="code-kw">return</span> (pCrawl != <span class="code-kw">NULL</span> && pCrawl->isEnd);
+}</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P09a: LeetCode 思路 -->
+    <section class="slide" data-title="LeetCode 思路">
+        <h2>LeetCode 820: 单词的压缩编码</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="card">
+                     <h3><i class="fas fa-code"></i> 题目描述</h3>
+                     <p><strong>目标</strong>：构造最短字符串 $S$，包含所有单词（以 <code>#</code> 结尾）。</p>
+                     <p><strong>规则</strong>：如果 A 是 B 的<strong>后缀</strong>，A 可以“藏”在 B 里，不用单独写。</p>
+                     <div style="font-size: 30px; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; margin-top:15px;">
+                        例如 <code>["time", "me", "bell"]</code><br>
+                        1. "me" 是 "time" 后缀 $\rightarrow$ 合并为 <code>"time#"</code><br>
+                        2. "bell" 无后缀关系 $\rightarrow$ 单独 <code>"bell#"</code><br>
+                        <span style="color: var(--accent-color); display:block; margin-top:5px;">最终长度：len("time#") + len("bell#") = 10</span>
+                     </div>
+                </div>
+            </div>
+            <div class="col-visual layout-center">
+                <div class="highlight-box" style="margin-bottom: 30px;">
+                    <h3><i class="fas fa-random"></i> 逆向思维</h3>
+                    <p style="font-size: 36px;">Trie 擅长处理<strong>前缀</strong>，如何处理<strong>后缀</strong>？</p>
+                    <p style="font-size: 42px; color: var(--accent-color); margin-top: 15px; text-align: center;"><strong>反转单词！</strong></p>
+                </div>
+                <div style="font-size: 40px; text-align: left;">
+                    <p>"time" $\rightarrow$ "emit"</p>
+                    <p>"me" $\rightarrow$ "em"</p>
+                    <p>"bell" $\rightarrow$ "lleb"</p>
+                    <hr>
+                    <p style="color: var(--accent-color)">"em" 变成了 "emit" 的前缀！</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P09b: LeetCode 解法 -->
+    <section class="slide" data-title="LeetCode 解法">
+        <h2>LeetCode 820: 单词的压缩编码</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="card">
+                    <h3><i class="fas fa-list-ol"></i> 解题步骤</h3>
+                    <ol style="font-size: 38px; line-height: 1.8;">
+                        <li>单词全反转："emit", "em", "lleb"</li>
+                        <li>构建 Trie 树</li>
+                        <li><strong>关键</strong>：如果一个词是另一个词的前缀，则它不需要独立编码（被包含）</li>
+                        <li><strong>结果</strong>：所有<strong>叶子节点</strong>对应单词长度 + 1</li>
+                    </ol>
+                </div>
+            </div>
+            <div class="col-visual layout-center">
+                 <svg width="500" height="500" viewBox="0 0 400 400" style="overflow: visible;">
+                    <!-- Root -->
+                    <circle cx="200" cy="50" r="15" fill="#0B1020" stroke="#fff" stroke-width="2" />
+                    
+                    <!-- e -->
+                    <line x1="200" y1="65" x2="150" y2="120" stroke="#fff" stroke-width="2" />
+                    <text x="160" y="100" fill="#fff" font-size="20">e</text>
+                    <circle cx="150" cy="120" r="15" fill="#0B1020" stroke="#fff" stroke-width="2" />
+                    
+                    <!-- m (me) -->
+                    <line x1="150" y1="135" x2="150" y2="190" stroke="#fff" stroke-width="2" />
+                    <text x="160" y="170" fill="#fff" font-size="20">m</text>
+                    <circle cx="150" cy="190" r="15" fill="#0B1020" stroke="#fff" stroke-width="2" />
+                    <text x="100" y="195" fill="#666" font-size="16">"em"</text>
+                    
+                    <!-- i -->
+                    <line x1="150" y1="205" x2="150" y2="260" stroke="#fff" stroke-width="2" />
+                    <text x="160" y="240" fill="#fff" font-size="20">i</text>
+                    <circle cx="150" cy="260" r="15" fill="#0B1020" stroke="#fff" stroke-width="2" />
+                    
+                    <!-- t (time) - Leaf -->
+                    <line x1="150" y1="275" x2="150" y2="330" stroke="#fff" stroke-width="2" />
+                    <text x="160" y="310" fill="#fff" font-size="20">t</text>
+                    <circle cx="150" cy="330" r="15" fill="var(--accent-color)" stroke="none" />
+                    <text x="150" y="360" fill="var(--accent-color)" font-size="18" text-anchor="middle">Leaf ("emit")</text>
+                    
+                    <!-- b (bell) branch ... -->
+                    <line x1="200" y1="65" x2="280" y2="120" stroke="#555" stroke-width="2" stroke-dasharray="5,5"/>
+                    <circle cx="280" cy="120" r="15" fill="#0B1020" stroke="#555" stroke-width="2" />
+                    <text x="310" y="125" fill="#555" font-size="16">...</text>
+                </svg>
+            </div>
+        </div>
+    </section>
+
+    <!-- P09c: 代码实现 - LeetCode -->
+    <section class="slide" data-title="代码实现：单词压缩">
+        <h2>代码实现：单词压缩</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="card">
+                    <h3><i class="fas fa-laptop-code"></i> 核心逻辑</h3>
+                    <ul style="font-size: 36px; line-height: 1.6;">
+                        <li><strong>预处理</strong>：将所有单词<strong>反转</strong></li>
+                        <li><strong>建树</strong>：将反转后的单词插入 Trie</li>
+                        <li><strong>统计</strong>：遍历 Trie，找到所有<strong>叶子节点</strong></li>
+                        <li><strong>累加</strong>：$\sum (\text{叶子深度} + 1)$</li>
+                    </ul>
+                </div>
+                <div class="highlight-box">
+                    <p style="font-size: 34px;">
+                        <i class="fas fa-check-circle"></i> 
+                        为什么只统计叶子？<br>
+                        因为非叶子节点对应的单词，一定是某个叶子节点对应单词的<strong>后缀</strong>（反转前），因此被包含。
+                    </p>
+                </div>
+            </div>
+            <div class="col-visual">
+                <div class="code-block" style="font-size: 26px;"><span class="code-cm">// 深度优先遍历，统计叶子节点路径长度</span>
+<span class="code-kw">void</span> <span class="code-fn">dfs</span>(<span class="code-type">TrieNode</span>* root, <span class="code-type">int</span> depth, <span class="code-type">int</span>* ans) {
+    <span class="code-type">bool</span> isLeaf = <span class="code-kw">true</span>;
+    <span class="code-kw">for</span> (<span class="code-type">int</span> i = <span class="code-num">0</span>; i < <span class="code-num">26</span>; i++) {
+        <span class="code-kw">if</span> (root->children[i]) {
+            isLeaf = <span class="code-kw">false</span>;
+            <span class="code-fn">dfs</span>(root->children[i], depth + <span class="code-num">1</span>, ans);
+        }
+    }
+    <span class="code-cm">// 是叶子节点 -> 累加长度 (depth + 1个#号)</span>
+    <span class="code-kw">if</span> (isLeaf && depth > <span class="code-num">0</span>) {
+        *ans += (depth + <span class="code-num">1</span>);
+    }
+}
+
+<span class="code-type">int</span> <span class="code-fn">minimumLengthEncoding</span>(<span class="code-type">char</span>** words, <span class="code-type">int</span> size) {
+    <span class="code-type">TrieNode</span>* root = <span class="code-fn">getNode</span>();
+    <span class="code-kw">for</span> (<span class="code-type">int</span> i = <span class="code-num">0</span>; i < size; i++) {
+        <span class="code-fn">reverseStr</span>(words[i]); <span class="code-cm">// 自定义反转函数</span>
+        <span class="code-fn">insert</span>(root, words[i]);
+    }
+    <span class="code-type">int</span> ans = <span class="code-num">0</span>;
+    <span class="code-fn">dfs</span>(root, <span class="code-num">0</span>, &ans);
+    <span class="code-kw">return</span> ans;
+}</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- P10: 性能对比 -->
+    <section class="slide" data-title="性能对比">
+        <h2>巅峰对决：Trie VS Hash Table</h2>
+        <div class="layout-center" style="margin-top: 40px;">
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th width="20%">维度</th>
+                        <th width="40%" style="color: var(--accent-color);">字典树 (Trie)</th>
+                        <th width="40%" style="color: var(--warn-color);">哈希表 (Hash Table)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>时间复杂度</strong></td>
+                        <td><strong style="color: var(--accent-color);">$O(L)$</strong><br><span style="font-size: 30px; color:#666">L=单词长度，与字典大小无关</span></td>
+                        <td>$O(1)$<br><span style="font-size: 30px; color:#666"></span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>前缀查询</strong></td>
+                        <td><strong style="color: var(--accent-color);">支持 (非常快)</strong></td>
+                        <td>不支持 (只能全匹配)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>空间复杂度</strong></td>
+                        <td>较高 (大量空指针)<br><span style="font-size: 30px; color:#666">$O(\text{ALPHABET} \times N \times L)$</span></td>
+                        <td>一般 (取决于 Load Factor)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>有序性</strong></td>
+                        <td><strong>按字典序排列</strong></td>
+                        <td>无序</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- P11: 课堂小结 -->
+    <section class="slide" data-title="课堂小结">
+        <h2>课堂小结</h2>
+        <div class="layout-2col">
+            <div class="col-content">
+                <div class="card">
+                    <h3><i class="fas fa-star" style="color: var(--accent-color);"></i> 核心回顾</h3>
+                    <ul >
+                        <li style="font-size: 36px; line-height: 1.8;"><strong>本质</strong>：N 叉树，利用<strong>公共前缀</strong>复用节点，以空间换时间。</li>
+                        <li style="font-size: 36px; line-height: 1.8;"><strong>效率</strong>：增删查改的时间复杂度均为 <strong style="color: var(--accent-color);">$O(L)$</strong>。</li>
+                        <li style="font-size: 36px; line-height: 1.8;"><strong>代码关键</strong>：
+                            <ul style="margin-top: 10px; border-left: 4px solid #334155; padding-left: 20px;">
+                                <li style="font-size: 36px; line-height: 1.8;"><code>children[]</code>：指向下一字符的指针数组</li>
+                                <li style="font-size: 36px; line-height: 1.8;"><code>isEnd</code>：标记当前节点是否为单词结尾</li>
+                            </ul>
+                        </li>
+                        <li style="font-size: 36px; line-height: 1.8;"><strong>杀手级应用</strong>：自动补全、拼写检查、最长前缀匹配。</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="col-visual">
+                 <div class="card" style="border-left: 8px solid var(--tertiary-color); background: rgba(167, 139, 250, 0.05);">
+                    <h3><i class="fas fa-rocket" style="color: var(--tertiary-color);"></i> 进阶思考与优化</h3>
+                    <div style="margin-bottom: 30px;">
+                        <h4 style="font-size: 36px; margin-bottom: 10px; color: #fff;">1. 空间太浪费怎么办？</h4>
+                        <p style="font-size: 34px; color: #cbd5e1; line-height: 1.8;">
+                            标准 Trie 的 <code>children[26]</code> 包含大量空指针。<br>
+                            👉 <strong>优化</strong>：使用 <code>HashMap</code> 动态存储子节点，或使用 <strong>Radix Tree (压缩字典树)</strong> 合并单分支路径。
+                        </p>
+                    </div>
+                    <div>
+                        <h4 style="font-size: 36px; margin-bottom: 10px; color: #fff;">2. 支持中文/Unicode？</h4>
+                        <p style="font-size: 34px; color: #cbd5e1; line-height: 1.8;">
+                            字符集过大，开数组不可行。<br>
+                            👉 <strong>方案</strong>：每个节点内部维护一个红黑树/哈希表，或者使用 <strong>三叉搜索树 (Ternary Search Tree)</strong>。
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <div class="footer">
+        <span id="page-number">1 / 13</span>
+    </div>
+</div>
+
+<script>
+    // ==========================================
+    // Slide Control Logic
+    // ==========================================
+    const slides = document.querySelectorAll('.slide');
+    const pageNumberEl = document.getElementById('page-number');
+    const totalSlides = slides.length;
+
+    function getPageFromUrl() {
+        const params = new URLSearchParams(window.location.search);
+        const page = parseInt(params.get('page'));
+        if (!isNaN(page) && page >= 1 && page <= totalSlides) {
+            return page - 1;
+        }
+        return 0;
+    }
+
+    let currentSlide = getPageFromUrl();
+
+    function updateSlide() {
+        slides.forEach((slide, index) => {
+            slide.classList.remove('active');
+            if (index === currentSlide) {
+                slide.classList.add('active');
+            }
+        });
+        pageNumberEl.textContent = `${currentSlide + 1} / ${totalSlides}`;
+        
+        try {
+            const url = new URL(window.location.href);
+            url.searchParams.set('page', currentSlide + 1);
+            window.history.replaceState(null, '', url.href);
+        } catch (e) {}
+
+        Anim.setActive(currentSlide);
+    }
+
+    function nextSlide() {
+        if (currentSlide < totalSlides - 1) {
+            currentSlide++;
+            updateSlide();
+        }
+    }
+
+    function prevSlide() {
+        if (currentSlide > 0) {
+            currentSlide--;
+            updateSlide();
+        }
+    }
+
+    document.addEventListener('keydown', (e) => {
+        if (['ArrowRight', ' ', 'Enter'].includes(e.key)) {
+            nextSlide();
+        } else if (e.key === 'ArrowLeft') {
+            prevSlide();
+        } else if (['ArrowUp', 'PageUp'].includes(e.key)) {
+             Anim.prev();
+        } else if (['ArrowDown', 'PageDown'].includes(e.key)) {
+             Anim.next();
+        } else if (e.key.toLowerCase() === 'r') {
+             Anim.reset();
+        }
+    });
+
+    function resizeApp() {
+        const app = document.getElementById('app');
+        const scale = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+        app.style.transform = `scale(${scale})`;
+    }
+    window.addEventListener('resize', resizeApp);
+    resizeApp();
+
+    // ==========================================
+    // Animation Engine (Simplified)
+    // ==========================================
+    class AnimationManager {
+        constructor() {
+            this.animations = {}; 
+            this.currentAnim = null;
+            this.currentStep = 0;
+            this.timer = null;
+            this.isPlaying = false;
+        }
+
+        register(slideIndex, snapshots, renderFn, uiIds) {
+            this.animations[slideIndex] = { snapshots, render: renderFn, uiIds };
+        }
+
+        setActive(slideIndex) {
+            this.stop();
+            if (this.animations[slideIndex]) {
+                this.currentAnim = this.animations[slideIndex];
+                this.currentStep = 0;
+                this.render();
+            } else {
+                this.currentAnim = null;
+            }
+        }
+
+        next() {
+            this.stop();
+            if (!this.currentAnim) return;
+            if (this.currentStep < this.currentAnim.snapshots.length - 1) {
+                this.currentStep++;
+                this.render();
+            }
+        }
+
+        prev() {
+            this.stop();
+            if (!this.currentAnim) return;
+            if (this.currentStep > 0) {
+                this.currentStep--;
+                this.render();
+            }
+        }
+
+        reset() {
+            this.stop();
+            if (!this.currentAnim) return;
+            this.currentStep = 0;
+            this.render();
+        }
+
+        toggle() {
+            if (this.isPlaying) this.stop();
+            else this.play();
+        }
+
+        play() {
+            if (!this.currentAnim) return;
+            if (this.currentStep >= this.currentAnim.snapshots.length - 1) {
+                this.currentStep = 0;
+                this.render();
+            }
+            this.isPlaying = true;
+            this.tick();
+        }
+
+        stop() {
+            this.isPlaying = false;
+            if (this.timer) clearTimeout(this.timer);
+        }
+
+        tick() {
+            if (!this.isPlaying) return;
+            const delay = this.currentAnim.snapshots[this.currentStep].delay || 1000;
+            this.timer = setTimeout(() => {
+                if (!this.isPlaying) return;
+                if (this.currentStep < this.currentAnim.snapshots.length - 1) {
+                    this.currentStep++;
+                    this.render();
+                    this.tick();
+                } else {
+                    this.stop();
+                }
+            }, delay);
+        }
+
+        render() {
+            if (!this.currentAnim) return;
+            const state = this.currentAnim.snapshots[this.currentStep];
+            this.currentAnim.render(state, this.currentAnim.uiIds);
+        }
+    }
+
+    const Anim = new AnimationManager();
+
+    // ==========================================
+    // Trie Visualization Logic
+    // ==========================================
+    
+    // Node structure for visualization: { id, char, x, y, children: [], isEnd, status: 'normal'|'active'|'visited' }
+    
+    function renderTrie(state, uiIds) {
+        const container = document.getElementById(uiIds.container);
+        const descEl = document.getElementById(uiIds.desc);
+        
+        if (descEl) descEl.innerHTML = state.desc;
+        if (!container) return;
+
+        let html = '<svg style="position: absolute; width: 100%; height: 100%; top:0; left:0; z-index:0;">';
+        
+        // Render edges
+        state.nodes.forEach(node => {
+            node.children.forEach(childId => {
+                const child = state.nodes.find(n => n.id === childId);
+                if (child) {
+                    let stroke = "#fff";
+                    let width = 2;
+                    let opacity = 0.3;
+                    
+                    if (state.activePath && state.activePath.includes(child.id)) {
+                        stroke = "var(--accent-color)";
+                        width = 4;
+                        opacity = 1;
+                    }
+
+                    html += `<line x1="${node.x}" y1="${node.y}" x2="${child.x}" y2="${child.y}" stroke="${stroke}" stroke-width="${width}" opacity="${opacity}" />`;
+                }
+            });
+        });
+        html += '</svg>';
+
+        // Render nodes
+        state.nodes.forEach(node => {
+            let classes = 'trie-node';
+            if (node.isEnd) classes += ' end-word';
+            if (state.activeNode === node.id) classes += ' active';
+            
+            // Highlight path
+            if (state.activePath && state.activePath.includes(node.id)) {
+                // Keep active style
+            }
+
+            html += `<div class="${classes}" style="left: ${node.x - 25}px; top: ${node.y - 25}px;">
+                ${node.char || ''}
+            </div>`;
+        });
+
+        container.innerHTML = html;
+    }
+
+    // Helper to build tree nodes
+    const NODE_R = 25;
+    const START_X = 400;
+    const START_Y = 50;
+    
+    function createNodes() {
+        // Hardcoded layout for "cat", "car"
+        return [
+            { id: 0, char: '', x: 450, y: 50, children: [1], isEnd: false }, // Root
+            { id: 1, char: 'c', x: 450, y: 150, children: [2], isEnd: false },
+            { id: 2, char: 'a', x: 450, y: 250, children: [3, 4], isEnd: false },
+            { id: 3, char: 't', x: 350, y: 350, children: [], isEnd: true },  // cat
+            { id: 4, char: 'r', x: 550, y: 350, children: [], isEnd: true },  // car
+        ];
+    }
+
+    function initInsertAnim() {
+        const nodesBase = createNodes();
+        // Initial state: only root
+        const step0Nodes = [nodesBase[0]];
+        // c
+        const step1Nodes = [nodesBase[0], {...nodesBase[1], children:[]}];
+        step1Nodes[0].children = [1];
+        // c -> a
+        const step2Nodes = [nodesBase[0], nodesBase[1], {...nodesBase[2], children:[]}];
+        step2Nodes[1].children = [2];
+        // c -> a -> t
+        const step3Nodes = [nodesBase[0], nodesBase[1], nodesBase[2], nodesBase[3]];
+        step3Nodes[2].children = [3];
+        // c -> a -> t, r
+        // 关键：为了防止修改 step3Nodes 引用的 nodesBase[2]，我们这里深拷贝或者重新赋值 children
+        // 注意 step3Nodes[2] 已经是 nodesBase[2]，上面一行已经修改了它的 children 为 [3]
+        
+        // 为了让 step4 正确显示 t 和 r，我们需要在这里把 nodesBase[2] 的 children 补全为 [3, 4]
+        // 但如果直接改 nodesBase[2]，会影响 step3Nodes[2] 吗？是的，因为是同一个对象引用。
+        // 所以 step3Nodes[2] 应该用一个副本，或者 step4Nodes 用一个副本。
+        
+        // 正确做法：
+        // step3 使用 a 的副本 (只连 t)
+        const nodeA_onlyT = {...nodesBase[2], children: [3]};
+        step3Nodes[2] = nodeA_onlyT;
+
+        // step4 使用 a 的完整版 (连 t 和 r)
+        nodesBase[2].children = [3, 4];
+        const step4Nodes = [nodesBase[0], nodesBase[1], nodesBase[2], nodesBase[3], nodesBase[4]];
+        
+        const snapshots = [
+            { nodes: [nodesBase[0]], desc: "初始状态：只有根节点", activeNode: 0 },
+            { nodes: step0Nodes, desc: "插入 'cat': <br>当前 'c' 不存在 -> 新建节点", activeNode: 0, delay: 1000 },
+            { nodes: step1Nodes, desc: "插入 'cat': <br>移动到 'c'", activeNode: 1, activePath: [1] },
+            { nodes: step1Nodes, desc: "插入 'cat': <br>当前 'a' 不存在 -> 新建节点", activeNode: 1, activePath: [1] },
+            { nodes: step2Nodes, desc: "插入 'cat': <br>移动到 'a'", activeNode: 2, activePath: [1, 2] },
+            { nodes: step3Nodes, desc: "插入 'cat': <br>新建 't'，并标记结束", activeNode: 3, activePath: [1, 2, 3] },
+            { nodes: step3Nodes, desc: "插入 'car': <br>从根开始，'c' 存在 -> 移动", activeNode: 1, activePath: [1] },
+            { nodes: step3Nodes, desc: "插入 'car': <br>'a' 存在 -> 移动", activeNode: 2, activePath: [1, 2] },
+            { nodes: step4Nodes, desc: "插入 'car': <br>'r' 不存在 -> 新建 'r'，标记结束", activeNode: 4, activePath: [1, 2, 4] },
+            { nodes: step4Nodes, desc: "插入完成！", activeNode: -1 }
+        ];
+
+        Anim.register(4, snapshots, renderTrie, { container: 'insert-container', desc: 'insert-desc' });
+    }
+
+    function initSearchAnim() {
+        const nodes = createNodes();
+        const snapshots = [
+            { nodes, desc: "准备查找 'cat'", activeNode: -1 },
+            { nodes, desc: "查找 'c' -> 存在", activeNode: 1, activePath: [1] },
+            { nodes, desc: "查找 'a' -> 存在", activeNode: 2, activePath: [1, 2] },
+            { nodes, desc: "查找 't' -> 存在", activeNode: 3, activePath: [1, 2, 3] },
+            { nodes, desc: "检查 isEnd? <br><span style='color:#22D3EE'>True</span> -> Found 'cat'", activeNode: 3, activePath: [1, 2, 3] },
+            
+            { nodes, desc: "准备查找 'cap'", activeNode: -1, delay: 1500 },
+            { nodes, desc: "查找 'c' -> 存在", activeNode: 1, activePath: [1] },
+            { nodes, desc: "查找 'a' -> 存在", activeNode: 2, activePath: [1, 2] },
+            { nodes, desc: "查找 'p' -> <span style='color:#F472B6'>不存在！</span>", activeNode: 2, activePath: [1, 2] },
+            
+            { nodes, desc: "准备查找前缀 'ca'", activeNode: -1, delay: 1500 },
+            { nodes, desc: "查找 'c' -> 存在", activeNode: 1, activePath: [1] },
+            { nodes, desc: "查找 'a' -> 存在", activeNode: 2, activePath: [1, 2] },
+            { nodes, desc: "前缀查找无需 isEnd <br><span style='color:#22D3EE'>True</span> -> Found prefix 'ca'", activeNode: 2, activePath: [1, 2] },
+        ];
+        
+        Anim.register(6, snapshots, renderTrie, { container: 'search-container', desc: 'search-desc' });
+    }
+
+    initInsertAnim();
+    initSearchAnim();
+    updateSlide();
+
+</script>
+
+<!-- MathJax -->
+<script>
+    window.MathJax = {
+        tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] }
+    };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
+
+</body>
+</html>
