@@ -1,0 +1,1061 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>13 红黑树：平衡的另一种选择</title>
+    <script src="https://unpkg.com/@tailwindcss/browser@4"></script>
+    <link
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+      rel="stylesheet"
+    />
+    <style type="text/tailwindcss">
+      @theme {
+        --color-bg-dark: #0b1020;
+        --color-text-main: #eaf2ff;
+        --color-accent: #22d3ee;
+        --color-secondary: #60a5fa;
+        --color-tertiary: #a78bfa;
+        --color-warn: #f472b6;
+        --color-code-bg: #1e293b;
+        --color-black-node: #1e293b;
+        --color-red-node: #f43f5e;
+      }
+
+      @layer base {
+        body {
+          @apply bg-black text-text-main font-sans overflow-hidden flex justify-center items-center h-screen;
+        }
+      }
+
+      @layer utilities {
+        .slide-container {
+          @apply relative w-[1920px] h-[1080px] bg-bg-dark overflow-hidden shadow-2xl;
+          box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+        }
+
+        .slide {
+          @apply absolute inset-0 hidden flex-col p-14 opacity-0 transition-opacity duration-400 ease-in-out;
+        }
+
+        .slide.active {
+          @apply flex opacity-100;
+        }
+
+        .bg-decoration {
+          @apply absolute inset-0 z-0 pointer-events-none;
+          background-image: radial-gradient(
+              circle at 15% 15%,
+              rgba(34, 211, 238, 0.03) 0%,
+              transparent 25%
+            ),
+            radial-gradient(
+              circle at 85% 85%,
+              rgba(167, 139, 250, 0.03) 0%,
+              transparent 25%
+            );
+        }
+
+        .grid-overlay {
+          @apply absolute inset-0 z-0;
+          background-size: 60px 60px;
+          background-image: linear-gradient(
+              to right,
+              rgba(255, 255, 255, 0.02) 1px,
+              transparent 1px
+            ),
+            linear-gradient(
+              to bottom,
+              rgba(255, 255, 255, 0.02) 1px,
+              transparent 1px
+            );
+        }
+
+        /* Typography */
+        h1 {
+          @apply text-[100px] font-extrabold leading-tight mb-8;
+          background: linear-gradient(
+            135deg,
+            #fff 0%,
+            var(--color-accent) 100%
+          );
+          -webkit-background-clip: text;
+          background-clip: text;
+          -webkit-text-fill-color: transparent;
+        }
+
+        h2 {
+          @apply text-[64px] mb-8 text-accent inline-block pb-4 border-b-4 border-accent/30;
+        }
+
+        h3 {
+          @apply text-[42px] mb-6 text-secondary;
+        }
+
+        p,
+        li {
+          @apply text-[32px] mb-4 text-slate-300;
+        }
+
+        strong {
+          @apply text-accent font-bold;
+        }
+
+        /* Components */
+        .card {
+          @apply bg-white/5 border border-white/10 rounded-3xl p-6 mb-6 backdrop-blur-sm;
+        }
+
+        .code-block {
+          @apply font-mono bg-code-bg p-6 rounded-2xl border border-slate-700 text-[22px] leading-relaxed text-slate-200 overflow-x-auto whitespace-pre;
+        }
+
+        .code-kw { @apply text-[#c678dd]; }
+        .code-type { @apply text-[#e5c07b]; }
+        .code-fn { @apply text-[#61afef]; }
+        .code-cm { @apply text-[#64748b] italic; }
+        .code-num { @apply text-[#d19a66]; }
+        .code-str { @apply text-[#98c379]; }
+        .code-op { @apply text-[#56b6c2]; }
+
+        /* RB Tree Nodes */
+        .node-group {
+            transition: all 0.8s ease;
+        }
+        .node-circle {
+            stroke-width: 3px;
+            transition: fill 0.5s ease, stroke 0.5s ease;
+        }
+        .node-black {
+            fill: var(--color-black-node);
+            stroke: #94a3b8;
+        }
+        .node-red {
+            fill: var(--color-red-node);
+            stroke: #fff;
+        }
+        .node-nil {
+            fill: #000;
+            stroke: #333;
+            stroke-width: 1px;
+            rx: 4;
+        }
+        
+        .prop-badge {
+            @apply inline-flex items-center px-3 py-1 rounded-full text-xl font-bold mr-2;
+        }
+        .prop-badge-red {
+            @apply bg-red-500/20 text-red-400 border border-red-500/50;
+        }
+        .prop-badge-black {
+            @apply bg-slate-700/50 text-slate-300 border border-slate-600;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app" class="slide-container">
+      <div class="bg-decoration"></div>
+      <div class="grid-overlay"></div>
+
+      <!-- P01: 封面 -->
+      <section class="slide active justify-center items-center text-center" data-title="封面">
+        <div class="flex flex-col items-center z-10">
+          <!-- Abstract RB Tree Visualization -->
+          <svg width="600" height="300" viewBox="0 0 600 300" class="mb-10 overflow-visible">
+             <defs>
+                 <filter id="glow-red">
+                     <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+                     <feMerge>
+                         <feMergeNode in="coloredBlur"/>
+                         <feMergeNode in="SourceGraphic"/>
+                     </feMerge>
+                 </filter>
+             </defs>
+             <!-- Edges -->
+             <path d="M300 50 L200 150 M300 50 L400 150 M200 150 L150 250 M200 150 L250 250" stroke="#fff" stroke-width="3" />
+             
+             <!-- Root (Black) -->
+             <circle cx="300" cy="50" r="30" class="node-black node-circle"/>
+             <text x="300" y="60" text-anchor="middle" fill="#fff" font-size="24" font-weight="bold">30</text>
+
+             <!-- Left (Red) -->
+             <circle cx="200" cy="150" r="30" class="node-red node-circle" filter="url(#glow-red)">
+                 <animate attributeName="r" values="30;32;30" dur="2s" repeatCount="indefinite"/>
+             </circle>
+             <text x="200" y="160" text-anchor="middle" fill="#fff" font-size="24" font-weight="bold">15</text>
+
+             <!-- Right (Black) -->
+             <circle cx="400" cy="150" r="30" class="node-black node-circle"/>
+             <text x="400" y="160" text-anchor="middle" fill="#fff" font-size="24" font-weight="bold">50</text>
+             
+             <!-- Children of Left -->
+             <circle cx="150" cy="250" r="25" class="node-black node-circle"/>
+             <text x="150" y="258" text-anchor="middle" fill="#fff" font-size="20">10</text>
+             
+             <circle cx="250" cy="250" r="25" class="node-black node-circle"/>
+             <text x="250" y="258" text-anchor="middle" fill="#fff" font-size="20">20</text>
+
+          </svg>
+          
+          <div class="bg-red-500/10 px-6 py-2 rounded-full border border-red-500/30 mb-6">
+             <span class="text-red-500 text-2xl font-mono tracking-widest">RED-BLACK TREE</span>
+          </div>
+          <h1>数据结构与算法</h1>
+          <p class="text-[60px] text-secondary">红黑树：适度平衡的艺术</p>
+        </div>
+      </section>
+
+      <!-- P03: 引入 - 为什么需要红黑树 -->
+      <section class="slide" data-title="为什么是红黑树">
+        <h2>从“严格”到“适度”</h2>
+        <div class="grid grid-cols-2 gap-10 h-full">
+           <div class="flex flex-col gap-6">
+               <div class="card opacity-90">
+                   <h3><i class="fas fa-balance-scale-left"></i> 回顾 AVL 树</h3>
+                   <ul class="text-[26px] leading-tight">
+                       <li><strong>规则：</strong>左右高度差 $|BF| \le 1$</li>
+                       <li><strong>优点：</strong>查找极致快 $O(\log N)$</li>
+                       <li><strong>痛点：</strong>插入/删除时，为了维持这种“绝对平衡”，需要频繁旋转。</li>
+                   </ul>
+               </div>
+
+               <div class="card border-accent border-2 shadow-[0_0_30px_rgba(244,63,94,0.2)]">
+                   <h3 class="text-accent"><i class="fas fa-tree"></i> 红黑树 (RB Tree)</h3>
+                   <ul class="text-[28px] leading-tight">
+                       <li><strong>规则：</strong>引入颜色位，通过 5 条性质约束。</li>
+                       <li><strong>效果：</strong>没有 AVL 那么平，但最长路径 $\le 2 \times$ 最短路径。</li>
+                       <li><strong>收益：</strong>插入/删除时，旋转次数更少（常数级），大量使用<strong>变色</strong>（开销小）。</li>
+                   </ul>
+               </div>
+           </div>
+           
+           <!-- Comparison Viz -->
+           <div class="flex flex-col items-center justify-center relative bg-white/5 rounded-3xl p-4 mt-4 w-full h-[500px]">
+               <svg width="800" height="460" viewBox="0 0 800 460" class="overflow-visible">
+                   <!-- Legend/Titles -->
+                   <g transform="translate(200, 30)">
+                       <text text-anchor="middle" fill="#94a3b8" font-size="24" font-weight="bold">AVL 树</text>
+                       <text y="30" text-anchor="middle" fill="#64748b" font-size="18">严格平衡 |BF| ≤ 1</text>
+                   </g>
+                   <g transform="translate(600, 30)">
+                       <text text-anchor="middle" fill="var(--color-accent)" font-size="24" font-weight="bold">红黑树</text>
+                       <text y="30" text-anchor="middle" fill="#64748b" font-size="18">黑高平衡 bh 一致</text>
+                   </g>
+
+                   <!-- Separator -->
+                   <line x1="400" y1="20" x2="400" y2="440" stroke="white" stroke-opacity="0.1" stroke-dasharray="8,8" />
+
+                   <!-- AVL Tree Visualization (Perfectly Balanced) -->
+                   <g transform="translate(200, 100)">
+                       <!-- Edges -->
+                       <path d="M0,0 L-60,60 M0,0 L60,60 
+                                M-60,60 L-90,120 M-60,60 L-30,120
+                                M60,60 L30,120 M60,60 L90,120" 
+                             stroke="#94a3b8" stroke-width="2" />
+                       
+                       <!-- Level 1 -->
+                       <circle cx="0" cy="0" r="16" class="node-black" style="fill: #334155; stroke: #94a3b8"/>
+                       
+                       <!-- Level 2 -->
+                       <circle cx="-60" cy="60" r="16" class="node-black" style="fill: #334155; stroke: #94a3b8"/>
+                       <circle cx="60" cy="60" r="16" class="node-black" style="fill: #334155; stroke: #94a3b8"/>
+
+                       <!-- Level 3 -->
+                       <circle cx="-90" cy="120" r="16" class="node-black" style="fill: #334155; stroke: #94a3b8"/>
+                       <circle cx="-30" cy="120" r="16" class="node-black" style="fill: #334155; stroke: #94a3b8"/>
+                       <circle cx="30" cy="120" r="16" class="node-black" style="fill: #334155; stroke: #94a3b8"/>
+                       <circle cx="90" cy="120" r="16" class="node-black" style="fill: #334155; stroke: #94a3b8"/>
+
+                       <!-- Annotation -->
+                       <text y="180" text-anchor="middle" fill="#94a3b8" font-size="16">任意节点左右高度差 ≤ 1</text>
+                       <rect x="-100" y="-20" width="200" height="160" fill="none" stroke="#94a3b8" stroke-opacity="0.3" rx="10" stroke-dasharray="4,4"/>
+                   </g>
+
+                   <!-- RB Tree Visualization (Skewed but Valid) -->
+                   <g transform="translate(600, 100)">
+                       <!-- Path Indicators -->
+                       <!-- Short Path (Left) -->
+                       <path d="M-10,-10 L-70,60" stroke="rgba(255,255,255,0.2)" stroke-width="0" stroke-linecap="round" />
+                       <!-- Long Path (Right) -->
+                       <path d="M10,-10 L70,60 L100,120 L130,180" stroke="rgba(34, 211, 238, 0.2)" stroke-width="0" stroke-linecap="round" fill="none"/>
+
+                       <!-- Edges -->
+                       <path d="M0,0 L-60,60 
+                                M0,0 L60,60
+                                M60,60 L90,120
+                                M90,120 L120,180" 
+                             stroke="#94a3b8" stroke-width="2" />
+
+                       <!-- Root (Black) -->
+                       <circle cx="0" cy="0" r="16" class="node-black"/>
+                       
+                       <!-- Left Child (Black) -->
+                       <circle cx="-60" cy="60" r="16" class="node-black"/>
+                       <text x="-90" y="65" fill="#64748b" font-size="14" text-anchor="end">路径黑节点: 2</text>
+
+                       <!-- Right Child (Red) -->
+                       <circle cx="60" cy="60" r="16" class="node-red"/>
+
+                       <!-- Right-Right (Black) -->
+                       <circle cx="90" cy="120" r="16" class="node-black"/>
+
+                       <!-- Right-Right-Right (Red) -->
+                       <circle cx="120" cy="180" r="16" class="node-red"/>
+                       
+                       <!-- NIL nodes visual cues -->
+                       <rect x="-70" y="90" width="20" height="20" fill="#000" rx="4" opacity="0.5"/>
+                       <rect x="110" y="210" width="20" height="20" fill="#000" rx="4" opacity="0.5"/>
+                       <line x1="-60" y1="76" x2="-60" y2="90" stroke="#555"/>
+                       <line x1="120" y1="196" x2="120" y2="210" stroke="#555"/>
+                       <!-- Comparison Text -->
+                       <text x="0" y="280" text-anchor="middle" fill="#eaf2ff" font-size="28">最长路径不超过最短路径两倍</text>
+                   </g>
+               </svg>
+           </div>
+        </div>
+      </section>
+
+      <!-- P04: 定义 -->
+      <section class="slide" data-title="红黑树定义">
+        <h2>红黑树的 5 条铁律</h2>
+        <div class="grid grid-cols-2 gap-8 h-full">
+            <div class="card flex flex-col justify-center">
+                <ol class="list-none space-y-6">
+                    <li class="flex items-start">
+                        <span class="bg-slate-700 text-white rounded px-2 mx-3 font-mono">1</span>
+                        <div>
+                            <strong>颜色属性</strong>：每个节点要么是 <span class="text-red-500 font-bold">红色</span>，要么是 <span class="text-black bg-white rounded px-2 font-bold">黑色</span>。
+                        </div>
+                    </li>
+                    <li class="flex items-start">
+                        <span class="bg-slate-700 text-white rounded px-2 mx-3 font-mono">2</span>
+                        <div>
+                            <strong>根属性</strong>：<span class="font-bold">根节点</span>必须是黑色。
+                        </div>
+                    </li>
+                    <li class="flex items-start">
+                        <span class="bg-slate-700 text-white rounded px-2 mx-3 font-mono">3</span>
+                        <div>
+                            <strong>叶子属性</strong>：所有叶子节点 (NIL) 都是黑色的。
+                        </div>
+                    </li>
+                    <li class="flex items-start bg-red-900/20 p-3 rounded-lg border border-red-500/30">
+                        <span class="bg-red-500 text-white rounded px-2 mr-3 font-mono">4</span>
+                        <div>
+                            <strong>红属性 (关键)</strong>：不能有两个连续的红色节点。
+                        </div>
+                    </li>
+                    <li class="flex items-start bg-blue-900/20 p-3 rounded-lg border border-blue-500/30">
+                        <span class="bg-black text-white rounded px-2 mr-3 font-mono">5</span>
+                        <div>
+                            <strong>黑高属性 (关键)</strong>：从任一节点到其所有后代叶子的路径上，包含相同数量的黑色节点。
+                        </div>
+                    </li>
+                </ol>
+                <div class="mt-6 bg-indigo-500/10 p-5 rounded-xl border border-indigo-500/30 flex items-center justify-center gap-4">
+                    <i class="fas fa-fire text-red-500 text-3xl"></i>
+                    <div class="text-left">
+                        <div class="text-slate-400 text-xl font-bold uppercase tracking-wider mb-1">Mnemonic / 速记口诀</div>
+                        <div class="text-2xl text-white font-bold">
+                            <span class="text-slate-300">根叶黑</span>，<span class="text-red-400">不红红</span>，<span class="text-secondary">黑路同</span>。
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex flex-col items-center justify-center relative">
+                <!-- Example Tree -->
+                <svg width="800" height="600" viewBox="0 0 800 600" class="overflow-visible">
+                    <defs>
+                        <g id="node-nil">
+                            <rect x="-15" y="-10" width="30" height="20" rx="4" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/>
+                            <text x="0" y="5" text-anchor="middle" fill="#94a3b8" font-size="10" font-weight="bold">NIL</text>
+                        </g>
+                    </defs>
+
+                    <!-- Edges L1->L2 -->
+                    <line x1="400" y1="50" x2="250" y2="150" stroke="#fff" stroke-width="2"/>
+                    <line x1="400" y1="50" x2="550" y2="150" stroke="#fff" stroke-width="2"/>
+
+                    <!-- Edges L2->L3 -->
+                    <line x1="250" y1="150" x2="150" y2="250" stroke="#fff" stroke-width="2"/>
+                    <line x1="250" y1="150" x2="350" y2="250" stroke="#fff" stroke-width="2"/>
+                    <line x1="550" y1="150" x2="480" y2="250" stroke="#fff" stroke-width="2"/>
+                    <line x1="550" y1="150" x2="650" y2="250" stroke="#fff" stroke-width="2"/>
+
+                    <!-- Edges L3->L4 -->
+                    <!-- From 65 -->
+                    <line x1="480" y1="250" x2="450" y2="340" stroke="#fff" stroke-width="2"/> <!-- 65->NIL -->
+                    <line x1="480" y1="250" x2="510" y2="340" stroke="#fff" stroke-width="2"/> <!-- 65->NIL -->
+                    <!-- From 90 -->
+                    <line x1="650" y1="250" x2="620" y2="340" stroke="#fff" stroke-width="2"/> <!-- 90->NIL -->
+                    <line x1="650" y1="250" x2="680" y2="340" stroke="#fff" stroke-width="2"/> <!-- 90->NIL -->
+
+                    <!-- Edges to NILs (L3->NIL) -->
+                    <!-- From 10 -->
+                    <line x1="150" y1="250" x2="120" y2="340" stroke="#555" stroke-width="1.5"/>
+                    <line x1="150" y1="250" x2="180" y2="340" stroke="#555" stroke-width="1.5"/>
+                    <!-- From 30 -->
+                    <line x1="350" y1="250" x2="320" y2="340" stroke="#555" stroke-width="1.5"/>
+                    <line x1="350" y1="250" x2="380" y2="340" stroke="#555" stroke-width="1.5"/>
+
+                    <!-- Nodes -->
+                    <!-- Root 50 (B) -->
+                    <g transform="translate(400, 50)">
+                        <circle r="30" class="node-black node-circle"/>
+                        <text y="10" text-anchor="middle" fill="#fff" font-size="24">50</text>
+                        <text x="40" y="5" fill="#64748b" font-size="16">bh=2</text>
+                    </g>
+                    
+                    <!-- L 20 (R) -->
+                    <g transform="translate(250, 150)">
+                        <circle r="30" class="node-red node-circle"/>
+                        <text y="10" text-anchor="middle" fill="#fff" font-size="24">20</text>
+                    </g>
+
+                    <!-- R 80 (B) -->
+                    <g transform="translate(550, 150)">
+                        <circle r="30" class="node-black node-circle"/>
+                        <text y="10" text-anchor="middle" fill="#fff" font-size="24">80</text>
+                        <text x="40" y="5" fill="#64748b" font-size="16">bh=1</text>
+                    </g>
+                    
+                    <!-- L-L 10 (B) -->
+                    <g transform="translate(150, 250)">
+                        <circle r="25" class="node-black node-circle"/>
+                        <text y="8" text-anchor="middle" fill="#fff" font-size="20">10</text>
+                    </g>
+
+                    <!-- L-R 30 (B) -->
+                    <g transform="translate(350, 250)">
+                        <circle r="25" class="node-black node-circle"/>
+                        <text y="8" text-anchor="middle" fill="#fff" font-size="20">30</text>
+                    </g>
+
+                    <!-- R-L 65 (R) -->
+                    <g transform="translate(480, 250)">
+                        <circle r="25" class="node-red node-circle"/>
+                        <text y="8" text-anchor="middle" fill="#fff" font-size="20">65</text>
+                    </g>
+
+                    <!-- R-R 90 (R) -->
+                    <g transform="translate(650, 250)">
+                        <circle r="25" class="node-red node-circle"/>
+                        <text y="8" text-anchor="middle" fill="#fff" font-size="20">90</text>
+                    </g>
+
+                    <!-- NIL Nodes Row -->
+                    <!-- Under 10 -->
+                    <use href="#node-nil" x="120" y="340"/>
+                    <use href="#node-nil" x="180" y="340"/>
+                    <!-- Under 30 -->
+                    <use href="#node-nil" x="320" y="340"/>
+                    <use href="#node-nil" x="380" y="340"/>
+                    <!-- Under 65 -->
+                    <use href="#node-nil" x="450" y="340"/>
+                    <use href="#node-nil" x="510" y="340"/>
+                    <!-- Under 90 -->
+                    <use href="#node-nil" x="620" y="340"/>
+                    <use href="#node-nil" x="680" y="340"/>
+                    
+                    <!-- Annotations -->
+                    <path d="M 130 360 L 130 380 L 400 380 L 400 80" stroke="var(--color-secondary)" stroke-width="2" stroke-dasharray="5,5" fill="none" opacity="0.6"/>
+                    <text x="400" y="400" text-anchor="middle" fill="var(--color-secondary)" font-size="20">从根到任意 NIL 的黑节点数均为 2 (不含 NIL 本身)</text>
+                </svg>
+            </div>
+        </div>
+      </section>
+
+      <!-- P06: 插入策略 -->
+      <section class="slide" data-title="插入策略">
+        <h2>插入的艺术：默认为红</h2>
+        <div class="grid grid-cols-2 gap-10">
+            <div class="card bg-black/20">
+                 <h3>Q: 新节点应该是什么颜色？</h3>
+                 <div class="space-y-6 mt-8">
+                     <div class="p-6 border border-slate-600 rounded-xl opacity-90">
+                         <h4 class="text-[32px] text-slate-400">选项 A：黑色</h4>
+                         <p class="text-[24px]">后果：所在路径黑高 +1。</p>
+                         <p class="text-[24px] text-warn">问题：必然破坏“黑高属性” (性质5)。</p>
+                         <p class="text-[24px]">修复难度：全局性破坏，很难修。</p>
+                     </div>
+                     <div class="p-6 border-2 border-red-500 bg-red-500/5 rounded-xl">
+                        <h4 class="text-[32px] text-red-500">选项 B：红色 (正确)</h4>
+                        <p class="text-[24px]">后果：如果父节点是黑，完美！无需修复。</p>
+                        <p class="text-[24px]">风险：如果父节点是红，破坏“红红不相邻” (性质4)。</p>
+                        <p class="text-[24px] text-green-400">优势：局部性破坏，好修！</p>
+                    </div>
+                 </div>
+            </div>
+            <div class="card">
+                <h3>修复三板斧</h3>
+                <ul class="text-[30px] space-y-4">
+                    <li>
+                        <strong>目标</strong>：消除双红，且不引入新的违规。
+                    </li>
+                    <li class="border-t border-white/10 pt-4">
+                        <span class="text-tertiary font-bold">1. 变色 (Recolor)</span>
+                        <br/><span class="text-slate-400 text-[24px]">红变黑，黑变红。代价最小。</span>
+                    </li>
+                    <li>
+                        <span class="text-secondary font-bold">2. 旋转 (Rotate)</span>
+                        <br/><span class="text-slate-400 text-[24px]">调整结构（同 AVL）。</span>
+                    </li>
+                </ul>
+                <div class="mt-8 bg-white/5 p-4 rounded-lg">
+                    <p class="mb-2 text-accent font-bold">看“叔叔”的脸色行事：</p>
+                    <ul class="list-disc pl-8 text-[24px]">
+                        <li>叔叔是 <span class="text-red-500">红色</span> $\to$ 变色。</li>
+                        <li>叔叔是 <span class="text-black bg-white rounded px-2">黑色</span> $\to$ 旋转。</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+      </section>
+
+      <!-- P07: Case 1 叔红 -->
+      <section class="slide" data-title="情况一：叔叔是红">
+        <h2>Case 1: 叔叔是红色 $\to$ 变色</h2>
+        <div class="grid grid-cols-2 gap-8 h-full items-center">
+            <div class="card flex flex-col items-center justify-center h-full relative p-6">
+                 <!-- Visual Before -->
+                 <div class="absolute top-4 left-4 text-slate-400">Step 1: 冲突</div>
+                 <svg viewBox="0 0 400 300" class="w-full h-[320px] mb-6 overflow-visible">
+                     <!-- Diagram: GP(B) -> P(R), U(R) -->
+                     <line x1="200" y1="50" x2="100" y2="150" stroke="#fff" stroke-width="4"/>
+                     <line x1="200" y1="50" x2="300" y2="150" stroke="#fff" stroke-width="4"/>
+                     <line x1="100" y1="150" x2="50" y2="250" stroke="#fff" stroke-width="4"/>
+                     <circle cx="200" cy="50" r="30" class="node-black node-circle"/>
+                     <circle cx="100" cy="150" r="30" class="node-red node-circle"/>
+                     <circle cx="300" cy="150" r="30" class="node-red node-circle"/>
+                     <circle cx="50" cy="250" r="28" class="node-red node-circle"/>
+                     <text x="200" y="60" text-anchor="middle" fill="#fff" font-size="20">GP</text>
+                     <text x="100" y="160" text-anchor="middle" fill="#fff" font-size="20">P</text>
+                     <text x="300" y="160" text-anchor="middle" fill="#fff" font-size="20">U</text>
+                     <text x="50" y="260" text-anchor="middle" fill="#fff" font-size="16">New</text>
+                 </svg>
+                 <div class="text-3xl text-accent font-bold mb-6">⬇ 变色 (Recolor)</div>
+                 <div class="absolute top-[60%] left-4 text-slate-400">Step 2: 修复</div>
+                 <svg viewBox="0 0 400 300" class="w-full h-[320px] overflow-visible">
+                      <!-- Diagram: GP(R) -> P(B), U(B) -->
+                     <line x1="200" y1="50" x2="100" y2="150" stroke="#fff" stroke-width="4"/>
+                     <line x1="200" y1="50" x2="300" y2="150" stroke="#fff" stroke-width="4"/>
+                     <line x1="100" y1="150" x2="50" y2="250" stroke="#fff" stroke-width="4"/>
+                     <circle cx="200" cy="50" r="30" class="node-red node-circle"/>
+                     <circle cx="100" cy="150" r="30" class="node-black node-circle"/>
+                     <circle cx="300" cy="150" r="30" class="node-black node-circle"/>
+                     <circle cx="50" cy="250" r="28" class="node-red node-circle"/>
+                     <text x="200" y="60" text-anchor="middle" fill="#fff" font-size="20">GP</text>
+                     <text x="100" y="160" text-anchor="middle" fill="#fff" font-size="20">P</text>
+                     <text x="300" y="160" text-anchor="middle" fill="#fff" font-size="20">U</text>
+                 </svg>
+            </div>
+            <div class="flex flex-col gap-6 h-full justify-center">
+                <div class="card p-8 bg-blue-900/10 border-blue-500/30">
+                    <h3 class="text-accent text-[36px] mb-6"><i class="fas fa-magic"></i> 策略解析</h3>
+                    <ul class="space-y-6">
+                        <li class="flex items-start">
+                            <span class="bg-slate-700 text-white rounded-full w-8 h-8 flex items-center justify-center mr-4 mt-1 font-mono text-xl">1</span>
+                            <div>
+                                <strong class="text-white text-[30px]">父亲 (P) 变黑</strong>
+                                <p class="text-slate-400 text-[24px]">消除与新节点 (New) 的双红冲突。</p>
+                            </div>
+                        </li>
+                        <li class="flex items-start">
+                             <span class="bg-slate-700 text-white rounded-full w-8 h-8 flex items-center justify-center mr-4 mt-1 font-mono text-xl">2</span>
+                            <div>
+                                <strong class="text-white text-[30px]">叔叔 (U) 变黑</strong>
+                                <p class="text-slate-400 text-[24px]">为了保持黑高平衡，叔叔也必须增加一个黑色。</p>
+                            </div>
+                        </li>
+                        <li class="flex items-start">
+                             <span class="bg-slate-700 text-white rounded-full w-8 h-8 flex items-center justify-center mr-4 mt-1 font-mono text-xl">3</span>
+                            <div>
+                                <strong class="text-red-400 text-[30px]">爷爷 (GP) 变红</strong>
+                                <p class="text-slate-400 text-[24px]">因为左右子树都各加了一个黑，所以根必须减一个黑（变红），维持整体黑高不变。</p>
+                            </div>
+                        </li>
+                    </ul>
+                    <div class="mt-8 bg-warn/10 p-4 rounded-xl border border-warn/20">
+                        <p class="text-warn text-[24px] mb-0">
+                            <i class="fas fa-exclamation-triangle mr-2"></i> <strong>注意：</strong>爷爷变红后，可能会与其父节点产生新的双红冲突，需要<strong>向上递归</strong>处理。
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+      </section>
+
+      <!-- P08: Case 2 叔黑 LL -->
+      <section class="slide" data-title="情况二：叔叔是黑 (LL)">
+        <h2>Case 2: 叔叔是黑 (LL型) $\to$ 右旋</h2>
+        <div class="grid grid-cols-2 gap-8 h-full items-center">
+            <div class="card flex flex-col items-center justify-center h-full relative p-6">
+                 <div class="absolute top-4 left-4 text-slate-400">Step 1: LL 型 (直线)</div>
+                 <svg viewBox="0 0 400 300" class="w-full h-[320px] mb-6 overflow-visible">
+                     <!-- Line: GP(B)-P(R)-N(R) -->
+                     <line x1="280" y1="50" x2="180" y2="150" stroke="#fff" stroke-width="4"/>
+                     <line x1="180" y1="150" x2="80" y2="250" stroke="#fff" stroke-width="4"/>
+                     <!-- Uncle (NIL/Black) -->
+                     <line x1="280" y1="50" x2="350" y2="120" stroke="#555" stroke-width="2" stroke-dasharray="6"/>
+                     <rect x="330" y="100" width="40" height="40" fill="#000" rx="6"/>
+                     <text x="350" y="128" text-anchor="middle" fill="#555" font-size="16">U</text>
+
+                     <circle cx="280" cy="50" r="30" class="node-black node-circle"/>
+                     <circle cx="180" cy="150" r="30" class="node-red node-circle"/>
+                     <circle cx="80" cy="250" r="30" class="node-red node-circle"/>
+                     <text x="280" y="60" text-anchor="middle" fill="#fff" font-size="20">GP</text>
+                     <text x="180" y="160" text-anchor="middle" fill="#fff" font-size="20">P</text>
+                     <text x="80" y="260" text-anchor="middle" fill="#fff" font-size="20">N</text>
+                 </svg>
+                 <div class="text-3xl text-accent font-bold mb-6">⬇ 右旋 (Right Rotate) + 变色</div>
+                 <div class="absolute top-[60%] left-4 text-slate-400">Step 2: 平衡</div>
+                 <svg viewBox="0 0 400 300" class="w-full h-[320px] overflow-visible">
+                     <!-- Triangle: P(B) top, N(R) left, GP(R) right -->
+                     <line x1="200" y1="50" x2="100" y2="150" stroke="#fff" stroke-width="4"/>
+                     <line x1="200" y1="50" x2="300" y2="150" stroke="#fff" stroke-width="4"/>
+                     <circle cx="200" cy="50" r="30" class="node-black node-circle"/>
+                     <circle cx="100" cy="150" r="30" class="node-red node-circle"/>
+                     <circle cx="300" cy="150" r="30" class="node-red node-circle"/>
+                     <text x="200" y="60" text-anchor="middle" fill="#fff" font-size="20">P</text>
+                     <text x="100" y="160" text-anchor="middle" fill="#fff" font-size="20">N</text>
+                     <text x="300" y="160" text-anchor="middle" fill="#fff" font-size="20">GP</text>
+                 </svg>
+            </div>
+            <div class="flex flex-col gap-6 h-full justify-center">
+                <div class="card p-8 bg-green-900/10 border-green-500/30">
+                    <h3 class="text-accent text-[36px] mb-6"><i class="fas fa-sync-alt"></i> 策略解析</h3>
+                    <ul class="space-y-6">
+                        <li class="flex items-start">
+                            <span class="text-green-400 font-bold text-[30px] mr-4 min-w-[120px]">特征</span>
+                            <p class="text-slate-300 text-[28px]">三点一线 (Left-Left)，叔叔是黑色或 NIL。</p>
+                        </li>
+                        <li class="flex items-start">
+                            <span class="text-green-400 font-bold text-[30px] mr-4 min-w-[120px]">变色</span>
+                            <div class="text-[28px]">
+                                <span class="text-white">父亲 (P) 变黑</span>，<span class="text-red-400">爷爷 (GP) 变红</span>。
+                            </div>
+                        </li>
+                        <li class="flex items-start">
+                            <span class="text-green-400 font-bold text-[30px] mr-4 min-w-[120px]">旋转</span>
+                            <p class="text-slate-300 text-[28px]">以父亲 (P) 为轴，对爷爷 (GP) 进行<strong>右旋</strong>。</p>
+                        </li>
+                        <li class="flex items-start">
+                            <span class="text-green-400 font-bold text-[30px] mr-4 min-w-[120px]">结果</span>
+                            <p class="text-slate-300 text-[28px]">父节点 P 上位成为子树根节点，完美平衡，<strong>无需继续递归</strong>。</p>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+      </section>
+
+      <!-- P09: Case 3 叔黑 RR -->
+      <section class="slide" data-title="情况三：叔叔是黑 (RR)">
+        <h2>Case 3: 叔叔是黑 (RR型) $\to$ 左旋</h2>
+        <div class="grid grid-cols-2 gap-8 h-full items-center">
+            <div class="card flex flex-col items-center justify-center h-full relative p-6">
+                 <div class="absolute top-4 left-4 text-slate-400">Step 1: RR 型 (直线)</div>
+                 <svg viewBox="0 0 400 300" class="w-full h-[320px] mb-6 overflow-visible">
+                     <!-- Line: GP(B)-P(R)-N(R) Right -->
+                     <line x1="120" y1="50" x2="220" y2="150" stroke="#fff" stroke-width="4"/>
+                     <line x1="220" y1="150" x2="320" y2="250" stroke="#fff" stroke-width="4"/>
+                     <!-- Uncle (NIL/Black) -->
+                     <line x1="120" y1="50" x2="50" y2="120" stroke="#555" stroke-width="2" stroke-dasharray="6"/>
+                     <rect x="30" y="100" width="40" height="40" fill="#000" rx="6"/>
+                     <text x="50" y="128" text-anchor="middle" fill="#555" font-size="16">U</text>
+
+                     <circle cx="120" cy="50" r="30" class="node-black node-circle"/>
+                     <circle cx="220" cy="150" r="30" class="node-red node-circle"/>
+                     <circle cx="320" cy="250" r="30" class="node-red node-circle"/>
+                     <text x="120" y="60" text-anchor="middle" fill="#fff" font-size="20">GP</text>
+                     <text x="220" y="160" text-anchor="middle" fill="#fff" font-size="20">P</text>
+                     <text x="320" y="260" text-anchor="middle" fill="#fff" font-size="20">N</text>
+                 </svg>
+                 <div class="text-3xl text-accent font-bold mb-6">⬇ 左旋 (Left Rotate) + 变色</div>
+                 <div class="absolute top-[60%] left-4 text-slate-400">Step 2: 平衡</div>
+                 <svg viewBox="0 0 400 300" class="w-full h-[320px] overflow-visible">
+                     <!-- Triangle: P(B) top, GP(R) left, N(R) right -->
+                     <line x1="200" y1="50" x2="100" y2="150" stroke="#fff" stroke-width="4"/>
+                     <line x1="200" y1="50" x2="300" y2="150" stroke="#fff" stroke-width="4"/>
+                     <circle cx="200" cy="50" r="30" class="node-black node-circle"/>
+                     <circle cx="100" cy="150" r="30" class="node-red node-circle"/>
+                     <circle cx="300" cy="150" r="30" class="node-red node-circle"/>
+                     <text x="200" y="60" text-anchor="middle" fill="#fff" font-size="20">P</text>
+                     <text x="100" y="160" text-anchor="middle" fill="#fff" font-size="20">GP</text>
+                     <text x="300" y="160" text-anchor="middle" fill="#fff" font-size="20">N</text>
+                 </svg>
+            </div>
+            <div class="flex flex-col gap-6 h-full justify-center">
+                <div class="card p-8 bg-purple-900/10 border-purple-500/30">
+                    <h3 class="text-accent text-[36px] mb-6"><i class="fas fa-undo"></i> 策略解析</h3>
+                    <ul class="space-y-6">
+                        <li class="flex items-start">
+                            <span class="text-purple-400 font-bold text-[30px] mr-4 min-w-[120px]">特征</span>
+                            <p class="text-slate-300 text-[28px]">三点一线 (Right-Right)，与 LL 镜像对称。</p>
+                        </li>
+                        <li class="flex items-start">
+                            <span class="text-purple-400 font-bold text-[30px] mr-4 min-w-[120px]">变色</span>
+                            <div class="text-[28px]">
+                                <span class="text-white">父亲 (P) 变黑</span>，<span class="text-red-400">爷爷 (GP) 变红</span>。
+                            </div>
+                        </li>
+                        <li class="flex items-start">
+                            <span class="text-purple-400 font-bold text-[30px] mr-4 min-w-[120px]">旋转</span>
+                            <p class="text-slate-300 text-[28px]">以父亲 (P) 为轴，对爷爷 (GP) 进行<strong>左旋</strong>。</p>
+                        </li>
+                        <li class="flex items-start">
+                            <span class="text-purple-400 font-bold text-[30px] mr-4 min-w-[120px]">结果</span>
+                            <p class="text-slate-300 text-[28px]">父节点 P 上位，完美平衡，同样<strong>无需递归</strong>。</p>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+      </section>
+
+      <!-- P10: Case 4 叔黑 LR -->
+      <section class="slide" data-title="情况四：叔叔是黑 (LR)">
+        <h2>Case 4: 叔叔是黑 (LR型) $\to$ 双旋 (左旋+右旋)</h2>
+        <div class="grid grid-cols-2 gap-8 h-full items-center">
+            <div class="card flex flex-col items-center justify-center h-full relative p-6">
+                 <div class="absolute top-4 left-4 text-slate-400">Step 1: LR 型 (折线)</div>
+                 <svg viewBox="0 0 400 260" class="w-full h-[260px] mb-8 overflow-visible">
+                     <!-- ZigZag: GP(B)-P(R)-N(R) Left-Right -->
+                     <line x1="250" y1="50" x2="150" y2="150" stroke="#fff" stroke-width="4"/>
+                     <line x1="150" y1="150" x2="210" y2="230" stroke="#fff" stroke-width="4"/>
+                     <circle cx="250" cy="50" r="30" class="node-black node-circle"/>
+                     <circle cx="150" cy="150" r="30" class="node-red node-circle"/>
+                     <circle cx="210" cy="230" r="30" class="node-red node-circle"/>
+                     <text x="250" y="60" text-anchor="middle" fill="#fff" font-size="20">GP</text>
+                     <text x="150" y="160" text-anchor="middle" fill="#fff" font-size="20">P</text>
+                     <text x="210" y="240" text-anchor="middle" fill="#fff" font-size="20">N</text>
+                 </svg>
+                 <div class="text-2xl text-secondary font-bold mb-8">⬇ 1. 以 P 为轴左旋 (Left Rotate)</div>
+                 <svg viewBox="0 0 400 260" class="w-full h-[260px] overflow-visible">
+                     <!-- Becomes LL: GP-N-P -->
+                     <line x1="250" y1="50" x2="150" y2="150" stroke="#fff" stroke-width="4"/>
+                     <line x1="150" y1="150" x2="90" y2="230" stroke="#fff" stroke-width="4"/>
+                     <circle cx="250" cy="50" r="30" class="node-black node-circle"/>
+                     <circle cx="150" cy="150" r="30" class="node-red node-circle"/>
+                     <circle cx="90" cy="230" r="30" class="node-red node-circle"/>
+                     <text x="250" y="60" text-anchor="middle" fill="#fff" font-size="20">GP</text>
+                     <text x="150" y="160" text-anchor="middle" fill="#fff" font-size="20">N</text>
+                     <text x="90" y="240" text-anchor="middle" fill="#fff" font-size="20">P</text>
+                 </svg>
+                 <div class="text-2xl text-accent font-bold mt-6">⬇ 2. 变成 LL 型 $\to$ 对 GP 右旋</div>
+            </div>
+            <div class="flex flex-col gap-6 h-full justify-center">
+                <div class="card p-8 bg-orange-900/10 border-orange-500/30">
+                    <h3 class="text-accent text-[36px] mb-6"><i class="fas fa-random"></i> LR 策略解析</h3>
+                    <ul class="space-y-6">
+                        <li class="flex items-start">
+                            <span class="text-orange-400 font-bold text-[30px] mr-4 min-w-[120px]">场景</span>
+                            <p class="text-slate-300 text-[28px]">父节点是祖父的<strong>左</strong>孩子，新节点是父节点的<strong>右</strong>孩子。</p>
+                        </li>
+                        <li class="flex items-start">
+                            <span class="text-orange-400 font-bold text-[30px] mr-4 min-w-[120px]">第一步</span>
+                            <p class="text-slate-300 text-[28px]">以<strong>父节点 (P)</strong> 为轴进行<strong>左旋</strong>。目的是把折线“拉直”成 LL 型。</p>
+                        </li>
+                        <li class="flex items-start">
+                            <span class="text-orange-400 font-bold text-[30px] mr-4 min-w-[120px]">第二步</span>
+                            <p class="text-slate-300 text-[28px]">此时变成了 Case 2 (LL)，以<strong>祖父 (GP)</strong> 为轴进行<strong>右旋</strong>并变色。</p>
+                        </li>
+                        <li class="flex items-start">
+                            <span class="text-orange-400 font-bold text-[30px] mr-4 min-w-[120px]">口诀</span>
+                            <p class="text-white text-[28px] font-bold">LR $\to$ 先左后右。</p>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+      </section>
+
+      <!-- P11: Case 5 叔黑 RL -->
+      <section class="slide" data-title="情况五：叔叔是黑 (RL)">
+        <h2>Case 5: 叔叔是黑 (RL型) $\to$ 双旋 (右旋+左旋)</h2>
+        <div class="grid grid-cols-2 gap-8 h-full items-center">
+            <div class="card flex flex-col items-center justify-center h-full relative p-6">
+                 <div class="absolute top-4 left-4 text-slate-400">Step 1: RL 型 (折线)</div>
+                 <svg viewBox="0 0 400 260" class="w-full h-[260px] mb-8 overflow-visible">
+                     <!-- ZigZag: GP(B)-P(R)-N(R) Right-Left -->
+                     <line x1="150" y1="50" x2="250" y2="150" stroke="#fff" stroke-width="4"/>
+                     <line x1="250" y1="150" x2="190" y2="230" stroke="#fff" stroke-width="4"/>
+                     <circle cx="150" cy="50" r="30" class="node-black node-circle"/>
+                     <circle cx="250" cy="150" r="30" class="node-red node-circle"/>
+                     <circle cx="190" cy="230" r="30" class="node-red node-circle"/>
+                     <text x="150" y="60" text-anchor="middle" fill="#fff" font-size="20">GP</text>
+                     <text x="250" y="160" text-anchor="middle" fill="#fff" font-size="20">P</text>
+                     <text x="190" y="240" text-anchor="middle" fill="#fff" font-size="20">N</text>
+                 </svg>
+                 <div class="text-2xl text-secondary font-bold mb-8">⬇ 1. 以 P 为轴右旋 (Right Rotate)</div>
+                 <svg viewBox="0 0 400 260" class="w-full h-[260px] overflow-visible">
+                     <!-- Becomes RR: GP-N-P -->
+                     <line x1="150" y1="50" x2="250" y2="150" stroke="#fff" stroke-width="4"/>
+                     <line x1="250" y1="150" x2="310" y2="230" stroke="#fff" stroke-width="4"/>
+                     <circle cx="150" cy="50" r="30" class="node-black node-circle"/>
+                     <circle cx="250" cy="150" r="30" class="node-red node-circle"/>
+                     <circle cx="310" cy="230" r="30" class="node-red node-circle"/>
+                     <text x="150" y="60" text-anchor="middle" fill="#fff" font-size="20">GP</text>
+                     <text x="250" y="160" text-anchor="middle" fill="#fff" font-size="20">N</text>
+                     <text x="310" y="240" text-anchor="middle" fill="#fff" font-size="20">P</text>
+                 </svg>
+                 <div class="text-2xl text-accent font-bold mt-6">⬇ 2. 变成 RR 型 $\to$ 对 GP 左旋</div>
+            </div>
+            <div class="flex flex-col gap-6 h-full justify-center">
+                <div class="card p-8 bg-pink-900/10 border-pink-500/30">
+                    <h3 class="text-accent text-[36px] mb-6"><i class="fas fa-random"></i> RL 策略解析</h3>
+                    <ul class="space-y-6">
+                        <li class="flex items-start">
+                            <span class="text-pink-400 font-bold text-[30px] mr-4 min-w-[120px]">场景</span>
+                            <p class="text-slate-300 text-[28px]">父节点是祖父的<strong>右</strong>孩子，新节点是父节点的<strong>左</strong>孩子。</p>
+                        </li>
+                        <li class="flex items-start">
+                            <span class="text-pink-400 font-bold text-[30px] mr-4 min-w-[120px]">第一步</span>
+                            <p class="text-slate-300 text-[28px]">以<strong>父节点 (P)</strong> 为轴进行<strong>右旋</strong>。目的是把折线“拉直”成 RR 型。</p>
+                        </li>
+                        <li class="flex items-start">
+                            <span class="text-pink-400 font-bold text-[30px] mr-4 min-w-[120px]">第二步</span>
+                            <p class="text-slate-300 text-[28px]">此时变成了 Case 3 (RR)，以<strong>祖父 (GP)</strong> 为轴进行<strong>左旋</strong>并变色。</p>
+                        </li>
+                        <li class="flex items-start">
+                            <span class="text-pink-400 font-bold text-[30px] mr-4 min-w-[120px]">口诀</span>
+                            <p class="text-white text-[28px] font-bold">RL $\to$ 先右后左。</p>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+      </section>
+
+      <!-- P12: 操作速查表 -->
+      <section class="slide" data-title="操作速查表">
+        <h2>插入修复・操作速查表</h2>
+        <div class="card h-full flex flex-col justify-center p-10">
+            <table class="w-full text-[28px] text-center border-collapse">
+                <thead>
+                    <tr class="bg-white/5 text-secondary border-b-2 border-secondary/30">
+                        <th class="py-5 px-4">场景</th>
+                        <th class="py-5 px-4">叔叔颜色</th>
+                        <th class="py-5 px-4">结构特征</th>
+                        <th class="py-5 px-4 text-left pl-10">核心操作</th>
+                        <th class="py-5 px-4">后续</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-white/10">
+                    <!-- Case 1 -->
+                    <tr class="hover:bg-white/5 transition-colors">
+                        <td class="py-5 font-bold text-warn">Case 1</td>
+                        <td class="py-5"><span class="text-red-500 font-bold">红色</span></td>
+                        <td class="py-5 text-slate-400">任意</td>
+                        <td class="py-5 text-left pl-10">
+                            <div class="flex flex-col gap-1">
+                                <span>P, U $\to$ <span class="text-black bg-white/80 rounded px-1 text-[20px] font-bold align-middle">黑</span></span>
+                                <span>GP $\to$ <span class="text-red-500 font-bold">红</span></span>
+                            </div>
+                        </td>
+                        <td class="py-5"><span class="text-yellow-400 font-bold">递归 (查 GP)</span></td>
+                    </tr>
+                    <!-- Case 2 LL -->
+                    <tr class="hover:bg-white/5 transition-colors">
+                        <td class="py-5 font-bold text-accent">Case 2 (LL)</td>
+                        <td class="py-5"><span class="text-slate-400">黑色</span></td>
+                        <td class="py-5">GP-P-N (左直线)</td>
+                        <td class="py-5 text-left pl-10">
+                            <span class="text-accent font-bold">右旋 GP</span> + 变色
+                        </td>
+                        <td class="py-5"><span class="text-green-400 font-bold">结束</span></td>
+                    </tr>
+                    <!-- Case 3 RR -->
+                    <tr class="hover:bg-white/5 transition-colors">
+                        <td class="py-5 font-bold text-accent">Case 3 (RR)</td>
+                        <td class="py-5"><span class="text-slate-400">黑色</span></td>
+                        <td class="py-5">GP-P-N (右直线)</td>
+                        <td class="py-5 text-left pl-10">
+                            <span class="text-accent font-bold">左旋 GP</span> + 变色
+                        </td>
+                        <td class="py-5"><span class="text-green-400 font-bold">结束</span></td>
+                    </tr>
+                    <!-- Case 4 LR -->
+                    <tr class="hover:bg-white/5 transition-colors">
+                        <td class="py-5 font-bold text-tertiary">Case 4 (LR)</td>
+                        <td class="py-5"><span class="text-slate-400">黑色</span></td>
+                        <td class="py-5">左-右 (折线)</td>
+                        <td class="py-5 text-left pl-10">
+                            <span class="text-tertiary font-bold">左旋 P</span> $\to$ 变成 LL
+                        </td>
+                        <td class="py-5 text-slate-400">转 Case 2</td>
+                    </tr>
+                    <!-- Case 5 RL -->
+                    <tr class="hover:bg-white/5 transition-colors">
+                        <td class="py-5 font-bold text-tertiary">Case 5 (RL)</td>
+                        <td class="py-5"><span class="text-slate-400">黑色</span></td>
+                        <td class="py-5">右-左 (折线)</td>
+                        <td class="py-5 text-left pl-10">
+                            <span class="text-tertiary font-bold">右旋 P</span> $\to$ 变成 RR
+                        </td>
+                        <td class="py-5 text-slate-400">转 Case 3</td>
+                    </tr>
+                </tbody>
+            </table>
+            <div class="mt-8 p-6 bg-blue-900/20 border border-blue-500/30 rounded-2xl flex items-center justify-center gap-6">
+                <i class="fas fa-lightbulb text-yellow-400 text-4xl"></i>
+                <span class="text-[32px] text-slate-200">记忆口诀：<strong class="text-white">叔红变色看祖父，叔黑直旋折变直。</strong></span>
+            </div>
+        </div>
+      </section>
+
+      <!-- P11: 总结与应用 -->
+      <section class="slide" data-title="总结与应用">
+        <h2>总结与应用</h2>
+        <div class="grid grid-cols-2 gap-12">
+            <div class="card">
+                <h3><i class="fas fa-table"></i> AVL vs 红黑树</h3>
+                <table class="w-full text-[28px] text-left border-collapse">
+                    <thead>
+                        <tr class="border-b border-white/20 text-slate-400">
+                            <th class="py-2">维度</th>
+                            <th class="py-2">AVL 树</th>
+                            <th class="py-2 text-accent">红黑树</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="border-b border-white/10">
+                            <td class="py-4">平衡程度</td>
+                            <td>严格 (BF $\le 1$)</td>
+                            <td class="text-accent">宽松 (2倍路径)</td>
+                        </tr>
+                         <tr class="border-b border-white/10">
+                            <td class="py-4">查找性能</td>
+                            <td class="text-green-400">略快 ($1.44 \log N$)</td>
+                            <td>快 ($2.0 \log N$)</td>
+                        </tr>
+                        <tr class="border-b border-white/10">
+                            <td class="py-4">插入/删除</td>
+                            <td>较慢 (旋转多)</td>
+                            <td class="text-accent">较快 (旋转少)</td>
+                        </tr>
+                        <tr>
+                            <td class="py-4">适用场景</td>
+                            <td>读多写少</td>
+                            <td class="text-accent">通用 / 写频繁</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="flex flex-col gap-6">
+                <div class="card bg-secondary/10 border-secondary/30">
+                    <h3 class="text-secondary">实际应用</h3>
+                    <ul class="list-disc pl-8 text-[28px]">
+                        <li>
+                            <strong class="text-white">C++ STL</strong>: <code>std::map</code>, <code>std::set</code>, <code>multimap</code>
+                        </li>
+                        <li>
+                            <strong class="text-white">Java</strong>: <code>java.util.TreeMap</code>, <code>HashMap</code> (链表长于8时)
+                        </li>
+                        <li>
+                            <strong class="text-white">Linux Kernel</strong>: CFS 调度器 (<code>rbtree</code>), 虚拟内存管理 (`vm_area_struct`)
+                        </li>
+                        <li>
+                            <strong class="text-white">Nginx</strong>: 定时器管理
+                        </li>
+                    </ul>
+                </div>
+                <div class="card bg-warn/10 border-warn/30">
+                     <h3 class="text-warn">一句话总结</h3>
+                     <p class="text-[32px] font-bold text-white">
+                         红黑树通过放弃“绝对平衡”，换取了更高效的动态修改能力，是工程上性价比最高的二叉搜索树。
+                     </p>
+                </div>
+            </div>
+        </div>
+      </section>
+
+      <div class="absolute bottom-8 right-10 text-2xl text-white/30 z-50">
+        <span id="page-number">1 / 1</span>
+      </div>
+    </div>
+
+    <!-- Animation Scripts -->
+    <script>
+      // --- Navigation Logic ---
+      const slides = document.querySelectorAll('.slide');
+      const pageNumberEl = document.getElementById('page-number');
+
+      function getPageFromUrl() {
+        const params = new URLSearchParams(window.location.search);
+        const page = parseInt(params.get('page'));
+        if (!isNaN(page) && page >= 1 && page <= slides.length) {
+          return page - 1;
+        }
+        return 0;
+      }
+
+      let currentSlide = getPageFromUrl();
+
+      function updateSlide() {
+        const slidesNow = document.querySelectorAll('.slide');
+        slidesNow.forEach((slide, index) => {
+          slide.classList.remove('active');
+          if (index === currentSlide) {
+            slide.classList.add('active');
+          }
+        });
+        pageNumberEl.textContent = `${currentSlide + 1} / ${slidesNow.length}`;
+
+        try {
+          const url = new URL(window.location.href);
+          url.searchParams.set('page', currentSlide + 1);
+          window.history.replaceState(null, '', url.href);
+        } catch (e) {}
+      }
+
+      function nextSlide() {
+        if (currentSlide < document.querySelectorAll('.slide').length - 1) {
+          currentSlide++;
+          updateSlide();
+        }
+      }
+
+      function prevSlide() {
+        if (currentSlide > 0) {
+          currentSlide--;
+          updateSlide();
+        }
+      }
+
+      function resizeApp() {
+        const app = document.getElementById('app');
+        const scale = Math.min(
+          window.innerWidth / 1920,
+          window.innerHeight / 1080
+        );
+        app.style.transform = `scale(${scale})`;
+      }
+
+      window.addEventListener('resize', resizeApp);
+      window.addEventListener('load', () => {
+        resizeApp();
+        updateSlide();
+      });
+
+      document.addEventListener('keydown', (e) => {
+        if (['ArrowRight', ' ', 'Enter'].includes(e.key)) nextSlide();
+        else if (e.key === 'ArrowLeft') prevSlide();
+      });
+    </script>
+    <script>
+      window.MathJax = {
+        tex: {
+          inlineMath: [
+            ['$', '$'],
+            ['\\(', '\\)'],
+          ],
+        },
+      };
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
+  </body>
+</html>

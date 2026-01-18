@@ -1,0 +1,2143 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>12 AVL树：平衡的艺术</title>
+    <script src="https://unpkg.com/@tailwindcss/browser@4"></script>
+    <link
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+      rel="stylesheet"
+    />
+    <style type="text/tailwindcss">
+      @theme {
+        --color-bg-dark: #0b1020;
+        --color-text-main: #eaf2ff;
+        --color-accent: #22d3ee;
+        --color-secondary: #60a5fa;
+        --color-tertiary: #a78bfa;
+        --color-warn: #f472b6;
+        --color-code-bg: #1e293b;
+      }
+
+      @layer base {
+        body {
+          @apply bg-black text-text-main font-sans overflow-hidden flex justify-center items-center h-screen;
+        }
+      }
+
+      @layer utilities {
+        .slide-container {
+          @apply relative w-[1920px] h-[1080px] bg-bg-dark overflow-hidden shadow-2xl;
+          box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+        }
+
+        .slide {
+          @apply absolute inset-0 hidden flex-col p-14 opacity-0 transition-opacity duration-400 ease-in-out;
+        }
+
+        .slide.active {
+          @apply flex opacity-100;
+        }
+
+        .bg-decoration {
+          @apply absolute inset-0 z-0 pointer-events-none;
+          background-image: radial-gradient(
+              circle at 15% 15%,
+              rgba(34, 211, 238, 0.03) 0%,
+              transparent 25%
+            ),
+            radial-gradient(
+              circle at 85% 85%,
+              rgba(167, 139, 250, 0.03) 0%,
+              transparent 25%
+            );
+        }
+
+        .grid-overlay {
+          @apply absolute inset-0 z-0;
+          background-size: 60px 60px;
+          background-image: linear-gradient(
+              to right,
+              rgba(255, 255, 255, 0.02) 1px,
+              transparent 1px
+            ),
+            linear-gradient(
+              to bottom,
+              rgba(255, 255, 255, 0.02) 1px,
+              transparent 1px
+            );
+        }
+
+        /* Typography */
+        h1 {
+          @apply text-[120px] font-extrabold leading-tight mb-10;
+          background: linear-gradient(
+            135deg,
+            #fff 0%,
+            var(--color-secondary) 100%
+          );
+          -webkit-background-clip: text;
+          background-clip: text;
+          -webkit-text-fill-color: transparent;
+        }
+
+        h2 {
+          @apply text-[72px] mb-8 text-accent inline-block pb-4 border-b-4 border-[rgba(34,211,238,0.3)];
+        }
+
+        h3 {
+          @apply text-[48px] mb-6 text-secondary;
+        }
+
+        p,
+        li {
+          @apply text-[36px] mb-4 text-slate-300;
+        }
+
+        strong {
+          @apply text-accent font-bold;
+        }
+
+        /* Components */
+        .card {
+          @apply bg-white/5 border border-white/10 rounded-3xl p-6 mb-6 backdrop-blur-sm;
+        }
+
+        .code-block {
+          @apply font-mono bg-code-bg p-8 rounded-2xl border border-slate-700 text-[24px] leading-relaxed text-slate-200 overflow-x-auto whitespace-pre;
+        }
+
+        .code-kw {
+          @apply text-[#c678dd];
+        }
+        .code-type {
+          @apply text-[#e5c07b];
+        }
+        .code-fn {
+          @apply text-[#61afef];
+        }
+        .code-cm {
+          @apply text-[#64748b] italic;
+        }
+        .code-num {
+          @apply text-[#d19a66];
+        }
+        .code-str {
+          @apply text-[#98c379];
+        }
+
+        /* Tree Nodes */
+        .tree-node {
+          @apply w-20 h-20 rounded-full bg-bg-dark border-[3px] border-accent flex items-center justify-center text-[32px] font-bold text-white absolute z-10 shadow-[0_0_20px_rgba(34,211,238,0.2)] transition-all duration-300;
+        }
+
+        .tree-node.active {
+          @apply bg-accent text-black scale-110 shadow-[0_0_40px_var(--color-accent)];
+        }
+
+        .tree-node.warn {
+          @apply border-warn text-warn shadow-[0_0_20px_var(--color-warn)];
+        }
+
+        .tree-node.visited {
+          @apply bg-[#103749] border-accent/50 text-white/70;
+        }
+
+        /* Animation Controls */
+        .anim-controls button {
+          @apply p-3 text-xl bg-white/10 border border-white/20 text-white rounded-lg cursor-pointer transition-all hover:bg-accent hover:text-black hover:border-accent active:scale-95 flex items-center justify-center min-w-[60px];
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app" class="slide-container">
+      <div class="bg-decoration"></div>
+      <div class="grid-overlay"></div>
+
+      <!-- P01: 封面 -->
+      <section
+        class="slide active justify-center items-center text-center"
+        data-title="封面"
+      >
+        <div class="flex flex-col items-center">
+          <svg
+            width="600"
+            height="400"
+            viewBox="0 0 600 400"
+            class="mb-10 overflow-visible drop-shadow-[0_0_30px_rgba(34,211,238,0.3)]"
+          >
+            <!-- Abstract Balance Visualization -->
+            <defs>
+              <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop
+                  offset="0%"
+                  style="stop-color: var(--color-secondary); stop-opacity: 1"
+                />
+                <stop
+                  offset="100%"
+                  style="stop-color: var(--color-accent); stop-opacity: 1"
+                />
+              </linearGradient>
+            </defs>
+
+            <!-- Base -->
+            <path d="M250 350 L350 350 L300 250 Z" fill="#334155" />
+
+            <!-- Beam -->
+            <rect
+              x="100"
+              y="240"
+              width="400"
+              height="10"
+              fill="#475569"
+              rx="5"
+              transform="rotate(-5, 300, 245)"
+            >
+              <animateTransform
+                attributeName="transform"
+                type="rotate"
+                values="-5 300 245; 5 300 245; -5 300 245"
+                dur="6s"
+                repeatCount="indefinite"
+              />
+            </rect>
+
+            <!-- Left Plate -->
+            <g transform="rotate(-5, 300, 245)">
+              <animateTransform
+                attributeName="transform"
+                type="rotate"
+                values="-5 300 245; 5 300 245; -5 300 245"
+                dur="6s"
+                repeatCount="indefinite"
+              />
+              <line
+                x1="120"
+                y1="245"
+                x2="120"
+                y2="300"
+                stroke="#94a3b8"
+                stroke-width="2"
+              />
+              <path
+                d="M90 300 Q120 330 150 300"
+                fill="none"
+                stroke="#94a3b8"
+                stroke-width="4"
+              />
+              <circle
+                cx="120"
+                cy="290"
+                r="15"
+                fill="var(--color-accent)"
+              />
+            </g>
+
+            <!-- Right Plate -->
+            <g transform="rotate(-5, 300, 245)">
+              <animateTransform
+                attributeName="transform"
+                type="rotate"
+                values="-5 300 245; 5 300 245; -5 300 245"
+                dur="6s"
+                repeatCount="indefinite"
+              />
+              <line
+                x1="480"
+                y1="245"
+                x2="480"
+                y2="300"
+                stroke="#94a3b8"
+                stroke-width="2"
+              />
+              <path
+                d="M450 300 Q480 330 510 300"
+                fill="none"
+                stroke="#94a3b8"
+                stroke-width="4"
+              />
+              <circle
+                cx="480"
+                cy="290"
+                r="15"
+                fill="var(--color-warn)"
+              />
+            </g>
+
+            <text
+              x="300"
+              y="100"
+              text-anchor="middle"
+              fill="#fff"
+              font-size="24"
+              font-family="monospace"
+              letter-spacing="4"
+            >
+              SELF-BALANCING
+            </text>
+          </svg>
+          <h1>数据结构与算法</h1>
+          <p class="text-[60px] text-secondary">AVL 树：平衡的艺术</p>
+        </div>
+      </section>
+
+      <!-- P02: 痛点 - BST 退化 -->
+      <section class="slide" data-title="BST退化">
+        <h2>痛点：BST 的隐患</h2>
+        <div class="grid grid-cols-2 gap-12 flex-1 items-start">
+          <div class="flex flex-col gap-4">
+            <div class="card border-l-8 border-l-accent">
+              <h3>
+                <i class="fas fa-check-circle text-accent"></i> 理想情况
+                (Balanced)
+              </h3>
+              <ul class="text-[28px] leading-tight">
+                <li>
+                  插入顺序：<span class="font-mono text-accent"
+                    >50, 20, 80, 10, 30</span
+                  >
+                  (随机)
+                </li>
+                <li>结构：像一棵茂盛的树，左右均匀。</li>
+                <li>高度：$O(\log N)$</li>
+                <li>
+                  查找效率：<span class="text-accent font-bold">快</span>
+                  (只找几层)
+                </li>
+              </ul>
+            </div>
+            <div class="card border-l-8 border-l-warn">
+              <h3>
+                <i class="fas fa-exclamation-triangle text-warn"></i> 极端情况
+                (Skewed)
+              </h3>
+              <ul class="text-[28px] leading-tight">
+                <li>
+                  插入顺序：<span class="font-mono text-warn"
+                    >10, 20, 30, 40, 50</span
+                  >
+                  (有序)
+                </li>
+                <li>结构：退化成“链表”。</li>
+                <li>高度：$O(N)$</li>
+                <li>
+                  查找效率：<span class="text-warn font-bold">慢</span>
+                  (退回到线性扫描)
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div
+            class="flex flex-col items-center justify-center h-full relative"
+          >
+            <!-- Visual Comparison -->
+            <svg
+              width="700"
+              height="500"
+              viewBox="0 0 700 500"
+              class="overflow-visible"
+            >
+              <!-- Left: Balanced Tree -->
+              <g transform="translate(150, 30)">
+                <text
+                  x="0"
+                  y="-40"
+                  text-anchor="middle"
+                  fill="var(--color-accent)"
+                  font-size="24"
+                  font-weight="bold"
+                >
+                  Happy Tree
+                </text>
+                <line
+                  x1="0"
+                  y1="0"
+                  x2="-60"
+                  y2="80"
+                  stroke="#fff"
+                  stroke-width="3"
+                />
+                <line
+                  x1="0"
+                  y1="0"
+                  x2="60"
+                  y2="80"
+                  stroke="#fff"
+                  stroke-width="3"
+                />
+                <line
+                  x1="-60"
+                  y1="80"
+                  x2="-90"
+                  y2="160"
+                  stroke="#fff"
+                  stroke-width="2"
+                />
+                <line
+                  x1="-60"
+                  y1="80"
+                  x2="-30"
+                  y2="160"
+                  stroke="#fff"
+                  stroke-width="2"
+                />
+
+                <circle
+                  r="20"
+                  fill="#0B1020"
+                  stroke="var(--color-accent)"
+                  stroke-width="3"
+                />
+                <circle
+                  cx="-60"
+                  cy="80"
+                  r="18"
+                  fill="#0B1020"
+                  stroke="var(--color-accent)"
+                  stroke-width="2"
+                />
+                <circle
+                  cx="60"
+                  cy="80"
+                  r="18"
+                  fill="#0B1020"
+                  stroke="var(--color-accent)"
+                  stroke-width="2"
+                />
+                <circle cx="-90" cy="160" r="15" fill="#1e293b" />
+                <circle cx="-30" cy="160" r="15" fill="#1e293b" />
+              </g>
+
+              <!-- Divider -->
+              <line
+                x1="350"
+                y1="30"
+                x2="350"
+                y2="400"
+                stroke="#334155"
+                stroke-width="2"
+                stroke-dasharray="8,8"
+              />
+
+              <!-- Right: Skewed Tree (Linked List) -->
+              <g transform="translate(550, 30)">
+                <text
+                  x="0"
+                  y="-40"
+                  text-anchor="middle"
+                  fill="var(--color-warn)"
+                  font-size="24"
+                  font-weight="bold"
+                >
+                  Sad Tree (Linked List)
+                </text>
+                <!-- Compact Nodes: step=50 -->
+                <line
+                  x1="0"
+                  y1="0"
+                  x2="25"
+                  y2="50"
+                  stroke="#fff"
+                  stroke-width="3"
+                />
+                <line
+                  x1="25"
+                  y1="50"
+                  x2="50"
+                  y2="100"
+                  stroke="#fff"
+                  stroke-width="3"
+                />
+                <line
+                  x1="50"
+                  y1="100"
+                  x2="75"
+                  y2="150"
+                  stroke="#fff"
+                  stroke-width="3"
+                />
+                <line
+                  x1="75"
+                  y1="150"
+                  x2="100"
+                  y2="200"
+                  stroke="#fff"
+                  stroke-width="3"
+                />
+
+                <circle
+                  r="20"
+                  fill="#0B1020"
+                  stroke="var(--color-warn)"
+                  stroke-width="3"
+                />
+                <circle
+                  cx="25"
+                  cy="50"
+                  r="20"
+                  fill="#0B1020"
+                  stroke="var(--color-warn)"
+                  stroke-width="3"
+                />
+                <circle
+                  cx="50"
+                  cy="100"
+                  r="20"
+                  fill="#0B1020"
+                  stroke="var(--color-warn)"
+                  stroke-width="3"
+                />
+                <circle
+                  cx="75"
+                  cy="150"
+                  r="20"
+                  fill="#0B1020"
+                  stroke="var(--color-warn)"
+                  stroke-width="3"
+                />
+                <circle
+                  cx="100"
+                  cy="200"
+                  r="20"
+                  fill="#0B1020"
+                  stroke="var(--color-warn)"
+                  stroke-width="3"
+                />
+
+                <text x="-55" y="10" fill="#888" font-size="20">10</text>
+                <text x="-30" y="60" fill="#888" font-size="20">20</text>
+                <text x="-5" y="110" fill="#888" font-size="20">30</text>
+              </g>
+
+              <text
+                x="350"
+                y="450"
+                text-anchor="middle"
+                fill="#fff"
+                font-size="28"
+              >
+                我们需要一种机制，让树自动保持
+                <span class="text-accent text-4xl">“左右平衡”</span>
+              </text>
+            </svg>
+          </div>
+        </div>
+      </section>
+
+      <!-- P03: AVL 定义 -->
+      <section class="slide" data-title="AVL定义">
+        <h2>什么是 AVL 树？</h2>
+        <div class="grid grid-cols-2 gap-10">
+          <div class="flex flex-col justify-center gap-6">
+            <div class="card !p-6 !mb-0">
+              <h3 class="!mb-4"><i class="fas fa-book"></i> 定义</h3>
+              <p class="!mb-0 leading-relaxed">
+                <strong>AVL 树</strong> (Adelson-Velsky and Landis Tree)
+                是最早发明的<strong>自平衡</strong>二叉搜索树，树中任意一个节点的左子树和右子树的高度差的绝对值 ≤ 1。
+              </p>
+            </div>
+
+            <div class="card border-l-8 border-l-tertiary !p-6 !mb-0">
+              <h3 class="!mb-4">
+                <i class="fas fa-balance-scale text-tertiary"></i>
+                核心指标：平衡因子 (BF)
+              </h3>
+              <div class="bg-white/5 p-4 rounded-xl my-4 text-center">
+                <p class="text-[36px] font-mono text-tertiary mb-1">
+                  BF = Height(L) - Height(R)
+                </p>
+              </div>
+              <ul class="text-[28px] leading-tight">
+                <li class="!mb-2"><strong>铁律</strong>：任意节点的 $|BF| \le 1$。</li>
+                <li class="!mb-2">
+                  即 BF 只能是
+                  <span class="text-accent font-bold font-mono">-1, 0, 1</span
+                  >。
+                </li>
+                <li class="!mb-0">
+                  一旦某节点 $|BF| > 1$，立即触发<strong>旋转</strong>修复。
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="flex justify-center items-center relative">
+            <!-- Tree with Height/BF labels -->
+            <svg
+              width="600"
+              height="400"
+              viewBox="0 0 600 400"
+              class="overflow-visible"
+            >
+              <!-- Edges -->
+              <line
+                x1="300"
+                y1="50"
+                x2="150"
+                y2="150"
+                stroke="#fff"
+                stroke-width="4"
+              />
+              <line
+                x1="300"
+                y1="50"
+                x2="450"
+                y2="150"
+                stroke="#fff"
+                stroke-width="4"
+              />
+              <line
+                x1="150"
+                y1="150"
+                x2="80"
+                y2="250"
+                stroke="#fff"
+                stroke-width="3"
+              />
+              <line
+                x1="150"
+                y1="150"
+                x2="220"
+                y2="250"
+                stroke="#fff"
+                stroke-width="3"
+              />
+              <line
+                x1="450"
+                y1="150"
+                x2="520"
+                y2="250"
+                stroke="#fff"
+                stroke-width="3"
+              />
+              <line
+                x1="80"
+                y1="250"
+                x2="40"
+                y2="350"
+                stroke="#fff"
+                stroke-width="2"
+              />
+
+              <!-- Nodes -->
+              <!-- Root -->
+              <g transform="translate(300, 50)">
+                <circle
+                  r="30"
+                  fill="#0B1020"
+                  stroke="#22D3EE"
+                  stroke-width="3"
+                />
+                <text y="10" text-anchor="middle" fill="#fff" font-size="24">
+                  50
+                </text>
+                <!-- BF Label -->
+                <rect
+                  x="40"
+                  y="-10"
+                  width="60"
+                  height="30"
+                  rx="5"
+                  fill="#334155"
+                />
+                <text
+                  x="70"
+                  y="10"
+                  text-anchor="middle"
+                  fill="#22D3EE"
+                  font-size="18"
+                  font-family="monospace"
+                >
+                  BF:1
+                </text>
+                <text
+                  x="-50"
+                  y="0"
+                  text-anchor="end"
+                  fill="#94a3b8"
+                  font-size="16"
+                >
+                  H=4
+                </text>
+              </g>
+
+              <!-- L: 20 -->
+              <g transform="translate(150, 150)">
+                <circle
+                  r="30"
+                  fill="#0B1020"
+                  stroke="#22D3EE"
+                  stroke-width="3"
+                />
+                <text y="10" text-anchor="middle" fill="#fff" font-size="24">
+                  20
+                </text>
+                <rect
+                  x="-100"
+                  y="-10"
+                  width="60"
+                  height="30"
+                  rx="5"
+                  fill="#334155"
+                />
+                <text
+                  x="-70"
+                  y="10"
+                  text-anchor="middle"
+                  fill="#22D3EE"
+                  font-size="18"
+                  font-family="monospace"
+                >
+                  BF:1
+                </text>
+              </g>
+
+              <!-- R: 80 -->
+              <g transform="translate(450, 150)">
+                <circle
+                  r="30"
+                  fill="#0B1020"
+                  stroke="#22D3EE"
+                  stroke-width="3"
+                />
+                <text y="10" text-anchor="middle" fill="#fff" font-size="24">
+                  80
+                </text>
+                <rect
+                  x="40"
+                  y="-10"
+                  width="60"
+                  height="30"
+                  rx="5"
+                  fill="#334155"
+                />
+                <text
+                  x="70"
+                  y="10"
+                  text-anchor="middle"
+                  fill="#22D3EE"
+                  font-size="18"
+                  font-family="monospace"
+                >
+                  BF:-1
+                </text>
+              </g>
+
+              <!-- LL: 10 -->
+              <g transform="translate(80, 250)">
+                <circle
+                  r="25"
+                  fill="#0B1020"
+                  stroke="#22D3EE"
+                  stroke-width="2"
+                />
+                <text y="8" text-anchor="middle" fill="#fff" font-size="20">
+                  10
+                </text>
+                <text
+                  x="-70"
+                  y="5"
+                  fill="#22D3EE"
+                  font-size="16"
+                  font-family="monospace"
+                >
+                  BF:1
+                </text>
+              </g>
+
+              <!-- LR: 30 -->
+              <g transform="translate(220, 250)">
+                <circle
+                  r="25"
+                  fill="#0B1020"
+                  stroke="#22D3EE"
+                  stroke-width="2"
+                />
+                <text y="8" text-anchor="middle" fill="#fff" font-size="20">
+                  30
+                </text>
+                <text
+                  x="35"
+                  y="5"
+                  fill="#22D3EE"
+                  font-size="16"
+                  font-family="monospace"
+                >
+                  BF:0
+                </text>
+              </g>
+
+              <!-- RR: 90 -->
+              <g transform="translate(520, 250)">
+                <circle
+                  r="25"
+                  fill="#0B1020"
+                  stroke="#22D3EE"
+                  stroke-width="2"
+                />
+                <text y="8" text-anchor="middle" fill="#fff" font-size="20">
+                  90
+                </text>
+                <text
+                  x="35"
+                  y="5"
+                  fill="#22D3EE"
+                  font-size="16"
+                  font-family="monospace"
+                >
+                  BF:0
+                </text>
+              </g>
+
+              <!-- LLL: 5 -->
+              <g transform="translate(40, 350)">
+                <circle
+                  r="20"
+                  fill="#0B1020"
+                  stroke="#22D3EE"
+                  stroke-width="2"
+                />
+                <text y="6" text-anchor="middle" fill="#fff" font-size="16">
+                  5
+                </text>
+                <text
+                  x="-65"
+                  y="5"
+                  fill="#22D3EE"
+                  font-size="14"
+                  font-family="monospace"
+                >
+                  BF:0
+                </text>
+              </g>
+            </svg>
+          </div>
+        </div>
+      </section>
+
+      <!-- P04: 解药 - 旋转 -->
+      <section class="slide" data-title="解药：旋转">
+        <h2>解药：旋转 (Rotation)</h2>
+        <div class="grid grid-cols-2 gap-10">
+          <div class="flex flex-col justify-center">
+            <div class="card">
+              <h3><i class="fas fa-sync-alt"></i> 核心思想</h3>
+              <p class="mb-8">
+                旋转是一种局部调整操作，目的是在<strong>降低高度</strong>的同时，严格<strong
+                  >保持 BST 的中序遍历顺序</strong
+                >不变。
+              </p>
+              <div class="bg-white/5 p-6 rounded-xl border border-white/10">
+                <p class="text-[32px] text-accent mb-4">口诀：</p>
+                <ul class="text-[28px] list-none p-0">
+                  <li>左边重了 $\to$ 往右旋 (LL)</li>
+                  <li>右边重了 $\to$ 往左旋 (RR)</li>
+                  <li>“拐弯”了 $\to$ 先把弯捋直，再旋转 (LR / RL)</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex flex-col items-center justify-center h-full relative" id="anim-process-container">
+            <!-- Animated Rotation Demo -->
+            <svg
+              width="600"
+              height="450"
+              viewBox="0 0 600 450"
+              class="overflow-visible"
+            >
+              <defs>
+                <marker
+                  id="arrow-p4"
+                  markerWidth="12"
+                  markerHeight="12"
+                  refX="10"
+                  refY="6"
+                  orient="auto"
+                >
+                  <path d="M2,2 L10,6 L2,10 L6,6 L2,2" fill="var(--color-accent)" />
+                </marker>
+              </defs>
+
+              <!-- Dynamic Edges -->
+              <line id="p4-edge-ab" stroke="#fff" stroke-width="4" />
+              <line id="p4-edge-bc" stroke="#fff" stroke-width="4" />
+
+              <!-- Nodes -->
+              <g id="p4-node-a">
+                <circle r="30" fill="#0B1020" stroke="#fff" stroke-width="3" />
+                <text y="10" text-anchor="middle" fill="#fff" font-size="24">
+                  A
+                </text>
+                <text
+                  x="-90"
+                  y="10"
+                  fill="var(--color-warn)"
+                  font-size="18"
+                  opacity="1"
+                  id="p4-bf"
+                >
+                  BF:-2
+                </text>
+              </g>
+              <g id="p4-node-b">
+                <circle
+                  r="30"
+                  fill="#0B1020"
+                  stroke="var(--color-accent)"
+                  stroke-width="3"
+                />
+                <text y="10" text-anchor="middle" fill="#fff" font-size="24">
+                  B
+                </text>
+              </g>
+              <g id="p4-node-c">
+                <circle r="30" fill="#0B1020" stroke="#fff" stroke-width="3" />
+                <text y="10" text-anchor="middle" fill="#fff" font-size="24">
+                  C
+                </text>
+              </g>
+
+              <!-- Helper Arrows (Fading) -->
+              <path
+                id="p4-arrow-move"
+                d=""
+                fill="none"
+                stroke="var(--color-accent)"
+                stroke-width="3"
+                stroke-dasharray="8,8"
+                marker-end="url(#arrow-p4)"
+                opacity="0"
+              />
+
+              <!-- Caption -->
+              <text
+                x="300"
+                y="420"
+                text-anchor="middle"
+                fill="#aaa"
+                font-size="28"
+                id="p4-caption"
+              >
+                失衡 (Right Heavy)
+              </text>
+            </svg>
+
+            <div class="mt-4 flex gap-4">
+              <button
+                onclick="AnimProcess.toggle()"
+                class="px-4 py-2 bg-white/10 rounded-lg hover:bg-white/20 transition cursor-pointer text-[20px]"
+              >
+                <i class="fas fa-play"></i> 播放/暂停
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- P05: 单旋演示 (LL/RR) -->
+      <section class="slide" data-title="单旋:LL/RR">
+        <h2>单旋：处理“直线型”失衡</h2>
+        <div class="grid grid-cols-2 gap-10 h-full">
+          <!-- Left Column: LL Case -->
+          <div
+            class="flex flex-col items-center border-r border-white/10 pr-10"
+          >
+            <h3 class="text-accent mb-6">LL 型 (左左) $\to$ 右旋</h3>
+            <div
+              class="relative w-full h-[400px] bg-white/5 rounded-xl border border-white/10"
+              id="anim-ll"
+            >
+              <!-- SVG for LL Animation -->
+              <svg class="w-full h-full" viewBox="0 0 400 400">
+                <!-- Edges -->
+                <line
+                  id="ll-edge-1"
+                  x1="200"
+                  y1="50"
+                  x2="100"
+                  y2="150"
+                  stroke="#fff"
+                  stroke-width="3"
+                />
+                <line
+                  id="ll-edge-2"
+                  x1="100"
+                  y1="150"
+                  x2="50"
+                  y2="250"
+                  stroke="#fff"
+                  stroke-width="3"
+                />
+                <line
+                  id="ll-edge-3"
+                  x1="100"
+                  y1="150"
+                  x2="150"
+                  y2="250"
+                  stroke="#fff"
+                  stroke-width="3"
+                  stroke-dasharray="4,4"
+                  opacity="0.5"
+                />
+                <!-- T2 -->
+
+                <!-- Nodes -->
+                <g id="ll-node-C" transform="translate(200, 50)">
+                  <circle
+                    r="25"
+                    fill="#0B1020"
+                    stroke="#fff"
+                    stroke-width="2"
+                  />
+                  <text y="8" text-anchor="middle" fill="#fff" font-size="20">
+                    C
+                  </text>
+                  <text x="40" y="0" fill="var(--color-warn)" font-size="14">
+                    BF:2
+                  </text>
+                </g>
+                <g id="ll-node-B" transform="translate(100, 150)">
+                  <circle
+                    r="25"
+                    fill="#0B1020"
+                    stroke="var(--color-accent)"
+                    stroke-width="2"
+                  />
+                  <text y="8" text-anchor="middle" fill="#fff" font-size="20">
+                    B
+                  </text>
+                </g>
+                <g id="ll-node-A" transform="translate(50, 250)">
+                  <circle
+                    r="20"
+                    fill="#0B1020"
+                    stroke="#fff"
+                    stroke-width="2"
+                  />
+                  <text y="6" text-anchor="middle" fill="#fff" font-size="16">
+                    A
+                  </text>
+                </g>
+                <g
+                  id="ll-node-T2"
+                  transform="translate(150, 250)"
+                >
+                  <rect x="-15" y="-15" width="30" height="30" fill="#334155" stroke="#fff" stroke-width="2" />
+                  <text y="5" text-anchor="middle" fill="#fff" font-size="12">
+                    T2
+                  </text>
+                </g>
+              </svg>
+
+              <div class="absolute bottom-4 w-full flex justify-center gap-4">
+                <button
+                  onclick="AnimLL.play()"
+                  class="bg-accent text-black px-4 py-2 rounded font-bold hover:bg-white transition-colors"
+                >
+                  演示右旋
+                </button>
+                <button
+                  onclick="AnimLL.reset()"
+                  class="bg-white/10 text-white px-4 py-2 rounded hover:bg-white/20"
+                >
+                  重置
+                </button>
+              </div>
+            </div>
+            <div class="mt-4 text-slate-300 text-[24px] leading-snug">
+              <p class="mb-2"><strong class="text-accent">核心动作：</strong>把 B 提起来，C 沉下去。</p>
+              <div class="bg-white/5 p-3 rounded-lg border border-white/10 mt-2">
+                <p class="text-[28px] text-slate-300 mb-1">
+                  <i class="fas fa-random text-accent"></i> <strong>T2 去哪了？</strong>
+                </p>
+                <p class="text-[24px] text-slate-400 leading-normal">
+                  必须维持中序遍历 <code>A < B < <span class="text-warn font-bold">T2</span> < C</code> 不变。<br/>
+                  <span class="text-warn font-bold">T2</span> 比 B 大、比 C 小，只能挂在 <strong>C 的左边</strong>。
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Column: RR Case -->
+          <div class="flex flex-col items-center pl-10">
+            <h3 class="text-warn mb-6">RR 型 (右右) $\to$ 左旋</h3>
+            <div
+              class="relative w-full h-[400px] bg-white/5 rounded-xl border border-white/10"
+              id="anim-rr"
+            >
+              <!-- SVG for RR Animation -->
+              <svg class="w-full h-full" viewBox="0 0 400 400">
+                <!-- Edges -->
+                <line
+                  id="rr-edge-1"
+                  x1="200"
+                  y1="50"
+                  x2="300"
+                  y2="150"
+                  stroke="#fff"
+                  stroke-width="3"
+                />
+                <line
+                  id="rr-edge-2"
+                  x1="300"
+                  y1="150"
+                  x2="350"
+                  y2="250"
+                  stroke="#fff"
+                  stroke-width="3"
+                />
+                <line
+                  id="rr-edge-3"
+                  x1="300"
+                  y1="150"
+                  x2="250"
+                  y2="250"
+                  stroke="#fff"
+                  stroke-width="3"
+                  stroke-dasharray="4,4"
+                  opacity="0.5"
+                />
+                <!-- T2 -->
+
+                <!-- Nodes -->
+                <g id="rr-node-A" transform="translate(200, 50)">
+                  <circle
+                    r="25"
+                    fill="#0B1020"
+                    stroke="#fff"
+                    stroke-width="2"
+                  />
+                  <text y="8" text-anchor="middle" fill="#fff" font-size="20">
+                    A
+                  </text>
+                  <text x="-70" y="5" fill="var(--color-warn)" font-size="14">
+                    BF:-2
+                  </text>
+                </g>
+                <g id="rr-node-B" transform="translate(300, 150)">
+                  <circle
+                    r="25"
+                    fill="#0B1020"
+                    stroke="var(--color-warn)"
+                    stroke-width="2"
+                  />
+                  <text y="8" text-anchor="middle" fill="#fff" font-size="20">
+                    B
+                  </text>
+                </g>
+                <g id="rr-node-C" transform="translate(350, 250)">
+                  <circle
+                    r="20"
+                    fill="#0B1020"
+                    stroke="#fff"
+                    stroke-width="2"
+                  />
+                  <text y="6" text-anchor="middle" fill="#fff" font-size="16">
+                    C
+                  </text>
+                </g>
+                <g
+                  id="rr-node-T2"
+                  transform="translate(250, 250)"
+                >
+                  <rect x="-15" y="-15" width="30" height="30" fill="#334155" stroke="#fff" stroke-width="2" />
+                  <text y="5" text-anchor="middle" fill="#fff" font-size="12">
+                    T2
+                  </text>
+                </g>
+              </svg>
+
+              <div class="absolute bottom-4 w-full flex justify-center gap-4">
+                <button
+                  onclick="AnimRR.play()"
+                  class="bg-warn text-black px-4 py-2 rounded font-bold hover:bg-white transition-colors"
+                >
+                  演示左旋
+                </button>
+                <button
+                  onclick="AnimRR.reset()"
+                  class="bg-white/10 text-white px-4 py-2 rounded hover:bg-white/20"
+                >
+                  重置
+                </button>
+              </div>
+            </div>
+            <div class="mt-4 text-slate-300 text-[24px] leading-snug">
+              <p class="mb-2"><strong class="text-accent">核心动作：</strong>把 B 提起来，A 沉下去。</p>
+              <div class="bg-white/5 p-3 rounded-lg border border-white/10 mt-2">
+                <p class="text-[28px] text-slate-300 mb-1">
+                  <i class="fas fa-random text-accent"></i> <strong>T2 去哪了？</strong>
+                </p>
+                <p class="text-[24px] text-slate-400 leading-normal">
+                  必须维持中序遍历 <code>A < <span class="text-warn font-bold">T2</span> < B < C</code> 不变。<br/>
+                  <span class="text-warn font-bold">T2</span> 比 A 大、比 B 小，只能挂在 <strong>A 的右边</strong>。
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- P06: 双旋演示 (LR/RL) -->
+      <section class="slide" data-title="双旋:LR/RL">
+        <h2>双旋：处理“拐弯型”失衡</h2>
+        <div class="grid grid-cols-1 gap-6 h-full">
+          <div class="grid grid-cols-2 gap-10 flex-1">
+            <!-- LR Case -->
+            <div class="flex flex-col items-center">
+              <h3 class="text-tertiary mb-4">LR 型 (左右)</h3>
+              <div
+                class="relative w-full flex-1 bg-white/5 rounded-xl border border-white/10 flex flex-col items-center justify-center p-4"
+              >
+                <svg
+                  width="500"
+                  height="500"
+                  viewBox="0 0 300 300"
+                  class="overflow-visible"
+                  id="svg-lr"
+                >
+                  <!-- Dynamic Content by JS -->
+                </svg>
+                
+                <div class="bg-black/20 rounded-lg p-3 w-full mb-4 min-h-[80px] flex items-center justify-center border border-white/5">
+                  <p id="desc-lr" class="text-[28px] text-accent text-center m-0 leading-snug">
+                    初始状态：左孩子(A)的右孩子(B)过高
+                  </p>
+                </div>
+
+                <div class="flex gap-4 z-10">
+                  <button
+                    onclick="AnimLR.step1()"
+                    class="bg-tertiary text-black px-3 py-1 rounded"
+                  >
+                    1. 左旋左孩子
+                  </button>
+                  <button
+                    onclick="AnimLR.step2()"
+                    class="bg-tertiary text-black px-3 py-1 rounded"
+                  >
+                    2. 右旋根
+                  </button>
+                  <button
+                    onclick="AnimLR.reset()"
+                    class="bg-white/10 px-3 py-1 rounded"
+                  >
+                    重置
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- RL Case -->
+            <div class="flex flex-col items-center">
+              <h3 class="text-tertiary mb-4">RL 型 (右左)</h3>
+              <div
+                class="relative w-full flex-1 bg-white/5 rounded-xl border border-white/10 flex flex-col items-center justify-center p-4"
+              >
+                <svg
+                  width="500"
+                  height="500"
+                  viewBox="0 0 300 300"
+                  class="overflow-visible"
+                  id="svg-rl"
+                >
+                  <!-- Dynamic Content by JS -->
+                </svg>
+
+                <div class="bg-black/20 rounded-lg p-3 w-full mb-4 min-h-[80px] flex items-center justify-center border border-white/5">
+                  <p id="desc-rl" class="text-[28px] text-tertiary text-center m-0 leading-snug">
+                    初始状态：右孩子(C)的左孩子(B)过高
+                  </p>
+                </div>
+
+                <div class="flex gap-4 z-10">
+                  <button
+                    onclick="AnimRL.step1()"
+                    class="bg-tertiary text-black px-3 py-1 rounded"
+                  >
+                    1. 右旋右孩子
+                  </button>
+                  <button
+                    onclick="AnimRL.step2()"
+                    class="bg-tertiary text-black px-3 py-1 rounded"
+                  >
+                    2. 左旋根
+                  </button>
+                  <button
+                    onclick="AnimRL.reset()"
+                    class="bg-white/10 px-3 py-1 rounded"
+                  >
+                    重置
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- P07: 插入流程 -->
+      <section class="slide" data-title="插入流程">
+        <h2>插入操作：后序处理</h2>
+        <div class="grid grid-cols-2 gap-10">
+          <div class="flex flex-col gap-6">
+            <div class="card">
+              <h3><i class="fas fa-code-branch"></i> 递归流程</h3>
+              <ol class="text-[28px] list-decimal pl-10 leading-tight">
+                <li>
+                  <strong>标准插入</strong>：像普通 BST 一样找到空位插入。
+                </li>
+                <li>
+                  <strong>回溯 (Backtracking)</strong
+                  >：递归函数返回，沿着路径向上走。
+                </li>
+                <li class="text-accent font-bold">
+                  更新高度：$H = \max(H_L, H_R) + 1$
+                </li>
+                <li class="text-accent font-bold">计算 BF：$BF = H_L - H_R$</li>
+                <li>
+                  <strong>检查失衡</strong>：
+                  <ul class="list-disc pl-10 text-[24px] text-slate-400 mt-2">
+                    <li>
+                      $BF > 1$ (左重)：看左孩子 BF。 <br />
+                      $\to$ 左孩子 $\ge 0$：LL (右旋) <br />
+                      $\to$ 左孩子 $< 0$：LR (先左旋后右旋)
+                    </li>
+                    <li>
+                      $BF < -1$ (右重)：看右孩子 BF。 <br />
+                      $\to$ 右孩子 $\le 0$：RR (左旋) <br />
+                      $\to$ 右孩子 $> 0$：RL (先右旋后左旋)
+                    </li>
+                  </ul>
+                </li>
+              </ol>
+            </div>
+          </div>
+
+          <div class="flex flex-col items-center justify-center h-full relative" id="anim-insert-container">
+             <div class="absolute top-0 right-0 p-4">
+                 <div id="ins-status" class="text-accent text-[24px] font-mono bg-black/40 px-4 py-2 rounded-lg border border-accent/20">
+                    等待开始...
+                 </div>
+             </div>
+             
+             <svg width="600" height="500" viewBox="0 0 600 500" class="overflow-visible" id="svg-insert">
+                <!-- Nodes and edges will be generated by JS -->
+             </svg>
+
+             <div class="flex gap-4 mt-4">
+                <button onclick="AnimInsert.step()" class="px-6 py-2 bg-accent text-black font-bold rounded-lg hover:scale-105 transition-transform cursor-pointer">
+                   <i class="fas fa-step-forward"></i> 下一步
+                </button>
+                <button onclick="AnimInsert.reset()" class="px-6 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 transition-colors cursor-pointer">
+                   <i class="fas fa-undo"></i> 重置
+                </button>
+             </div>
+          </div>
+        </div>
+      </section>
+
+
+      <!-- P09: 总结 -->
+      <section class="slide" data-title="总结">
+        <h2>总结与展望</h2>
+        <div class="grid grid-cols-2 gap-16 h-full items-center">
+          <div class="card h-[80%] flex flex-col justify-center">
+            <h3 class="border-b-2 border-white/10 pb-4 mb-6">AVL 树特性</h3>
+            <ul class="text-[32px] leading-relaxed">
+              <li>
+                <span class="text-accent"
+                  ><i class="fas fa-thumbs-up"></i> 优点</span
+                >：
+                <ul class="list-disc pl-10 text-slate-300">
+                  <li>严格平衡，查找效率极其稳定 ($O(\log N)$)。</li>
+                  <li>适合<strong>读多写少</strong>的场景。</li>
+                </ul>
+              </li>
+              <li class="mt-6">
+                <span class="text-warn"
+                  ><i class="fas fa-thumbs-down"></i> 缺点</span
+                >：
+                <ul class="list-disc pl-10 text-slate-300">
+                  <li>插入/删除需要频繁旋转维护平衡。</li>
+                  <li>实现较复杂，额外存储高度信息。</li>
+                </ul>
+              </li>
+            </ul>
+          </div>
+
+          <div class="flex flex-col gap-8 h-[80%]">
+            <div
+              class="card flex-1 flex flex-col justify-center bg-accent/5 border-accent/20"
+            >
+              <h3 class="text-accent">下节预告：红黑树 (RB Tree)</h3>
+              <p class="text-[30px]">AVL 树太“较真”了 (绝对平衡)。</p>
+              <p class="text-[30px]">
+                能不能<strong>稍微</strong>允许一点不平衡，换取更快的插入删除速度？
+              </p>
+              <div
+                class="mt-6 p-4 bg-black/30 rounded-lg text-center font-mono text-tertiary text-2xl"
+              >
+                Map / Set / Linux内核 的选择
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- JS Logic -->
+      <script>
+        // --- Animation Classes ---
+        class AnimLLController {
+          constructor() {
+            this.container = document.getElementById('anim-ll');
+          }
+          play() {
+            const nodeC = this.container.querySelector('#ll-node-C');
+            const nodeB = this.container.querySelector('#ll-node-B');
+            const nodeA = this.container.querySelector('#ll-node-A');
+            const nodeT2 = this.container.querySelector('#ll-node-T2');
+            const edge1 = this.container.querySelector('#ll-edge-1'); // C-B
+            const edge2 = this.container.querySelector('#ll-edge-2'); // B-A
+            const edge3 = this.container.querySelector('#ll-edge-3'); // B-T2 (dashed)
+
+            // SVG coordinates animation manually via setAttribute/CSS
+            // Target State:
+            // B is new Root (200, 50)
+            // A is B's Left (100, 150)
+            // C is B's Right (300, 150)
+            // T2 is C's Left (250, 250)
+
+            // 1. Move B to Root
+            nodeB.style.transition = 'all 1s ease';
+            nodeB.setAttribute('transform', 'translate(200, 50)'); // 100,150 -> 200,50
+
+            // 2. Move C to Right Child
+            nodeC.style.transition = 'all 1s ease';
+            nodeC.setAttribute('transform', 'translate(300, 150)'); // 200,50 -> 300,150
+
+            // 3. Move A to Left Child (Keep relative to B in new pos?)
+            // A was 50,250 (Left of B). B moves +100, -100.
+            // But structure changes. A stays left of B.
+            // New B is 200,50. New A should be 100,150.
+            nodeA.style.transition = 'all 1s ease';
+            nodeA.setAttribute('transform', 'translate(100, 150)'); // 50,250 -> 100,150
+
+            // 4. Move T2 (Child of B -> Child of C)
+            // Old T2: 150, 250 (Right of B)
+            // New T2: 250, 250 (Left of C)
+            nodeT2.style.transition = 'all 1s ease';
+            nodeT2.setAttribute('transform', 'translate(250, 250)');
+
+            // 5. Update Edges (Simplified by hiding old, showing new or transforming lines)
+            // For simple demo, we just fade edges and reappear? Or animate endpoints?
+            // Animate endpoints is hard in vanilla JS without library.
+            // Let's use a trick: Force rerender lines after delay or use CSS transforms if lines are grouped.
+            // Simple approach: Hide lines, show new lines (if we had them).
+            // Or: assume lines are attached? No.
+
+            // Let's just translate lines roughly to match visual flow
+            edge1.style.transition = 'all 1s ease'; // C-B
+            // C-B becomes B-C.
+            edge1.setAttribute('x1', '300');
+            edge1.setAttribute('y1', '150'); // C
+            edge1.setAttribute('x2', '200');
+            edge1.setAttribute('y2', '50'); // B
+
+            edge2.style.transition = 'all 1s ease'; // B-A
+            // B-A becomes B-A (but positions changed)
+            edge2.setAttribute('x1', '200');
+            edge2.setAttribute('y1', '50'); // B
+            edge2.setAttribute('x2', '100');
+            edge2.setAttribute('y2', '150'); // A
+
+            edge3.style.transition = 'all 1s ease'; // B-T2 -> C-T2
+            edge3.setAttribute('x1', '300');
+            edge3.setAttribute('y1', '150'); // C
+            edge3.setAttribute('x2', '250');
+            edge3.setAttribute('y2', '250'); // T2
+          }
+          reset() {
+            const nodeC = this.container.querySelector('#ll-node-C');
+            const nodeB = this.container.querySelector('#ll-node-B');
+            const nodeA = this.container.querySelector('#ll-node-A');
+            const nodeT2 = this.container.querySelector('#ll-node-T2');
+            const edge1 = this.container.querySelector('#ll-edge-1');
+            const edge2 = this.container.querySelector('#ll-edge-2');
+            const edge3 = this.container.querySelector('#ll-edge-3');
+
+            nodeC.setAttribute('transform', 'translate(200, 50)');
+            nodeB.setAttribute('transform', 'translate(100, 150)');
+            nodeA.setAttribute('transform', 'translate(50, 250)');
+            nodeT2.setAttribute('transform', 'translate(150, 250)');
+
+            edge1.setAttribute('x1', '200');
+            edge1.setAttribute('y1', '50');
+            edge1.setAttribute('x2', '100');
+            edge1.setAttribute('y2', '150');
+
+            edge2.setAttribute('x1', '100');
+            edge2.setAttribute('y1', '150');
+            edge2.setAttribute('x2', '50');
+            edge2.setAttribute('y2', '250');
+
+            edge3.setAttribute('x1', '100');
+            edge3.setAttribute('y1', '150');
+            edge3.setAttribute('x2', '150');
+            edge3.setAttribute('y2', '250');
+          }
+        }
+        const AnimLL = new AnimLLController();
+
+        class AnimRRController {
+          constructor() {
+            this.container = document.getElementById('anim-rr');
+          }
+          play() {
+            const nodeA = this.container.querySelector('#rr-node-A');
+            const nodeB = this.container.querySelector('#rr-node-B');
+            const nodeC = this.container.querySelector('#rr-node-C');
+            const nodeT2 = this.container.querySelector('#rr-node-T2');
+            const edge1 = this.container.querySelector('#rr-edge-1'); // A-B
+            const edge2 = this.container.querySelector('#rr-edge-2'); // B-C
+            const edge3 = this.container.querySelector('#rr-edge-3'); // B-T2
+
+            // Target: B (200,50), A (100,150), C (300,150), T2 (150,250) child of A
+
+            nodeB.style.transition = 'all 1s ease';
+            nodeB.setAttribute('transform', 'translate(200, 50)');
+
+            nodeA.style.transition = 'all 1s ease';
+            nodeA.setAttribute('transform', 'translate(100, 150)');
+
+            nodeC.style.transition = 'all 1s ease';
+            nodeC.setAttribute('transform', 'translate(300, 150)');
+
+            nodeT2.style.transition = 'all 1s ease';
+            nodeT2.setAttribute('transform', 'translate(150, 250)');
+
+            // Edges
+            edge1.style.transition = 'all 1s ease'; // A-B -> B-A
+            edge1.setAttribute('x1', '200');
+            edge1.setAttribute('y1', '50'); // B
+            edge1.setAttribute('x2', '100');
+            edge1.setAttribute('y2', '150'); // A
+
+            edge2.style.transition = 'all 1s ease'; // B-C -> B-C
+            edge2.setAttribute('x1', '200');
+            edge2.setAttribute('y1', '50'); // B
+            edge2.setAttribute('x2', '300');
+            edge2.setAttribute('y2', '150'); // C
+
+            edge3.style.transition = 'all 1s ease'; // B-T2 -> A-T2
+            edge3.setAttribute('x1', '100');
+            edge3.setAttribute('y1', '150'); // A
+            edge3.setAttribute('x2', '150');
+            edge3.setAttribute('y2', '250'); // T2
+          }
+          reset() {
+            const nodeA = this.container.querySelector('#rr-node-A');
+            const nodeB = this.container.querySelector('#rr-node-B');
+            const nodeC = this.container.querySelector('#rr-node-C');
+            const nodeT2 = this.container.querySelector('#rr-node-T2');
+            const edge1 = this.container.querySelector('#rr-edge-1');
+            const edge2 = this.container.querySelector('#rr-edge-2');
+            const edge3 = this.container.querySelector('#rr-edge-3');
+
+            nodeA.setAttribute('transform', 'translate(200, 50)');
+            nodeB.setAttribute('transform', 'translate(300, 150)');
+            nodeC.setAttribute('transform', 'translate(350, 250)');
+            nodeT2.setAttribute('transform', 'translate(250, 250)');
+
+            edge1.setAttribute('x1', '200');
+            edge1.setAttribute('y1', '50');
+            edge1.setAttribute('x2', '300');
+            edge1.setAttribute('y2', '150');
+
+            edge2.setAttribute('x1', '300');
+            edge2.setAttribute('y1', '150');
+            edge2.setAttribute('x2', '350');
+            edge2.setAttribute('y2', '250');
+
+            edge3.setAttribute('x1', '300');
+            edge3.setAttribute('y1', '150');
+            edge3.setAttribute('x2', '250');
+            edge3.setAttribute('y2', '250');
+          }
+        }
+        const AnimRR = new AnimRRController();
+
+        // --- Double Rotation Helper (Animated) ---
+        class DoubleRotAnim {
+          constructor(containerId, type, descId) {
+            this.container = document.getElementById(containerId);
+            this.descEl = document.getElementById(descId);
+            this.type = type;
+            this.nodes = {};
+            this.edges = {};
+            this.initElements();
+            this.reset();
+          }
+
+          initElements() {
+            this.container.innerHTML = '';
+            const ns = "http://www.w3.org/2000/svg";
+            
+            // Create edges
+            ['e1', 'e2'].forEach(id => {
+               const line = document.createElementNS(ns, 'line');
+               line.setAttribute('stroke', '#fff');
+               line.setAttribute('stroke-width', '3');
+               line.style.transition = 'all 1s ease';
+               this.container.appendChild(line);
+               this.edges[id] = line;
+            });
+
+            // Create nodes
+            const nodeNames = ['A', 'B', 'C'];
+            nodeNames.forEach(name => {
+                const g = document.createElementNS(ns, 'g');
+                g.style.transition = 'all 1s ease';
+                g.setAttribute('id', `${this.type}-node-${name}`);
+                
+                const circle = document.createElementNS(ns, 'circle');
+                circle.setAttribute('r', '20');
+                circle.setAttribute('fill', '#0B1020');
+                circle.setAttribute('stroke', '#fff');
+                circle.setAttribute('stroke-width', '2');
+                
+                const text = document.createElementNS(ns, 'text');
+                text.setAttribute('y', '6');
+                text.setAttribute('text-anchor', 'middle');
+                text.setAttribute('fill', '#fff');
+                text.textContent = name;
+                
+                g.appendChild(circle);
+                g.appendChild(text);
+                
+                // BF label placeholder
+                const bf = document.createElementNS(ns, 'text');
+                bf.setAttribute('x', '30');
+                bf.setAttribute('y', '0');
+                bf.setAttribute('font-size', '12');
+                bf.setAttribute('fill', 'var(--color-warn)');
+                g.appendChild(bf);
+                g._bf = bf;
+                g._circle = circle;
+
+                this.container.appendChild(g);
+                this.nodes[name] = g;
+            });
+          }
+
+          setPos(nodeName, x, y, bfText='', highlight=false) {
+             const node = this.nodes[nodeName];
+             if(!node) return;
+             node.setAttribute('transform', `translate(${x}, ${y})`);
+             node._x = x;
+             node._y = y;
+             node._bf.textContent = bfText;
+             node._circle.setAttribute('stroke', highlight ? 'var(--color-accent)' : '#fff');
+             
+             // Adjust BF label position
+             if(bfText.includes('-')) {
+                 node._bf.setAttribute('x', '-30');
+                 node._bf.setAttribute('text-anchor', 'end');
+             } else {
+                 node._bf.setAttribute('x', '30');
+                 node._bf.setAttribute('text-anchor', 'start');
+             }
+          }
+
+          updateEdges(p1, p2) {
+             if(p1) {
+                 const n1 = this.nodes[p1[0]];
+                 const n2 = this.nodes[p1[1]];
+                 this.edges['e1'].setAttribute('x1', n1._x);
+                 this.edges['e1'].setAttribute('y1', n1._y);
+                 this.edges['e1'].setAttribute('x2', n2._x);
+                 this.edges['e1'].setAttribute('y2', n2._y);
+             }
+             if(p2) {
+                 const n1 = this.nodes[p2[0]];
+                 const n2 = this.nodes[p2[1]];
+                 this.edges['e2'].setAttribute('x1', n1._x);
+                 this.edges['e2'].setAttribute('y1', n1._y);
+                 this.edges['e2'].setAttribute('x2', n2._x);
+                 this.edges['e2'].setAttribute('y2', n2._y);
+             }
+          }
+
+          step1() {
+             if(this.type === 'LR') {
+                 // LR Step 1: Left Rotate A.
+                 this.setPos('C', 150, 50, 'BF:2');
+                 this.setPos('B', 75, 150, '', true);
+                 this.setPos('A', 35, 230, '');
+                 this.updateEdges(['C', 'B'], ['B', 'A']);
+                 if(this.descEl) this.descEl.innerHTML = '1. <span class="text-white">左旋左孩子</span>：B 上位，A 下沉。<br>变成直线型 (LL)。';
+             } else {
+                 // RL Step 1: Right Rotate C.
+                 this.setPos('A', 150, 50, 'BF:-2');
+                 this.setPos('B', 225, 150, '', true);
+                 this.setPos('C', 265, 230, '');
+                 this.updateEdges(['A', 'B'], ['B', 'C']);
+                 if(this.descEl) this.descEl.innerHTML = '1. <span class="text-white">右旋右孩子</span>：B 上位，C 下沉。<br>变成直线型 (RR)。';
+             }
+          }
+
+          step2() {
+             if(this.type === 'LR') {
+                 // LR Step 2: Right Rotate C.
+                 this.setPos('B', 150, 50, '', true); 
+                 this.setPos('A', 75, 150, '');
+                 this.setPos('C', 225, 150, '');
+                 this.updateEdges(['B', 'A'], ['B', 'C']);
+                 if(this.descEl) this.descEl.innerHTML = '2. <span class="text-white">右旋根节点</span>：B 成为新根。<br>平衡达成！';
+             } else {
+                 // RL Step 2: Left Rotate A.
+                 this.setPos('B', 150, 50, '', true); 
+                 this.setPos('A', 75, 150, '');
+                 this.setPos('C', 225, 150, '');
+                 this.updateEdges(['B', 'A'], ['B', 'C']);
+                 if(this.descEl) this.descEl.innerHTML = '2. <span class="text-white">左旋根节点</span>：B 成为新根。<br>平衡达成！';
+             }
+          }
+
+          reset() {
+             if(this.type === 'LR') {
+                 this.setPos('C', 150, 50, 'BF:2');
+                 this.setPos('A', 75, 150, 'BF:-1');
+                 this.setPos('B', 115, 230, '', true);
+                 this.updateEdges(['C', 'A'], ['A', 'B']);
+                 if(this.descEl) this.descEl.innerHTML = '初始状态：左孩子(A)的<span class="text-warn">右孩子(B)</span>过高。<br>需要先处理拐弯。';
+             } else {
+                 this.setPos('A', 150, 50, 'BF:-2');
+                 this.setPos('C', 225, 150, 'BF:1');
+                 this.setPos('B', 185, 230, '', true);
+                 this.updateEdges(['A', 'C'], ['C', 'B']);
+                 if(this.descEl) this.descEl.innerHTML = '初始状态：右孩子(C)的<span class="text-warn">左孩子(B)</span>过高。<br>需要先处理拐弯。';
+             }
+          }
+        }
+
+        const AnimLR = new DoubleRotAnim('svg-lr', 'LR', 'desc-lr');
+        const AnimRL = new DoubleRotAnim('svg-rl', 'RL', 'desc-rl');
+
+
+        // --- Process Animation (P04) ---
+        class AnimProcessController {
+          constructor() {
+            this.container = document.getElementById('anim-process-container');
+            this.nodeA = document.getElementById('p4-node-a');
+            this.nodeB = document.getElementById('p4-node-b');
+            this.nodeC = document.getElementById('p4-node-c');
+            this.edgeAB = document.getElementById('p4-edge-ab');
+            this.edgeBC = document.getElementById('p4-edge-bc');
+            this.arrow = document.getElementById('p4-arrow-move');
+            this.caption = document.getElementById('p4-caption');
+            this.bfLabel = document.getElementById('p4-bf');
+
+            this.isPlaying = false;
+            this.timer = null;
+
+            if (this.container) this.init();
+          }
+
+          setPos(el, x, y) {
+            el.setAttribute('transform', `translate(${x}, ${y})`);
+            el._x = x;
+            el._y = y;
+          }
+
+          updateEdges() {
+            if (!this.edgeAB || !this.edgeBC) return;
+            this.edgeAB.setAttribute('x1', this.nodeA._x);
+            this.edgeAB.setAttribute('y1', this.nodeA._y);
+            this.edgeAB.setAttribute('x2', this.nodeB._x);
+            this.edgeAB.setAttribute('y2', this.nodeB._y);
+
+            this.edgeBC.setAttribute('x1', this.nodeB._x);
+            this.edgeBC.setAttribute('y1', this.nodeB._y);
+            this.edgeBC.setAttribute('x2', this.nodeC._x);
+            this.edgeBC.setAttribute('y2', this.nodeC._y);
+          }
+
+          init() {
+            if (!this.nodeA) return;
+            // Initial State: RR
+            this.setPos(this.nodeA, 200, 80);
+            this.setPos(this.nodeB, 350, 180);
+            this.setPos(this.nodeC, 450, 280);
+            this.updateEdges();
+            this.caption.textContent = '失衡状态 (Right Heavy)';
+            this.bfLabel.textContent = 'BF:-2';
+            this.bfLabel.setAttribute('fill', 'var(--color-warn)');
+            this.arrow.style.opacity = 0;
+            this.nodeA.style.transition = 'none';
+            this.nodeB.style.transition = 'none';
+            this.nodeC.style.transition = 'none';
+          }
+
+          start() {
+            if (this.isPlaying) return;
+            this.isPlaying = true;
+            this.loop();
+          }
+
+          stop() {
+            this.isPlaying = false;
+            clearTimeout(this.timer);
+            this.init();
+          }
+
+          toggle() {
+            if (this.isPlaying) this.stop();
+            else this.start();
+          }
+
+          loop() {
+            if (!this.isPlaying) return;
+
+            // Step 1: Show Intent
+            this.arrow.setAttribute('d', 'M 180 80 Q 100 150 130 230');
+            this.arrow.style.transition = 'opacity 1s';
+            this.arrow.style.opacity = 1;
+
+            this.timer = setTimeout(() => {
+              if (!this.isPlaying) return;
+              // Step 2: Animate Movement
+              this.nodeA.style.transition = 'transform 2s ease-in-out';
+              this.nodeB.style.transition = 'transform 2s ease-in-out';
+              this.nodeC.style.transition = 'transform 2s ease-in-out';
+              this.arrow.style.opacity = 0;
+
+              this.setPos(this.nodeA, 150, 250);
+              this.setPos(this.nodeB, 300, 100);
+              this.setPos(this.nodeC, 450, 250);
+
+              const startTime = performance.now();
+              const duration = 2000;
+
+              const animateEdges = (time) => {
+                if (!this.isPlaying) return;
+                const elapsed = time - startTime;
+                if (elapsed < duration) {
+                  const p = elapsed / duration;
+                  const ease = (t) => (t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t);
+                  const t = ease(p);
+
+                  const curAx = 200 + (150 - 200) * t;
+                  const curAy = 80 + (250 - 80) * t;
+                  const curBx = 350 + (300 - 350) * t;
+                  const curBy = 180 + (100 - 180) * t;
+                  const curCx = 450 + (450 - 450) * t;
+                  const curCy = 280 + (250 - 280) * t;
+
+                  this.edgeAB.setAttribute('x1', curAx);
+                  this.edgeAB.setAttribute('y1', curAy);
+                  this.edgeAB.setAttribute('x2', curBx);
+                  this.edgeAB.setAttribute('y2', curBy);
+
+                  this.edgeBC.setAttribute('x1', curBx);
+                  this.edgeBC.setAttribute('y1', curBy);
+                  this.edgeBC.setAttribute('x2', curCx);
+                  this.edgeBC.setAttribute('y2', curCy);
+
+                  requestAnimationFrame(animateEdges);
+                } else {
+                  this.updateEdges();
+                  this.caption.textContent = '平衡 (Balanced)';
+                  this.bfLabel.textContent = 'BF:0';
+                  this.bfLabel.setAttribute('fill', 'var(--color-accent)');
+                }
+              };
+              requestAnimationFrame(animateEdges);
+
+              this.timer = setTimeout(() => {
+                if (!this.isPlaying) return;
+                // Wait then Reset
+                this.timer = setTimeout(() => {
+                  if (!this.isPlaying) return;
+                  this.nodeA.style.transition = 'none';
+                  this.nodeB.style.transition = 'none';
+                  this.nodeC.style.transition = 'none';
+                  this.init();
+                  this.loop();
+                }, 2000);
+              }, 2000);
+            }, 1000);
+          }
+        }
+        const AnimProcess = new AnimProcessController();
+
+        // --- Insert Animation ---
+        class AnimInsertController {
+            constructor() {
+                this.container = document.getElementById('svg-insert');
+                this.statusEl = document.getElementById('ins-status');
+                this.stepIdx = 0;
+                this.nodes = {};
+                this.edges = {};
+                this.init();
+            }
+
+            init() {
+                this.stepIdx = 0;
+                if(!this.container) return;
+                this.container.innerHTML = '';
+                this.updateStatus('初始状态: 10 -> 20');
+                
+                // Initial Tree: 10 (Root), 20 (Right)
+                this.createNode('10', 300, 100, 'BF:-1');
+                this.createNode('20', 400, 200, 'BF:0');
+                this.createEdge('10', '20', 'e1');
+            }
+
+            createNode(val, x, y, bf) {
+                const ns = "http://www.w3.org/2000/svg";
+                const g = document.createElementNS(ns, 'g');
+                g.setAttribute('transform', `translate(${x}, ${y})`);
+                g.setAttribute('id', `ins-node-${val}`);
+                g.style.transition = 'all 0.8s ease';
+
+                const c = document.createElementNS(ns, 'circle');
+                c.setAttribute('r', '25');
+                c.setAttribute('fill', '#0B1020');
+                c.setAttribute('stroke', '#fff');
+                c.setAttribute('stroke-width', '2');
+                
+                const t = document.createElementNS(ns, 'text');
+                t.setAttribute('y', '8');
+                t.setAttribute('text-anchor', 'middle');
+                t.setAttribute('fill', '#fff');
+                t.setAttribute('font-size', '20');
+                t.textContent = val;
+
+                const b = document.createElementNS(ns, 'text');
+                b.setAttribute('x', '35');
+                b.setAttribute('y', '5');
+                b.setAttribute('fill', '#64748b');
+                b.setAttribute('font-size', '16');
+                b.setAttribute('class', 'bf-label');
+                b.textContent = bf;
+
+                g.appendChild(c);
+                g.appendChild(t);
+                g.appendChild(b);
+                this.container.appendChild(g);
+                this.nodes[val] = g;
+            }
+
+            createEdge(u, v, id) {
+                const ns = "http://www.w3.org/2000/svg";
+                const line = document.createElementNS(ns, 'line');
+                const nU = this.nodes[u];
+                const nV = this.nodes[v];
+                
+                // Get current translation
+                const uT = nU.getAttribute('transform').match(/translate\(([^,]+),\s*([^)]+)\)/);
+                const vT = nV.getAttribute('transform').match(/translate\(([^,]+),\s*([^)]+)\)/);
+                
+                line.setAttribute('x1', uT[1]);
+                line.setAttribute('y1', uT[2]);
+                line.setAttribute('x2', vT[1]);
+                line.setAttribute('y2', vT[2]);
+                line.setAttribute('stroke', '#fff');
+                line.setAttribute('stroke-width', '2');
+                line.setAttribute('id', `ins-edge-${id}`);
+                line.style.transition = 'all 0.8s ease';
+                this.container.insertBefore(line, this.container.firstChild);
+                this.edges[id] = line;
+            }
+
+            highlight(val, color) {
+                const node = this.nodes[val];
+                if(node) {
+                    node.querySelector('circle').setAttribute('stroke', color);
+                    node.querySelector('circle').setAttribute('stroke-width', '4');
+                }
+            }
+
+            updateBF(val, text, color='#22d3ee') {
+                const node = this.nodes[val];
+                if(node) {
+                    const bf = node.querySelector('.bf-label');
+                    bf.textContent = text;
+                    bf.setAttribute('fill', color);
+                    bf.style.fontWeight = 'bold';
+                }
+            }
+
+            updateStatus(msg) {
+                if(this.statusEl) this.statusEl.innerHTML = msg;
+            }
+            
+            step() {
+                this.stepIdx++;
+                switch(this.stepIdx) {
+                    case 1: // Insert 30
+                        this.updateStatus('1. 插入 30: 递归找到空位');
+                        this.highlight('10', '#a78bfa'); // visited
+                        setTimeout(() => this.highlight('20', '#a78bfa'), 500);
+                        break;
+                    case 2: // Create Node
+                        this.updateStatus('2. 创建节点 30');
+                        this.createNode('30', 500, 300, 'BF:0');
+                        this.createEdge('20', '30', 'e2');
+                        this.highlight('30', '#22d3ee');
+                        break;
+                    case 3: // Backtrack 20
+                        this.updateStatus('3. 回溯 -> 更新 20 的 BF');
+                        this.highlight('20', '#f472b6'); // processing
+                        this.updateBF('20', 'BF:-1', '#f472b6');
+                        break;
+                    case 4: // Backtrack 10
+                        this.updateStatus('4. 回溯 -> 更新 10 的 BF');
+                        this.highlight('10', '#f472b6');
+                        this.updateBF('10', 'BF:-2', '#f43f5e'); // Warning
+                        break;
+                    case 5: // Detect RR
+                        this.updateStatus('5. 发现失衡: BF(10)=-2 (右重), BF(20)=-1 (右重) -> RR型');
+                        break;
+                    case 6: // Rotate
+                        this.updateStatus('6. 执行左旋 (Left Rotate)');
+                        
+                        const n10 = this.nodes['10'];
+                        const n20 = this.nodes['20'];
+                        const n30 = this.nodes['30'];
+                        const e1 = this.edges['e1']; // 10-20
+                        const e2 = this.edges['e2']; // 20-30
+
+                        n20.setAttribute('transform', 'translate(300, 100)');
+                        n10.setAttribute('transform', 'translate(200, 200)');
+                        n30.setAttribute('transform', 'translate(400, 200)');
+
+                        // Update Edges
+                        e1.setAttribute('x1', '200'); e1.setAttribute('y1', '200'); // 10
+                        e1.setAttribute('x2', '300'); e1.setAttribute('y2', '100'); // 20
+
+                        e2.setAttribute('x1', '300'); e2.setAttribute('y1', '100'); // 20
+                        e2.setAttribute('x2', '400'); e2.setAttribute('y2', '200'); // 30
+                        
+                        // Update BFs
+                        this.updateBF('10', 'BF:0', '#22d3ee');
+                        this.updateBF('20', 'BF:0', '#22d3ee');
+                        this.highlight('10', '#fff');
+                        this.highlight('20', '#fff');
+                        this.highlight('30', '#fff');
+                        break;
+                    case 7:
+                         this.updateStatus('完成: 恢复平衡');
+                         break;
+                }
+            }
+            
+            reset() {
+                this.init();
+            }
+        }
+        const AnimInsert = new AnimInsertController();
+      </script>
+
+      <div class="absolute bottom-8 right-10 text-2xl text-white/30 z-50">
+        <span id="page-number">1 / 1</span>
+      </div>
+    </div>
+
+    <script>
+      const slides = document.querySelectorAll('.slide');
+      const pageNumberEl = document.getElementById('page-number');
+      const totalSlides = slides.length; // Will update as we add slides
+
+      function getPageFromUrl() {
+        const params = new URLSearchParams(window.location.search);
+        const page = parseInt(params.get('page'));
+        if (!isNaN(page) && page >= 1 && page <= slides.length) {
+          // Use dynamic length
+          return page - 1;
+        }
+        return 0;
+      }
+
+      let currentSlide = getPageFromUrl();
+
+      function updateSlide() {
+        const slidesNow = document.querySelectorAll('.slide');
+        slidesNow.forEach((slide, index) => {
+          slide.classList.remove('active');
+          if (index === currentSlide) {
+            slide.classList.add('active');
+          }
+        });
+        pageNumberEl.textContent = `${currentSlide + 1} / ${slidesNow.length}`;
+
+        if (currentSlide === 3) {
+          if (typeof AnimProcess !== 'undefined') AnimProcess.start();
+        } else {
+          if (typeof AnimProcess !== 'undefined') AnimProcess.stop();
+        }
+
+        if (currentSlide === 6) {
+          if (typeof AnimInsert !== 'undefined') AnimInsert.reset();
+        }
+
+        try {
+          const url = new URL(window.location.href);
+          url.searchParams.set('page', currentSlide + 1);
+          window.history.replaceState(null, '', url.href);
+        } catch (e) {}
+      }
+
+      function nextSlide() {
+        if (currentSlide < document.querySelectorAll('.slide').length - 1) {
+          currentSlide++;
+          updateSlide();
+        }
+      }
+
+      function prevSlide() {
+        if (currentSlide > 0) {
+          currentSlide--;
+          updateSlide();
+        }
+      }
+
+      function resizeApp() {
+        const app = document.getElementById('app');
+        const scale = Math.min(
+          window.innerWidth / 1920,
+          window.innerHeight / 1080
+        );
+        app.style.transform = `scale(${scale})`;
+      }
+
+      window.addEventListener('resize', resizeApp);
+      window.addEventListener('load', () => {
+        resizeApp();
+        updateSlide();
+      });
+
+      document.addEventListener('keydown', (e) => {
+        if (['ArrowRight', ' ', 'Enter'].includes(e.key)) nextSlide();
+        else if (e.key === 'ArrowLeft') prevSlide();
+      });
+    </script>
+
+    <script>
+      window.MathJax = {
+        tex: {
+          inlineMath: [
+            ['$', '$'],
+            ['\\(', '\\)'],
+          ],
+        },
+      };
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
+  </body>
+</html>
