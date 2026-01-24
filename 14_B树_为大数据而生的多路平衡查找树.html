@@ -1,0 +1,2662 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>14 B树：为大数据而生的多路平衡查找树</title>
+    <script src="https://unpkg.com/@tailwindcss/browser@4"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+    <style type="text/tailwindcss">
+      @theme {
+        --color-bg-dark: #030712;
+        --color-text-main: #f1f5f9;
+        --color-accent: #0ea5e9;
+        --color-secondary: #3b82f6;
+        --color-tertiary: #6366f1;
+        --color-warn: #ef4444;
+        --color-code-bg: #1e293b;
+      }
+      @layer base {
+        body { @apply bg-black text-text-main font-sans overflow-hidden flex justify-center items-center h-screen; }
+      }
+      @layer utilities {
+        .slide-container { @apply relative w-[1920px] h-[1080px] bg-bg-dark overflow-hidden shadow-2xl; }
+        .slide { @apply absolute inset-0 hidden flex-col p-14 opacity-0 transition-opacity duration-400 ease-in-out; }
+        .slide.active { @apply flex opacity-100; }
+        .bg-decoration { @apply absolute inset-0 z-0 pointer-events-none; background-image: radial-gradient(circle at 15% 15%, rgba(14,165,233,0.03) 0%, transparent 25%), radial-gradient(circle at 85% 85%, rgba(99,102,241,0.03) 0%, transparent 25%); }
+        .grid-overlay { @apply absolute inset-0 z-0; background-size: 60px 60px; background-image: linear-gradient(to right, rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.02) 1px, transparent 1px); }
+        h1 { @apply text-[100px] font-extrabold leading-tight mb-8; background: linear-gradient(135deg, #fff 0%, var(--color-accent) 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+        h2 { @apply text-[64px] mb-8 text-accent inline-block pb-4 border-b-4 border-accent/30; }
+        h3 { @apply text-[42px] mb-6 text-secondary; }
+        p, li { @apply text-[32px] mb-4 text-slate-300; }
+        strong { @apply text-accent font-bold; }
+        .card { @apply bg-white/5 border border-white/10 rounded-3xl p-6 mb-6 backdrop-blur-sm; }
+        .code-block { @apply font-mono bg-code-bg p-6 rounded-2xl border border-slate-700 text-[22px] leading-relaxed text-slate-200 overflow-x-auto whitespace-pre; }
+        .code-kw { @apply text-[#c678dd]; }
+        .code-type { @apply text-[#e5c07b]; }
+        .code-cm { @apply text-[#64748b] italic; }
+        .code-num { @apply text-[#d19a66]; }
+        .btn-primary { @apply px-6 py-3 bg-accent/20 border border-accent/50 rounded-xl text-accent font-bold text-[24px] cursor-pointer transition-all hover:bg-accent/30 hover:scale-105 active:scale-95; }
+        .btn-secondary { @apply px-6 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-slate-300 font-bold text-[24px] cursor-pointer transition-all hover:bg-slate-600/50; }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app" class="slide-container">
+      <div class="bg-decoration"></div>
+      <div class="grid-overlay"></div>
+
+      <!-- P01: 封面 -->
+      <section class="slide active justify-center items-center text-center" data-title="封面">
+        <div class="flex flex-col items-center z-10">
+          <svg width="750" height="300" viewBox="0 0 750 300" class="mb-8 overflow-visible">
+            <defs>
+              <linearGradient id="nodeGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" style="stop-color:#2563eb;stop-opacity:0.3" />
+                <stop offset="100%" style="stop-color:#1e3a8a;stop-opacity:0.5" />
+              </linearGradient>
+              <filter id="glow-blue"><feGaussianBlur stdDeviation="3" result="coloredBlur"/><feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+            </defs>
+            <!-- Root Node -->
+            <g transform="translate(375, 50)">
+              <rect x="-120" y="-30" width="240" height="60" rx="10" fill="url(#nodeGrad)" stroke="#3b82f6" stroke-width="2" filter="url(#glow-blue)"/>
+              <text x="0" y="10" text-anchor="middle" fill="#fff" font-size="24" font-weight="bold">30 | 60</text>
+            </g>
+            <!-- Edges -->
+            <path d="M295 80 L150 150 M375 80 L375 150 M455 80 L600 150" stroke="#3b82f6" stroke-width="2"/>
+            <!-- Children -->
+            <g transform="translate(120, 190)">
+              <rect x="-80" y="-30" width="160" height="60" rx="10" fill="url(#nodeGrad)" stroke="#3b82f6" stroke-width="2"/>
+              <text x="0" y="10" text-anchor="middle" fill="#fff" font-size="20" font-weight="bold">5 | 10 | 20</text>
+            </g>
+            <g transform="translate(375, 190)">
+              <rect x="-120" y="-30" width="240" height="60" rx="10" fill="url(#nodeGrad)" stroke="#3b82f6" stroke-width="2"/>
+              <text x="0" y="10" text-anchor="middle" fill="#fff" font-size="20" font-weight="bold">35 | 40 | 45 | 50 | 55</text>
+            </g>
+            <g transform="translate(630, 190)">
+              <rect x="-100" y="-30" width="200" height="60" rx="10" fill="url(#nodeGrad)" stroke="#3b82f6" stroke-width="2"/>
+              <text x="0" y="10" text-anchor="middle" fill="#fff" font-size="20" font-weight="bold">65 | 70 | 80 | 90</text>
+            </g>
+          </svg>
+          <div class="bg-blue-500/10 px-6 py-2 rounded-full border border-blue-500/30 mb-6">
+            <span class="text-blue-400 text-2xl font-mono tracking-widest">B-TREE</span>
+          </div>
+          <h1>数据结构与算法</h1>
+          <p class="text-[56px] text-secondary">B-Tree：为大数据而生的多路平衡查找树</p>
+        </div>
+      </section>
+
+      <!-- P02: 二叉搜索树的问题 -->
+      <section class="slide" data-title="BST的问题">
+        <h2>二叉搜索树在磁盘上的问题</h2>
+        <div class="grid grid-cols-2 gap-10 h-full items-center">
+          <div class="flex flex-col gap-6">
+            <div class="card p-8">
+              <h3><i class="fas fa-tree mr-3"></i>BST / AVL 的问题</h3>
+              <ul class="space-y-3 mt-4">
+                <li class="flex items-start text-[28px]">
+                  <i class="fas fa-times-circle text-red-400 mr-4 mt-1"></i>
+                  <span>高度大：N 个节点，高度 $O(\log_2 N)$</span>
+                </li>
+                <li class="flex items-start text-[28px]">
+                  <i class="fas fa-times-circle text-red-400 mr-4 mt-1"></i>
+                  <span>每次访问一个节点就是一次 I/O，树越高，访问越多</span>
+                </li>
+                <li class="flex items-start text-[28px]">
+                  <i class="fas fa-times-circle text-red-400 mr-4 mt-1"></i>
+                  <span>一个磁盘页只存 1 个 key，浪费空间</span>
+                </li>
+              </ul>
+            </div>
+            <div class="card bg-blue-900/20 border-blue-500/30 p-5">
+              <p class="text-[28px] text-white mb-0">
+                <i class="fas fa-calculator text-blue-400 mr-3"></i>
+                $N = 10^6$（百万级）→ 二叉树高度 ≈ <span class="text-warn font-bold">20 层</span> = 20 次 I/O
+              </p>
+            </div>
+            <div class="card p-8 border-warn/30 bg-warn/5">
+              <h3 class="text-warn"><i class="fas fa-hdd mr-3"></i>磁盘 I/O 很贵</h3>
+              <div class="flex items-center gap-8 mt-4">
+                <div class="text-center">
+                  <div class="text-[48px] font-bold text-green-400">~100 ns</div>
+                  <div class="text-slate-400 text-[22px]">内存访问</div>
+                </div>
+                <div class="text-[36px] text-slate-500">vs</div>
+                <div class="text-center">
+                  <div class="text-[48px] font-bold text-warn">~10 ms</div>
+                  <div class="text-slate-400 text-[22px]">磁盘读取</div>
+                </div>
+              </div>
+              <p class="text-[28px] text-red-400 mt-4 mb-0">差距：<strong>10 万倍</strong></p>
+            </div>
+          </div>
+          <div class="flex flex-col items-center justify-center">
+            <!-- 新增：磁盘页解释 -->
+            <div class="card p-6 border-accent/30 bg-accent/5 w-full mb-6">
+              <h3 class="text-accent"><i class="fas fa-file-alt mr-3"></i>磁盘页 (Disk Page)</h3>
+              <ul class="space-y-3 mt-3 text-[24px]">
+                <li class="flex items-start">
+                  <span class="text-accent mr-3 font-bold">•</span>
+                  <span><strong>最小交换单位</strong>：磁盘与内存按"页"（～4KB）交换数据。</span>
+                </li>
+                <li class="flex items-start">
+                  <span class="text-accent mr-3 font-bold">•</span>
+                  <span><strong>预读机制</strong>：即使读 1 字节也会加载整页，BST 节点小读一次浪费了整页的大部分空间。</span>
+                </li>
+              </ul>
+            </div>
+
+            <svg width="600" height="500" viewBox="0 0 600 500" class="overflow-visible">
+              <defs>
+                <marker id="arrowDown" markerWidth="10" markerHeight="10" refX="5" refY="5" orient="auto">
+                  <path d="M0,0 L10,5 L0,10 L2,5 Z" fill="#f87171" />
+                </marker>
+              </defs>
+              
+              <g transform="translate(300, 50)">
+                <text x="0" y="-20" text-anchor="middle" fill="#64748b" font-size="24">二叉搜索树 (BST)</text>
+                
+                <!-- Level 1 -->
+                <circle cx="0" cy="20" r="25" fill="#1e3a5f" stroke="#f87171" stroke-width="3"/>
+                <text x="0" y="28" text-anchor="middle" fill="#fff" font-size="18">50</text>
+                
+                <!-- Edges L1->L2 -->
+                <line x1="-15" y1="40" x2="-90" y2="100" stroke="#64748b" stroke-width="2"/>
+                <line x1="15" y1="40" x2="90" y2="100" stroke="#64748b" stroke-width="2"/>
+                
+                <!-- Level 2 -->
+                <circle cx="-100" cy="110" r="25" fill="#1e3a5f" stroke="#3b82f6" stroke-width="2"/>
+                <text x="-100" y="118" text-anchor="middle" fill="#fff" font-size="18">20</text>
+                
+                <circle cx="100" cy="110" r="25" fill="#1e3a5f" stroke="#3b82f6" stroke-width="2"/>
+                <text x="100" y="118" text-anchor="middle" fill="#fff" font-size="18">80</text>
+            
+                <!-- Edges L2->L3 -->
+                <line x1="-115" y1="130" x2="-150" y2="190" stroke="#64748b" stroke-width="2"/>
+                <line x1="-85" y1="130" x2="-50" y2="190" stroke="#64748b" stroke-width="2"/>
+                
+                <line x1="85" y1="130" x2="50" y2="190" stroke="#64748b" stroke-width="2"/>
+                <line x1="115" y1="130" x2="150" y2="190" stroke="#64748b" stroke-width="2"/>
+            
+                <!-- Level 3 -->
+                <circle cx="-160" cy="200" r="22" fill="#1e3a5f" stroke="#3b82f6" stroke-width="2"/>
+                <circle cx="-40" cy="200" r="22" fill="#1e3a5f" stroke="#3b82f6" stroke-width="2"/>
+                <circle cx="40" cy="200" r="22" fill="#1e3a5f" stroke="#3b82f6" stroke-width="2"/>
+                <circle cx="160" cy="200" r="22" fill="#1e3a5f" stroke="#3b82f6" stroke-width="2"/>
+                
+                <!-- Edges L3->L4 (Partial) -->
+                <line x1="-160" y1="222" x2="-180" y2="270" stroke="#64748b" stroke-width="2" stroke-dasharray="4,2"/>
+                <line x1="160" y1="222" x2="180" y2="270" stroke="#64748b" stroke-width="2" stroke-dasharray="4,2"/>
+                
+                <!-- Level 4 (Dots) -->
+                <circle cx="-190" cy="280" r="4" fill="#64748b"/>
+                <circle cx="190" cy="280" r="4" fill="#64748b"/>
+                
+                <!-- Height Indicator -->
+                <line x1="240" y1="20" x2="240" y2="280" stroke="#f87171" stroke-width="2" marker-end="url(#arrowDown)"/>
+                <text x="255" y="150" fill="#f87171" font-size="20">高度大 = I/O 多</text>
+              </g>
+            
+              <!-- Bottom Message -->
+              <g transform="translate(300, 400)">
+                <rect x="-240" y="-40" width="480" height="80" rx="12" fill="#1e293b" stroke="#f87171" stroke-width="2" stroke-dasharray="8,4"/>
+                <text x="0" y="-5" text-anchor="middle" fill="#fff" font-size="22">每个节点 = 1 次随机 I/O</text>
+                <text x="0" y="25" text-anchor="middle" fill="#f87171" font-size="20">读 4KB 只拿 1 个整数 → 浪费！</text>
+              </g>
+            </svg>
+          </div>
+        </div>
+      </section>
+
+      <!-- P03: 核心想法 -->
+      <section class="slide" data-title="核心想法">
+        <h2>核心想法：让树"矮胖"</h2>
+        <div class="grid grid-cols-2 gap-10 h-full items-center">
+          <div class="flex flex-col gap-6">
+            <div class="card p-8 border-accent/30 bg-accent/5">
+              <h3 class="text-accent"><i class="fas fa-lightbulb mr-3"></i>关键洞察</h3>
+              <ul class="space-y-6 mt-6">
+                <li class="flex items-start">
+                  <span class="text-accent text-[40px] mr-4">①</span>
+                  <div>
+                    <strong class="text-white text-[32px]">一个节点放更多 key</strong>
+                    <p class="text-slate-400 text-[26px]">反正读一个磁盘页，顺便多拿几个 key</p>
+                  </div>
+                </li>
+                <li class="flex items-start">
+                  <span class="text-accent text-[40px] mr-4">②</span>
+                  <div>
+                    <strong class="text-white text-[32px]">分叉更多</strong>
+                    <p class="text-slate-400 text-[26px]">k 个 key 可以分出 k+1 个子树范围</p>
+                  </div>
+                </li>
+                <li class="flex items-start">
+                  <span class="text-accent text-[40px] mr-4">③</span>
+                  <div>
+                    <strong class="text-white text-[32px]">高度更低</strong>
+                    <p class="text-slate-400 text-[26px]">分叉越多，同样数据量，树越矮</p>
+                  </div>
+                </li>
+              </ul>
+            </div>
+            <div class="card bg-tertiary/10 border-tertiary/30 p-6">
+              <p class="text-[36px] text-white font-bold mb-0">
+                <i class="fas fa-arrow-right text-tertiary mr-3"></i>
+                <span class="text-tertiary">多路查找树</span>（Multi-way Search Tree）
+              </p>
+            </div>
+          </div>
+          <div class="flex flex-col items-center justify-center">
+            <svg width="650" height="600" viewBox="0 0 650 600" class="overflow-visible">
+              <!-- Comparison -->
+              <g transform="translate(170, 100)">
+                <text x="0" y="-30" text-anchor="middle" fill="#f87171" font-size="24" font-weight="bold">二叉树：瘦高</text>
+                <path d="M0,0 L-40,60 M0,0 L40,60 M-40,60 L-60,120 M-40,60 L-20,120 M40,60 L20,120 M40,60 L60,120" stroke="#64748b" stroke-width="2"/>
+                <circle cx="0" cy="0" r="16" fill="#374151" stroke="#6b7280"/>
+                <circle cx="-40" cy="60" r="16" fill="#374151" stroke="#6b7280"/>
+                <circle cx="40" cy="60" r="16" fill="#374151" stroke="#6b7280"/>
+                <circle cx="-60" cy="120" r="14" fill="#374151" stroke="#6b7280"/>
+                <circle cx="-20" cy="120" r="14" fill="#374151" stroke="#6b7280"/>
+                <circle cx="20" cy="120" r="14" fill="#374151" stroke="#6b7280"/>
+                <circle cx="60" cy="120" r="14" fill="#374151" stroke="#6b7280"/>
+                <text x="100" y="60" fill="#f87171" font-size="16">高度大</text>
+              </g>
+              <g transform="translate(480, 100)">
+                <text x="0" y="-30" text-anchor="middle" fill="#0ea5e9" font-size="24" font-weight="bold">B 树：矮胖</text>
+                <rect x="-80" y="-10" width="160" height="40" rx="6" fill="#1e3a5f" stroke="#3b82f6" stroke-width="2"/>
+                <text x="0" y="18" text-anchor="middle" fill="#fff" font-size="14">30 | 60</text>
+                <path d="M-50,30 L-100,80 M0,30 L0,80 M50,30 L100,80" stroke="#3b82f6" stroke-width="2"/>
+                <rect x="-140" y="80" width="80" height="35" rx="5" fill="#1e3a5f" stroke="#3b82f6"/>
+                <rect x="-40" y="80" width="80" height="35" rx="5" fill="#1e3a5f" stroke="#3b82f6"/>
+                <rect x="60" y="80" width="80" height="35" rx="5" fill="#1e3a5f" stroke="#3b82f6"/>
+                <text x="130" y="60" fill="#0ea5e9" font-size="16">高度小</text>
+              </g>
+              <!-- Formula & Example -->
+              <g transform="translate(325, 350)">
+                <rect x="-280" y="-80" width="560" height="160" rx="15" fill="#1e293b" stroke="#475569"/>
+                
+                <!-- Headers -->
+                <text x="-180" y="-40" text-anchor="middle" fill="#f87171" font-size="24" font-weight="bold">二叉树</text>
+                <text x="100" y="-40" text-anchor="middle" fill="#0ea5e9" font-size="24" font-weight="bold">B 树 (m=100)</text>
+                
+                <!-- Vertical Separator -->
+                <line x1="-40" y1="-80" x2="-40" y2="80" stroke="#475569" stroke-width="2"/>
+                
+                <!-- Row 1: Formula -->
+                <text x="-180" y="-5" text-anchor="middle" fill="#94a3b8" font-size="20">高度 ≈ log₂N</text>
+                <text x="100" y="-5" text-anchor="middle" fill="#94a3b8" font-size="20">高度 ≈ log₁₀₀N</text>
+                
+                <!-- Row 2: Example N=100w -->
+                <g transform="translate(0, 35)">
+                   <!-- Label Background to hide line -->
+                   <rect x="-120" y="-15" width="160" height="30" rx="4" fill="#1e293b" />
+                   <text x="-40" y="5" text-anchor="middle" fill="#fff" font-size="18" font-weight="bold">当 N = 100 万</text>
+                   
+                   <text x="-180" y="35" text-anchor="middle" fill="#fff" font-size="26" font-weight="bold">~20 层</text>
+                   <text x="100" y="35" text-anchor="middle" fill="#fff" font-size="26" font-weight="bold">~3 层</text>
+                </g>
+              </g>
+              <!-- Disk page concept -->
+              <g transform="translate(325, 510)">
+                <rect x="-250" y="-50" width="500" height="100" rx="12" fill="#0f172a" stroke="#3b82f6" stroke-width="2" stroke-dasharray="8,4"/>
+                <text x="0" y="-15" text-anchor="middle" fill="#64748b" font-size="20">一个磁盘页 (Page)</text>
+                <g transform="translate(-150, 10)">
+                  <rect x="0" y="0" width="60" height="35" rx="4" fill="#1e3a5f" stroke="#3b82f6"/>
+                  <text x="30" y="24" text-anchor="middle" fill="#fff" font-size="14">K1</text>
+                </g>
+                <g transform="translate(-70, 10)">
+                  <rect x="0" y="0" width="60" height="35" rx="4" fill="#1e3a5f" stroke="#3b82f6"/>
+                  <text x="30" y="24" text-anchor="middle" fill="#fff" font-size="14">K2</text>
+                </g>
+                <g transform="translate(10, 10)">
+                  <rect x="0" y="0" width="60" height="35" rx="4" fill="#1e3a5f" stroke="#3b82f6"/>
+                  <text x="30" y="24" text-anchor="middle" fill="#fff" font-size="14">...</text>
+                </g>
+                <g transform="translate(90, 10)">
+                  <rect x="0" y="0" width="60" height="35" rx="4" fill="#1e3a5f" stroke="#3b82f6"/>
+                  <text x="30" y="24" text-anchor="middle" fill="#fff" font-size="14">Kn</text>
+                </g>
+              </g>
+            </svg>
+          </div>
+        </div>
+      </section>
+
+      <!-- P04: B 树定义 -->
+      <section class="slide" data-title="B树定义">
+        <h2>B 树定义</h2>
+        <div class="grid grid-cols-2 gap-10 h-full">
+          <div class="flex flex-col gap-5">
+            <div class="card p-7 border-accent/50 bg-accent/5">
+              <h3 class="text-accent"><i class="fas fa-book mr-3"></i>定义</h3>
+              <p class="text-[30px] text-white mt-4">
+                B 树是一种<span class="text-accent">多路、自平衡</span>查找树，通过控制树高减少 I/O 次数
+              </p>
+              <ul class="mt-4 space-y-2 leading-tight">
+                <li class="text-[28px]"><i class="fas fa-check text-green-400 mr-2"></i>节点内 key <strong>有序排列</strong></li>
+                <li class="text-[28px]"><i class="fas fa-check text-green-400 mr-2"></i>所有<strong>叶子节点在同一层</strong></li>
+              </ul>
+            </div>
+            <div class="card p-7">
+              <h3><i class="fas fa-ruler mr-3"></i>m 阶B 树规则</h3>
+              <ul class="mt-4 space-y-2 leading-tight">
+                <li class="text-[28px]"><i class="fas fa-check text-green-400 mr-2"></i>每个节点最多 M 个子节点，M-1 个数据（key）</li>
+                <li class="text-[28px]"><i class="fas fa-check text-green-400 mr-2"></i>根节点至少 2 个子节点，一个数据</li>
+                <li class="text-[28px]"><i class="fas fa-check text-green-400 mr-2"></i>非根节点最少 [M/2] 个子节点，[M/2]  -1 个数据（key）</li>
+              </ul>
+            </div>
+            <div class="card bg-warn/10 border-warn/30 p-5">
+              <p class="text-[26px] text-white mb-0">
+                <i class="fas fa-lightbulb text-warn mr-2"></i>
+                <strong>"至少半满"</strong>：避免页空间浪费、控制树的高度
+              </p>
+            </div>
+          </div>
+          <div class="flex flex-col items-center justify-center">
+            <svg width="550" height="450" viewBox="0 0 650 530" class="overflow-visible">
+              <!-- m=5 Example Tree -->
+              <g transform="translate(325, 80)">
+                <text x="0" y="-65" text-anchor="middle" fill="#64748b" font-size="22">key 是子树的分隔</text>
+                
+                <!-- Root Node with explicit key positions -->
+                <rect x="-140" y="-30" width="280" height="60" rx="10" fill="#1e3a5f" stroke="#3b82f6" stroke-width="2"/>
+                
+                <!-- Key 30 -->
+                <g transform="translate(-50, 0)">
+                    <rect x="-30" y="-20" width="60" height="40" rx="6" fill="#0f172a" stroke="#fbbf24" stroke-width="2"/>
+                    <text x="0" y="8" text-anchor="middle" fill="#fbbf24" font-size="24" font-weight="bold">30</text>
+                </g>
+                
+                <!-- Key 60 -->
+                <g transform="translate(50, 0)">
+                    <rect x="-30" y="-20" width="60" height="40" rx="6" fill="#0f172a" stroke="#fbbf24" stroke-width="2"/>
+                    <text x="0" y="8" text-anchor="middle" fill="#fbbf24" font-size="24" font-weight="bold">60</text>
+                </g>
+              </g>
+
+              <!-- Divider Lines (The "Wall" concept) -->
+              <g transform="translate(325, 110)">
+                 <!-- Line from 30 -->
+                 <line x1="-50" y1="0" x2="-120" y2="150" stroke="#fbbf24" stroke-width="2" stroke-dasharray="6,4" opacity="0.6"/>
+                 <!-- Line from 60 -->
+                 <line x1="50" y1="0" x2="120" y2="150" stroke="#fbbf24" stroke-width="2" stroke-dasharray="6,4" opacity="0.6"/>
+              </g>
+
+              <!-- Edges (Visual connections) -->
+              <path d="M225 140 L120 280 M325 140 L325 280 M425 140 L530 280" stroke="#3b82f6" stroke-width="2" opacity="0.3"/>
+
+              <!-- Children Nodes -->
+              <!-- Left child: < 30 -->
+              <g transform="translate(100, 280)">
+                <rect x="-90" y="-30" width="180" height="60" rx="8" fill="#1e3a5f" stroke="#3b82f6" stroke-width="2"/>
+                <text x="0" y="10" text-anchor="middle" fill="#fff" font-size="18" font-weight="bold">5 | 10 | 15 | 20</text>
+                <text x="0" y="60" text-anchor="middle" fill="#64748b" font-size="24">都小于 30</text>
+              </g>
+
+              <!-- Middle child: 30 ~ 60 -->
+              <g transform="translate(325, 280)">
+                <rect x="-80" y="-30" width="160" height="60" rx="8" fill="#1e3a5f" stroke="#3b82f6" stroke-width="2"/>
+                <text x="0" y="10" text-anchor="middle" fill="#fff" font-size="18" font-weight="bold">40 | 45 | 50</text>
+                <text x="0" y="60" text-anchor="middle" fill="#64748b" font-size="24">介于 30-60</text>
+              </g>
+
+              <!-- Right child: > 60 -->
+              <g transform="translate(530, 280)">
+                <rect x="-70" y="-30" width="140" height="60" rx="8" fill="#1e3a5f" stroke="#3b82f6" stroke-width="2"/>
+                <text x="0" y="10" text-anchor="middle" fill="#fff" font-size="18" font-weight="bold">70 | 80</text>
+                <text x="0" y="60" text-anchor="middle" fill="#64748b" font-size="24">都大于 60</text>
+              </g>
+              
+              <!-- Explanation text replacing the disk page one -->
+              <g transform="translate(325, 450)">
+                 <rect x="-280" y="-40" width="560" height="100" rx="12" fill="#1e293b" stroke="#475569" stroke-dasharray="8,4"/>
+                 <text x="0" y="-10" text-anchor="middle" fill="#fbbf24" font-size="22" font-weight="bold">Key 不仅仅是数据，更是"路标"</text>
+                 <text x="0" y="30" text-anchor="middle" fill="#94a3b8" font-size="20">m 个 Key 把数轴切分为 m+1 个区间</text>
+              </g>
+            </svg>
+              <div class="code-block text-[18px] p-4 w-full"><span class="code-kw">#define</span> M <span class="code-num">5</span>  <span class="code-cm">// 阶数</span>
+<span class="code-kw">typedef struct</span> BTreeNode {
+    <span class="code-type">int</span> n;                     <span class="code-cm">// 当前 key 数量</span>
+    <span class="code-type">int</span> keys[M - <span class="code-num">1</span>];           <span class="code-cm">// 最多 m-1 个 key</span>
+    <span class="code-kw">struct</span> BTreeNode *child[M]; <span class="code-cm">// 最多 m 个孩子</span>
+    <span class="code-type">bool</span> isLeaf;
+} BTreeNode;</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- P05: 查找 -->
+      <section class="slide" data-title="查找">
+        <h2>查找（Search）演示：Key = 30</h2>
+        <div class="grid grid-cols-3 gap-6 h-full">
+          <!-- 左侧：动画区域 -->
+          <div class="col-span-2 card p-0 relative overflow-hidden flex items-center justify-center bg-black/20">
+            <svg id="search-svg" width="800" height="600" viewBox="0 0 800 600" class="overflow-visible">
+              <defs>
+                <filter id="glow-gold-s">
+                  <feGaussianBlur stdDeviation="2.5" result="coloredBlur"/>
+                  <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                </filter>
+                <filter id="glow-blue-s">
+                  <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+                  <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                </filter>
+                <marker id="arr-gold" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#fbbf24"/></marker>
+              </defs>
+              
+              <!-- Static Links (Background) -->
+              <g id="s-links" stroke="#3b82f6" stroke-width="2" opacity="0.5">
+                 <!-- Root to L2 -->
+                 <path d="M400 105 L250 175" />
+                 <path d="M400 105 L550 175" />
+                 <!-- L2 Left to L3 -->
+                 <path d="M200 225 L120 295" />
+                 <path d="M250 225 L250 295" />
+                 <path d="M300 225 L380 295" />
+                 <!-- L2 Right to L3 -->
+                 <path d="M500 225 L510 295" />
+                 <path d="M550 225 L600 295" />
+                 <path d="M600 225 L690 295" />
+              </g>
+
+              <!-- Level 1: Root -->
+              <g id="s-root" transform="translate(400, 80)" opacity="0.5" class="transition-all duration-500">
+                <rect id="s-root-rect" x="-60" y="-25" width="120" height="50" rx="8" fill="#1e3a5f" stroke="#3b82f6" stroke-width="3"/>
+                <text x="0" y="8" text-anchor="middle" fill="#fff" font-size="24" font-weight="bold">50</text>
+                <g id="s-root-hint" opacity="0" transform="translate(0, -45)">
+                   <rect x="-60" y="-20" width="120" height="30" rx="4" fill="#000" fill-opacity="0.8"/>
+                   <text x="0" y="0" text-anchor="middle" fill="#fbbf24" font-size="16" font-weight="bold">30 < 50</text>
+                </g>
+              </g>
+
+              <!-- Path L1 -> L2 -->
+              <path id="s-path-1" d="M380 105 L250 175" stroke="#fbbf24" stroke-width="4" stroke-dasharray="10,5" opacity="0" class="transition-all duration-500"/>
+
+              <!-- Level 2 -->
+              <g transform="translate(0, 0)">
+                  <!-- L2 Left (Target Path) -->
+                  <g id="s-l2-left" transform="translate(250, 200)" opacity="0.5" class="transition-all duration-500">
+                    <rect id="s-l2-left-rect" x="-70" y="-25" width="140" height="50" rx="8" fill="#1e3a5f" stroke="#3b82f6" stroke-width="3"/>
+                    <text x="0" y="8" text-anchor="middle" fill="#fff" font-size="24" font-weight="bold">20 | 35</text>
+                    <g id="s-l2-hint" opacity="0" transform="translate(0, -45)">
+                       <rect x="-70" y="-20" width="140" height="30" rx="4" fill="#000" fill-opacity="0.8"/>
+                       <text x="0" y="0" text-anchor="middle" fill="#fbbf24" font-size="16" font-weight="bold">20 < 30 < 35</text>
+                    </g>
+                  </g>
+                  <!-- L2 Right (Inactive) -->
+                  <g id="s-l2-right" transform="translate(550, 200)" opacity="0.5">
+                    <rect x="-70" y="-25" width="140" height="50" rx="8" fill="#1e3a5f" stroke="#3b82f6"/>
+                    <text x="0" y="8" text-anchor="middle" fill="#fff" font-size="24">70 | 90</text>
+                  </g>
+              </g>
+
+              <!-- Path L2 -> L3 -->
+              <path id="s-path-2" d="M250 225 L250 295" stroke="#fbbf24" stroke-width="4" stroke-dasharray="10,5" opacity="0" class="transition-all duration-500"/>
+
+              <!-- Level 3 -->
+              <g transform="translate(0, 0)">
+                  <!-- L3 Child 1 -->
+                  <g transform="translate(120, 320)" opacity="0.5">
+                    <rect x="-30" y="-25" width="60" height="50" rx="8" fill="#1e3a5f" stroke="#3b82f6"/>
+                    <text x="0" y="8" text-anchor="middle" fill="#fff" font-size="20">10</text>
+                  </g>
+                  <!-- L3 Child 2 (Target Node) -->
+                  <g id="s-l3-target" transform="translate(250, 320)" opacity="0.5" class="transition-all duration-500">
+                    <rect id="s-l3-target-rect" x="-50" y="-25" width="100" height="50" rx="8" fill="#1e3a5f" stroke="#3b82f6" stroke-width="3"/>
+                    <text x="0" y="8" text-anchor="middle" fill="#fff" font-size="24" font-weight="bold">25 | 30</text>
+                  </g>
+                  <!-- L3 Child 3 -->
+                  <g transform="translate(380, 320)" opacity="0.5">
+                    <rect x="-50" y="-25" width="100" height="50" rx="8" fill="#1e3a5f" stroke="#3b82f6"/>
+                    <text x="0" y="8" text-anchor="middle" fill="#fff" font-size="20">40 | 45</text>
+                  </g>
+                  
+                  <!-- L3 Right Children (Visual only) -->
+                  <g transform="translate(510, 320)" opacity="0.5">
+                    <rect x="-30" y="-25" width="60" height="50" rx="8" fill="#1e3a5f" stroke="#3b82f6"/>
+                    <text x="0" y="8" text-anchor="middle" fill="#fff" font-size="20">60</text>
+                  </g>
+                  <g transform="translate(600, 320)" opacity="0.5">
+                    <rect x="-30" y="-25" width="60" height="50" rx="8" fill="#1e3a5f" stroke="#3b82f6"/>
+                    <text x="0" y="8" text-anchor="middle" fill="#fff" font-size="20">80</text>
+                  </g>
+                  <g transform="translate(690, 320)" opacity="0.5">
+                    <rect x="-30" y="-25" width="60" height="50" rx="8" fill="#1e3a5f" stroke="#3b82f6"/>
+                    <text x="0" y="8" text-anchor="middle" fill="#fff" font-size="20">95</text>
+                  </g>
+              </g>
+
+              <!-- Target Highlight Box -->
+              <g id="s-target-box" transform="translate(250, 320)" opacity="0">
+                <rect x="5" y="-18" width="46" height="36" rx="4" fill="none" stroke="#0ea5e9" stroke-width="4" filter="url(#glow-blue-s)"/>
+                <text x="0" y="60" text-anchor="middle" fill="#0ea5e9" font-size="24" font-weight="bold">Found!</text>
+              </g>
+
+              <!-- Disk I/O Counter -->
+              <g transform="translate(400, 450)">
+                 <rect x="-150" y="-40" width="300" height="80" rx="12" fill="#0f172a" stroke="#475569"/>
+                 <text x="0" y="-10" text-anchor="middle" fill="#94a3b8" font-size="18">磁盘 I/O 次数</text>
+                 <text id="s-io-count" x="0" y="25" text-anchor="middle" fill="#fff" font-size="32" font-weight="bold">0</text>
+              </g>
+
+              <!-- Time Complexity Formula -->
+              <foreignObject x="0" y="480" width="800" height="120">
+                <div xmlns="http://www.w3.org/1999/xhtml" class="flex flex-col items-center justify-center h-full">
+                  <div class="text-slate-400 text-[20px] mb-2">时间复杂度 = 树高 × 节点内二分</div>
+                  <div class="text-[28px] text-white font-bold">
+                    $O(\log_M N) \times O(\log_2 M) = \color{#0ea5e9}{O(\log_2 N)}$
+                  </div>
+                </div>
+              </foreignObject>
+            </svg>
+          </div>
+
+          <!-- 右侧：控制面板 -->
+          <div class="flex flex-col gap-4">
+            <div class="card p-6 border-accent/30 bg-accent/5 min-h-[690px]">
+              <h3 class="text-[28px] text-accent"><i class="fas fa-search mr-3"></i>查找步骤</h3>
+              <div class="mt-6 space-y-6">
+                 <!-- 步骤说明 -->
+                 <div class="p-4 bg-slate-800/80 rounded-xl border border-slate-700 min-h-[80px] flex items-center">
+                    <p id="s-step-text" class="text-[24px] text-white leading-relaxed">点击"下一步"开始...</p>
+                 </div>
+                 
+                 <!-- 状态列表 -->
+                 <div class="space-y-3">
+                    <div id="s-state-1" class="flex items-center text-slate-500 transition-colors">
+                        <i class="fas fa-circle text-[12px] mr-3"></i>
+                        <span class="text-[28px]">1. 读取根节点 (Page 0)</span>
+                    </div>
+                    <div id="s-state-2" class="flex items-center text-slate-500 transition-colors">
+                        <i class="fas fa-circle text-[12px] mr-3"></i>
+                        <span class="text-[28px]">2. 比较 & 下钻 (左子树)</span>
+                    </div>
+                    <div id="s-state-3" class="flex items-center text-slate-500 transition-colors">
+                        <i class="fas fa-circle text-[12px] mr-3"></i>
+                        <span class="text-[28px]">3. 读取中间 & 叶子节点</span>
+                    </div>
+                    <div id="s-state-4" class="flex items-center text-slate-500 transition-colors">
+                        <i class="fas fa-circle text-[12px] mr-3"></i>
+                        <span class="text-[28px]">4. 找到 Key 30</span>
+                    </div>
+                 </div>
+              </div>
+            </div>
+            <div class="flex gap-4">
+              <button id="btn-search-next" class="btn-primary flex-1"><i class="fas fa-step-forward mr-2"></i>下一步</button>
+              <button id="btn-search-reset" class="btn-secondary"><i class="fas fa-redo mr-2"></i>重置</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+
+      <!-- P06: 插入操作 -->
+      <section class="slide" data-title="插入操作">
+        <h2>插入（Insert）：三种情况</h2>
+        <div class="grid grid-cols-3 gap-6 h-full">
+          <!-- 情况一：直接插入 -->
+          <div class="flex flex-col gap-4">
+            <div class="card p-6 border-green-500/30 bg-green-500/5 flex-1">
+              <h3 class="text-green-400 text-[32px]"><i class="fas fa-check-circle mr-3"></i>情况一：直接插入</h3>
+              <p class="text-[26px] text-slate-300 mt-4">叶子节点<strong class="text-green-400">未满</strong>，直接将 key 插入到正确位置</p>
+              
+              <div class="mt-6 flex justify-center">
+                <svg width="300" height="280" viewBox="0 0 300 280" class="overflow-visible">
+                  <!-- Before: Node with space -->
+                  <g transform="translate(150, 60)">
+                    <text x="0" y="-35" text-anchor="middle" fill="#64748b" font-size="18">插入前 (M=5)</text>
+                    <rect x="-120" y="-20" width="240" height="45" rx="8" fill="#1e3a5f" stroke="#3b82f6" stroke-width="2"/>
+                    <!-- Keys -->
+                    <g transform="translate(-75, 0)">
+                      <rect x="-25" y="-12" width="50" height="28" rx="4" fill="#0f172a" stroke="#3b82f6"/>
+                      <text x="0" y="6" text-anchor="middle" fill="#fff" font-size="16">10</text>
+                    </g>
+                    <g transform="translate(0, 0)">
+                      <rect x="-25" y="-12" width="50" height="28" rx="4" fill="#0f172a" stroke="#3b82f6"/>
+                      <text x="0" y="6" text-anchor="middle" fill="#fff" font-size="16">30</text>
+                    </g>
+                    <g transform="translate(75, 0)">
+                      <rect x="-25" y="-12" width="50" height="28" rx="4" fill="#0f172a" stroke="#3b82f6" stroke-dasharray="4,2" opacity="0.4"/>
+                      <text x="0" y="6" text-anchor="middle" fill="#64748b" font-size="14">空</text>
+                    </g>
+                  </g>
+                  
+                  <!-- Arrow -->
+                  <g transform="translate(150, 110)">
+                    <text x="0" y="0" text-anchor="middle" fill="#fbbf24" font-size="18" font-weight="bold">插入 25</text>
+                    <path d="M0,10 L0,50" stroke="#fbbf24" stroke-width="3" marker-end="url(#arr-insert)"/>
+                  </g>
+                  
+                  <!-- After: Key inserted -->
+                  <g transform="translate(150, 220)">
+                    <text x="0" y="-30" text-anchor="middle" fill="#64748b" font-size="18">插入后</text>
+                    <rect x="-120" y="-20" width="240" height="45" rx="8" fill="#1e3a5f" stroke="#22c55e" stroke-width="2"/>
+                    <g transform="translate(-75, 0)">
+                      <rect x="-25" y="-12" width="50" height="28" rx="4" fill="#0f172a" stroke="#3b82f6"/>
+                      <text x="0" y="6" text-anchor="middle" fill="#fff" font-size="16">10</text>
+                    </g>
+                    <g transform="translate(0, 0)">
+                      <rect x="-25" y="-12" width="50" height="28" rx="4" fill="#0f172a" stroke="#22c55e" stroke-width="2"/>
+                      <text x="0" y="6" text-anchor="middle" fill="#22c55e" font-size="16" font-weight="bold">25</text>
+                    </g>
+                    <g transform="translate(75, 0)">
+                      <rect x="-25" y="-12" width="50" height="28" rx="4" fill="#0f172a" stroke="#3b82f6"/>
+                      <text x="0" y="6" text-anchor="middle" fill="#fff" font-size="16">30</text>
+                    </g>
+                  </g>
+                  
+                  <defs>
+                    <marker id="arr-insert" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+                      <polygon points="0 0, 8 3, 0 6" fill="#fbbf24"/>
+                    </marker>
+                  </defs>
+                </svg>
+              </div>
+              
+              <div class="mt-4 p-4 bg-green-900/20 rounded-xl border border-green-500/30">
+                <p class="text-[22px] text-green-300 mb-0">
+                  <i class="fas fa-bolt mr-2"></i>复杂度：<strong>O(log N)</strong> — 仅需查找定位
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 情况二：节点分裂 -->
+          <div class="flex flex-col gap-4">
+            <div class="card p-6 border-amber-500/30 bg-amber-500/5 flex-1">
+              <h3 class="text-amber-400 text-[32px]"><i class="fas fa-exclamation-triangle mr-3"></i>情况二：节点分裂</h3>
+              <p class="text-[26px] text-slate-300 mt-4">叶子满了分裂，父节点<strong class="text-green-400">有空间</strong>接收</p>
+              
+              <div class="mt-6 flex justify-center">
+                <svg width="380" height="420" viewBox="0 0 380 420" class="overflow-visible">
+                  <!-- Before: Tree with parent -->
+                  <g transform="translate(190, 60)">
+                    <text x="0" y="-38" text-anchor="middle" fill="#94a3b8" font-size="18">插入前：父节点有空位</text>
+                    <!-- Parent node (has space) -->
+                    <rect x="-85" y="-22" width="170" height="44" rx="8" fill="#1e3a5f" stroke="#22c55e" stroke-width="2"/>
+                    <text x="0" y="6" text-anchor="middle" fill="#fff" font-size="20"><tspan fill="#22c55e">50</tspan> | <tspan fill="#64748b">空</tspan></text>
+                    <!-- Edge to leaf -->
+                    <path d="M0,24 L0,58" stroke="#3b82f6" stroke-width="2"/>
+                    <!-- Leaf node (full) -->
+                    <g transform="translate(0, 88)">
+                      <rect x="-80" y="-18" width="170" height="40" rx="8" fill="#1e3a5f" stroke="#f59e0b" stroke-width="2"/>
+                      <text x="5" y="8" text-anchor="middle" fill="#fff" font-size="18">10 | 20 | 30 | <tspan fill="#f59e0b">35</tspan> | 40</text>
+                      <text x="105" y="8" fill="#f59e0b" font-size="14" font-weight="bold">插入 35</text>
+                    </g>
+                  </g>
+                  
+                  <!-- Arrow -->
+                  <g transform="translate(190, 180)">
+                    <path d="M0,8 L0,50" stroke="#fbbf24" stroke-width="4" marker-end="url(#arr-insert)"/>
+                  </g>
+                  
+                  <!-- After: Split complete -->
+                  <g transform="translate(190, 320)">
+                    <text x="0" y="-65" text-anchor="middle" fill="#22c55e" font-size="18" font-weight="bold">分裂后：30 上提，父节点接收</text>
+                    <!-- Parent node (received 30) -->
+                    <rect x="-95" y="-45" width="190" height="44" rx="8" fill="#1e3a5f" stroke="#22c55e" stroke-width="2"/>
+                    <text x="0" y="-18" text-anchor="middle" fill="#fff" font-size="20"><tspan fill="#a855f7" font-weight="bold">30</tspan> | 50</text>
+                    <!-- Edges -->
+                    <path d="M-45,2 L-85,42" stroke="#a855f7" stroke-width="2"/>
+                    <path d="M45,2 L85,42" stroke="#a855f7" stroke-width="2"/>
+                    <!-- Left child -->
+                    <g transform="translate(-85, 68)">
+                      <rect x="-55" y="-18" width="110" height="38" rx="8" fill="#1e3a5f" stroke="#22c55e" stroke-width="2"/>
+                      <text x="0" y="6" text-anchor="middle" fill="#fff" font-size="18">10 | 20</text>
+                    </g>
+                    <!-- Right child -->
+                    <g transform="translate(85, 68)">
+                      <rect x="-55" y="-18" width="110" height="38" rx="8" fill="#1e3a5f" stroke="#22c55e" stroke-width="2"/>
+                      <text x="0" y="6" text-anchor="middle" fill="#fff" font-size="18">35 | 40</text>
+                    </g>
+                  </g>
+                  
+                  <defs>
+                    <marker id="arr-purple" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+                      <polygon points="0 0, 10 4, 0 8" fill="#a855f7"/>
+                    </marker>
+                  </defs>
+                </svg>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 情况三：分裂传播 -->
+          <div class="flex flex-col gap-4">
+            <div class="card p-6 border-red-500/30 bg-red-500/5 flex-1 relative overflow-hidden">
+              <h3 class="text-red-400 text-[32px]"><i class="fas fa-sitemap mr-3"></i>情况三：分裂传播</h3>
+              <p class="text-[26px] text-slate-300 mt-4">父节点<strong class="text-red-400">也满了</strong>，分裂<strong class="text-red-400">向上传播</strong></p>
+              
+              <div class="my-10 flex justify-center items-center">
+                <svg width="480" height="520" viewBox="0 0 380 420" class="overflow-visible" style="transform: scale(1.15); transform-origin: center;">
+                  <!-- Before: 2-layer tree -->
+                  <g transform="translate(190, 10)">
+                    <!-- Root level -->
+                    <rect x="-30" y="15" width="60" height="28" rx="5" fill="#1e3a5f" stroke="#ef4444" stroke-width="2"/>
+                    <text x="0" y="34" text-anchor="middle" fill="#fff" font-size="13">30|60</text>
+                    <!-- Edges to level 1 -->
+                    <line x1="-10" y1="43" x2="-70" y2="70" stroke="#475569" stroke-width="1.5"/>
+                    <line x1="0" y1="43" x2="0" y2="70" stroke="#475569" stroke-width="1.5"/>
+                    <line x1="10" y1="43" x2="70" y2="70" stroke="#475569" stroke-width="1.5"/>
+                    <!-- Level 1 nodes -->
+                    <rect x="-95" y="70" width="50" height="26" rx="5" fill="#1e3a5f" stroke="#ef4444" stroke-width="2"/>
+                    <text x="-70" y="87" text-anchor="middle" fill="#fff" font-size="12">10|20</text>
+                    <rect x="-25" y="70" width="50" height="26" rx="5" fill="#1e3a5f" stroke="#3b82f6" stroke-width="1.5"/>
+                    <text x="0" y="87" text-anchor="middle" fill="#fff" font-size="12">40|50</text>
+                    <rect x="45" y="70" width="50" height="26" rx="5" fill="#1e3a5f" stroke="#3b82f6" stroke-width="1.5"/>
+                    <text x="70" y="87" text-anchor="middle" fill="#fff" font-size="12">70|80</text>
+                    
+                    <!-- Insert indicator -->
+                    <text x="-125" y="87" fill="#ef4444" font-size="12" font-weight="bold">+25</text>
+                    <text x="-70" y="110" text-anchor="middle" fill="#ef4444" font-size="10">满了!</text>
+                  </g>
+                  
+                  <!-- Arrow -->
+                  <g transform="translate(190, 145)">
+                    <line x1="0" y1="-25" x2="0" y2="0" stroke="#ef4444" stroke-width="2" stroke-dasharray="4,2" opacity="0.6"/>
+                    <path d="M0,0 L0,20" stroke="#ef4444" stroke-width="3" marker-end="url(#arr-red3)"/>
+                    <text x="50" y="15" fill="#ef4444" font-size="13">连锁分裂</text>
+                  </g>
+                  
+                  <!-- After: 3-layer tree (height increased) -->
+                  <g transform="translate(190, 195)">
+                    <!-- New root (height increased) -->
+                    <rect x="-22" y="15" width="44" height="26" rx="5" fill="#7c3aed" stroke="#a855f7" stroke-width="2"/>
+                    <text x="0" y="32" text-anchor="middle" fill="#fff" font-size="13" font-weight="bold">30</text>
+                    <text x="35" y="32" fill="#22c55e" font-size="11">新根!</text>
+                    <!-- Edges to level 1 -->
+                    <line x1="-5" y1="41" x2="-50" y2="65" stroke="#a855f7" stroke-width="1.5"/>
+                    <line x1="5" y1="41" x2="50" y2="65" stroke="#a855f7" stroke-width="1.5"/>
+                    <!-- Level 1 nodes (split from old root) -->
+                    <rect x="-75" y="65" width="50" height="26" rx="5" fill="#1e3a5f" stroke="#22c55e" stroke-width="2"/>
+                    <text x="-50" y="82" text-anchor="middle" fill="#fff" font-size="12">20</text>
+                    <rect x="25" y="65" width="50" height="26" rx="5" fill="#1e3a5f" stroke="#3b82f6" stroke-width="1.5"/>
+                    <text x="50" y="82" text-anchor="middle" fill="#fff" font-size="12">60</text>
+                    <!-- Edges to level 2 from left node -->
+                    <line x1="-60" y1="91" x2="-90" y2="115" stroke="#475569" stroke-width="1"/>
+                    <line x1="-40" y1="91" x2="-30" y2="115" stroke="#475569" stroke-width="1"/>
+                    <!-- Level 2 nodes under left subtree -->
+                    <rect x="-105" y="115" width="30" height="20" rx="4" fill="#0f172a" stroke="#22c55e" stroke-width="1.5"/>
+                    <text x="-90" y="129" text-anchor="middle" fill="#22c55e" font-size="10">10</text>
+                    <rect x="-45" y="115" width="30" height="20" rx="4" fill="#0f172a" stroke="#22c55e" stroke-width="1.5"/>
+                    <text x="-30" y="129" text-anchor="middle" fill="#22c55e" font-size="10">25</text>
+                    
+                    <!-- Edges to level 2 from right node -->
+                    <line x1="40" y1="91" x2="30" y2="115" stroke="#475569" stroke-width="1"/>
+                    <line x1="60" y1="91" x2="90" y2="115" stroke="#475569" stroke-width="1"/>
+                    <!-- Level 2 nodes under right subtree -->
+                    <rect x="15" y="115" width="30" height="20" rx="4" fill="#0f172a" stroke="#3b82f6" stroke-width="1"/>
+                    <text x="30" y="129" text-anchor="middle" fill="#fff" font-size="10">40|50</text>
+                    <rect x="75" y="115" width="30" height="20" rx="4" fill="#0f172a" stroke="#3b82f6" stroke-width="1"/>
+                    <text x="90" y="129" text-anchor="middle" fill="#fff" font-size="10">70|80</text>
+                  </g>
+                  
+                  <!-- Summary -->
+                  <g transform="translate(190, 385)">
+                    <rect x="-140" y="-20" width="280" height="45" rx="8" fill="rgba(34,197,94,0.1)" stroke="#22c55e" stroke-width="1.5"/>
+                    <text x="0" y="5" text-anchor="middle" fill="#22c55e" font-size="15" font-weight="bold">叶→父→根 连锁分裂，树高+1</text>
+                  </g>
+                  
+                  <defs>
+                    <marker id="arr-red3" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+                      <polygon points="0 0, 10 4, 0 8" fill="#ef4444"/>
+                    </marker>
+                  </defs>
+                </svg>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- P07: 插入演示 -->
+      <section class="slide" data-title="插入演示">
+        <h2>插入（Insert）演示：三种情况</h2>
+        <div class="grid grid-cols-3 gap-6 h-full">
+          <!-- 左侧：动画区域 -->
+          <div class="col-span-2 card p-0 relative overflow-hidden flex items-center justify-center bg-black/20">
+            <svg id="insert-svg" width="800" height="620" viewBox="0 0 800 620" class="overflow-visible">
+              <defs>
+                <filter id="glow-green-i">
+                  <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                  <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                </filter>
+                <filter id="glow-gold-i">
+                  <feGaussianBlur stdDeviation="2.5" result="coloredBlur"/>
+                  <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                </filter>
+                <filter id="glow-purple-i">
+                  <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                  <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                </filter>
+                <marker id="arr-up" markerWidth="10" markerHeight="8" refX="5" refY="8" orient="auto">
+                  <polygon points="0 8, 5 0, 10 8" fill="#a855f7"/>
+                </marker>
+              </defs>
+              
+              <!-- 动态树容器 -->
+              <g id="i-tree-container"></g>
+              
+              <!-- 操作提示 -->
+              <g id="i-action-hint" transform="translate(400, 550)" opacity="0">
+                <rect x="-180" y="-30" width="360" height="60" rx="10" fill="#0f172a" stroke="#fbbf24" stroke-width="2"/>
+                <text id="i-hint-text" x="0" y="8" text-anchor="middle" fill="#fbbf24" font-size="22" font-weight="bold"></text>
+              </g>
+            </svg>
+          </div>
+
+          <!-- 右侧：控制面板 -->
+          <div class="flex flex-col gap-4">
+            <div class="card p-6 border-accent/30 bg-accent/5 min-h-[690px]">
+              <h3 class="text-[28px] text-accent"><i class="fas fa-plus-circle mr-3"></i>插入步骤</h3>
+              <div class="mt-4 space-y-4">
+                <!-- 当前情况指示 -->
+                <div id="i-case-indicator" class="p-3 rounded-xl border-2 border-slate-500/50 bg-slate-500/10">
+                  <span class="text-slate-400 text-[22px] font-bold"><i class="fas fa-info-circle mr-2"></i>准备就绪</span>
+                </div>
+                
+                <!-- 步骤说明 -->
+                <div class="p-4 bg-slate-800/80 rounded-xl border border-slate-700 min-h-[70px] flex items-center">
+                  <p id="i-step-text" class="text-[22px] text-white leading-relaxed">3阶B树：每节点最多2个key。点击开始演示...</p>
+                </div>
+                
+                <!-- 三种情况说明 -->
+                <div class="space-y-2">
+                  <div id="i-case-1" class="flex items-center text-slate-500 transition-all p-2 rounded-lg">
+                    <i class="fas fa-circle text-[10px] mr-3"></i>
+                    <span class="text-[22px]">① 插入 30：直接插入</span>
+                  </div>
+                  <div id="i-case-2" class="flex items-center text-slate-500 transition-all p-2 rounded-lg">
+                    <i class="fas fa-circle text-[10px] mr-3"></i>
+                    <span class="text-[22px]">② 插入 80：节点分裂</span>
+                  </div>
+                  <div id="i-case-3" class="flex items-center text-slate-500 transition-all p-2 rounded-lg">
+                    <i class="fas fa-circle text-[10px] mr-3"></i>
+                    <span class="text-[22px]">③ 插入 25：分裂传播</span>
+                  </div>
+                </div>
+                
+              </div>
+            </div>
+            <div class="flex gap-3">
+              <button id="btn-insert-prev" class="btn-secondary flex-1"><i class="fas fa-step-backward mr-2"></i>上一步</button>
+              <button id="btn-insert-next" class="btn-primary flex-1"><i class="fas fa-step-forward mr-2"></i>下一步</button>
+              <button id="btn-insert-reset" class="btn-secondary"><i class="fas fa-redo mr-2"></i>重置</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- P08: 删除操作 -->
+      <section class="slide" data-title="删除操作">
+        <h2>删除（Delete）：三种情况</h2>
+        <div class="grid grid-cols-3 gap-6 h-full">
+          <!-- 情况一：直接删除 -->
+          <div class="flex flex-col gap-4">
+            <div class="card p-6 border-green-500/30 bg-green-500/5 flex-1">
+              <h3 class="text-green-400 text-[32px]"><i class="fas fa-check-circle mr-3"></i>情况一：直接删除</h3>
+              <p class="text-[26px] text-slate-300 mt-4">叶子节点删除后 key 数量仍<strong class="text-green-400">≥ 下限</strong>，直接删除</p>
+              
+              <div class="mt-6 flex justify-center">
+                <svg width="300" height="280" viewBox="0 0 300 280" class="overflow-visible">
+                  <!-- Before: Node with enough keys -->
+                  <g transform="translate(150, 60)">
+                    <text x="0" y="-35" text-anchor="middle" fill="#64748b" font-size="18">删除前 (M=5, 下限=2)</text>
+                    <rect x="-120" y="-20" width="240" height="45" rx="8" fill="#1e3a5f" stroke="#3b82f6" stroke-width="2"/>
+                    <!-- Keys -->
+                    <g transform="translate(-75, 0)">
+                      <rect x="-25" y="-12" width="50" height="28" rx="4" fill="#0f172a" stroke="#3b82f6"/>
+                      <text x="0" y="6" text-anchor="middle" fill="#fff" font-size="16">10</text>
+                    </g>
+                    <g transform="translate(0, 0)">
+                      <rect x="-25" y="-12" width="50" height="28" rx="4" fill="#0f172a" stroke="#ef4444" stroke-width="2"/>
+                      <text x="0" y="6" text-anchor="middle" fill="#ef4444" font-size="16" font-weight="bold">25</text>
+                    </g>
+                    <g transform="translate(75, 0)">
+                      <rect x="-25" y="-12" width="50" height="28" rx="4" fill="#0f172a" stroke="#3b82f6"/>
+                      <text x="0" y="6" text-anchor="middle" fill="#fff" font-size="16">30</text>
+                    </g>
+                  </g>
+                  
+                  <!-- Arrow -->
+                  <g transform="translate(150, 110)">
+                    <text x="0" y="0" text-anchor="middle" fill="#ef4444" font-size="18" font-weight="bold">删除 25</text>
+                    <path d="M0,10 L0,50" stroke="#ef4444" stroke-width="3" marker-end="url(#arr-del)"/>
+                  </g>
+                  
+                  <!-- After: Key deleted -->
+                  <g transform="translate(150, 220)">
+                    <text x="0" y="-30" text-anchor="middle" fill="#64748b" font-size="18">删除后 (仍有2个)</text>
+                    <rect x="-85" y="-20" width="170" height="45" rx="8" fill="#1e3a5f" stroke="#22c55e" stroke-width="2"/>
+                    <g transform="translate(-40, 0)">
+                      <rect x="-25" y="-12" width="50" height="28" rx="4" fill="#0f172a" stroke="#3b82f6"/>
+                      <text x="0" y="6" text-anchor="middle" fill="#fff" font-size="16">10</text>
+                    </g>
+                    <g transform="translate(40, 0)">
+                      <rect x="-25" y="-12" width="50" height="28" rx="4" fill="#0f172a" stroke="#3b82f6"/>
+                      <text x="0" y="6" text-anchor="middle" fill="#fff" font-size="16">30</text>
+                    </g>
+                  </g>
+                  
+                  <defs>
+                    <marker id="arr-del" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+                      <polygon points="0 0, 8 3, 0 6" fill="#ef4444"/>
+                    </marker>
+                  </defs>
+                </svg>
+              </div>
+              
+              <div class="mt-4 p-4 bg-green-900/20 rounded-xl border border-green-500/30">
+                <p class="text-[22px] text-green-300 mb-0">
+                  <i class="fas fa-bolt mr-2"></i>复杂度：<strong>O(log N)</strong> — 仅需查找定位
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 情况二：借用兄弟 -->
+          <div class="flex flex-col gap-4">
+            <div class="card p-6 border-amber-500/30 bg-amber-500/5 flex-1">
+              <h3 class="text-amber-400 text-[32px]"><i class="fas fa-exchange-alt mr-3"></i>情况二：借用兄弟</h3>
+              <p class="text-[26px] text-slate-300 mt-4">删除后<strong class="text-amber-400">不足下限</strong>，但兄弟节点<strong class="text-green-400">有富余</strong></p>
+              
+              <div class="mt-6 flex justify-center">
+                <svg width="380" height="420" viewBox="0 0 380 420" class="overflow-visible">
+                  <!-- Before -->
+                  <g transform="translate(190, 60)">
+                    <text x="0" y="-38" text-anchor="middle" fill="#94a3b8" font-size="18">删除前：兄弟有富余</text>
+                    <!-- Parent node -->
+                    <rect x="-50" y="-22" width="100" height="44" rx="8" fill="#1e3a5f" stroke="#3b82f6" stroke-width="2"/>
+                    <text x="0" y="6" text-anchor="middle" fill="#fff" font-size="20">50</text>
+                    <!-- Edges -->
+                    <path d="M-25,24 L-70,58" stroke="#3b82f6" stroke-width="2"/>
+                    <path d="M25,24 L70,58" stroke="#3b82f6" stroke-width="2"/>
+                    <!-- Left child (will delete) -->
+                    <g transform="translate(-70, 88)">
+                      <rect x="-50" y="-18" width="100" height="40" rx="8" fill="#1e3a5f" stroke="#ef4444" stroke-width="2"/>
+                      <text x="0" y="8" text-anchor="middle" fill="#fff" font-size="18"><tspan fill="#ef4444">30</tspan> | 40</text>
+                      <text x="-100" y="8" fill="#ef4444" font-size="14" font-weight="bold">删30</text>
+                    </g>
+                    <!-- Right child (sibling with extra) -->
+                    <g transform="translate(70, 88)">
+                      <rect x="-60" y="-18" width="120" height="40" rx="8" fill="#1e3a5f" stroke="#22c55e" stroke-width="2"/>
+                      <text x="0" y="8" text-anchor="middle" fill="#fff" font-size="18">60 | 70 | 80</text>
+                      <text x="80" y="8" fill="#22c55e" font-size="14" font-weight="bold">富余!</text>
+                    </g>
+                  </g>
+                  
+                  <!-- Arrow -->
+                  <g transform="translate(190, 180)">
+                    <path d="M0,8 L0,50" stroke="#fbbf24" stroke-width="4" marker-end="url(#arr-del)"/>
+                    <text x="60" y="35" text-anchor="start" fill="#fbbf24" font-size="16" font-weight="bold">借用</text>
+                  </g>
+                  
+                  <!-- After -->
+                  <g transform="translate(190, 320)">
+                    <text x="0" y="-65" text-anchor="middle" fill="#22c55e" font-size="18" font-weight="bold">借用后：父key下移，兄弟key上移</text>
+                    <!-- Parent node (key changed) -->
+                    <rect x="-50" y="-45" width="100" height="44" rx="8" fill="#1e3a5f" stroke="#a855f7" stroke-width="2"/>
+                    <text x="0" y="-18" text-anchor="middle" fill="#fff" font-size="20"><tspan fill="#a855f7" font-weight="bold">60</tspan></text>
+                    <!-- Edges -->
+                    <path d="M-25,2 L-70,42" stroke="#3b82f6" stroke-width="2"/>
+                    <path d="M25,2 L70,42" stroke="#3b82f6" stroke-width="2"/>
+                    <!-- Left child -->
+                    <g transform="translate(-70, 68)">
+                      <rect x="-50" y="-18" width="100" height="38" rx="8" fill="#1e3a5f" stroke="#22c55e" stroke-width="2"/>
+                      <text x="0" y="6" text-anchor="middle" fill="#fff" font-size="18">40 | <tspan fill="#a855f7" font-weight="bold">50</tspan></text>
+                    </g>
+                    <!-- Right child -->
+                    <g transform="translate(70, 68)">
+                      <rect x="-50" y="-18" width="100" height="38" rx="8" fill="#1e3a5f" stroke="#22c55e" stroke-width="2"/>
+                      <text x="0" y="6" text-anchor="middle" fill="#fff" font-size="18">70 | 80</text>
+                    </g>
+                  </g>
+                  
+                  <defs>
+                    <marker id="arr-borrow" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+                      <polygon points="0 0, 10 4, 0 8" fill="#a855f7"/>
+                    </marker>
+                  </defs>
+                </svg>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 情况三：合并节点 -->
+          <div class="flex flex-col gap-4">
+            <div class="card p-6 border-red-500/30 bg-red-500/5 flex-1">
+              <h3 class="text-red-400 text-[32px]"><i class="fas fa-compress-arrows-alt mr-3"></i>情况三：合并节点</h3>
+              <p class="text-[26px] text-slate-300 mt-4">删除后不足，兄弟也<strong class="text-red-400">无富余</strong>，需要<strong class="text-red-400">合并</strong></p>
+              
+              <div class="mt-6 flex justify-center items-center">
+                <svg width="480" height="520" viewBox="0 0 380 420" class="overflow-visible" style="transform: scale(1.15); transform-origin: center;">
+                  <!-- Before: 3-layer 5阶 B树 -->
+                  <g transform="translate(190, 15)">
+                    <!-- Root (Level 0) -->
+                    <rect x="-28" y="12" width="56" height="26" rx="5" fill="#1e3a5f" stroke="#3b82f6" stroke-width="1.5"/>
+                    <text x="0" y="30" text-anchor="middle" fill="#fff" font-size="13">50</text>
+                    <!-- Edges to Level 1 -->
+                    <line x1="-8" y1="38" x2="-55" y2="60" stroke="#475569" stroke-width="1.5"/>
+                    <line x1="8" y1="38" x2="55" y2="60" stroke="#475569" stroke-width="1.5"/>
+                    <!-- Level 1 nodes -->
+                    <rect x="-85" y="60" width="60" height="24" rx="5" fill="#1e3a5f" stroke="#ef4444" stroke-width="2"/>
+                    <text x="-55" y="76" text-anchor="middle" fill="#fff" font-size="12">20 | 35</text>
+                    <rect x="25" y="60" width="60" height="24" rx="5" fill="#1e3a5f" stroke="#3b82f6" stroke-width="1.5"/>
+                    <text x="55" y="76" text-anchor="middle" fill="#fff" font-size="12">70 | 85</text>
+                    <!-- Edges to Level 2 (leaves) -->
+                    <line x1="-70" y1="84" x2="-95" y2="105" stroke="#475569" stroke-width="1"/>
+                    <line x1="-55" y1="84" x2="-55" y2="105" stroke="#475569" stroke-width="1"/>
+                    <line x1="-40" y1="84" x2="-15" y2="105" stroke="#475569" stroke-width="1"/>
+                    <!-- Level 2 (leaf) nodes -->
+                    <rect x="-125" y="105" width="40" height="22" rx="4" fill="#0f172a" stroke="#3b82f6" stroke-width="1"/>
+                    <text x="-105" y="119" text-anchor="middle" fill="#fff" font-size="10">5|10</text>
+                    <rect x="-75" y="105" width="40" height="22" rx="4" fill="#0f172a" stroke="#ef4444" stroke-width="2"/>
+                    <text x="-55" y="119" text-anchor="middle" fill="#fff" font-size="10"><tspan fill="#ef4444">25</tspan>|30</text>
+                    <text x="-55" y="140" fill="#ef4444" font-size="9" font-weight="bold" text-anchor="middle">删25!</text>
+                    <rect x="-30" y="105" width="40" height="22" rx="4" fill="#0f172a" stroke="#3b82f6" stroke-width="1"/>
+                    <text x="-10" y="119" text-anchor="middle" fill="#fff" font-size="10">40|45</text>
+                    <text x="-15" y="140" fill="#f59e0b" font-size="9" text-anchor="middle">下限</text>
+                    
+                    <!-- Right Subtree (Simplified) -->
+                    <line x1="40" y1="84" x2="25" y2="105" stroke="#475569" stroke-width="1"/>
+                    <line x1="55" y1="84" x2="65" y2="105" stroke="#475569" stroke-width="1"/>
+                    <line x1="70" y1="84" x2="105" y2="105" stroke="#475569" stroke-width="1"/>
+                    <rect x="15" y="105" width="30" height="22" rx="4" fill="#1e293b" stroke="#475569" stroke-width="1"/>
+                    <text x="30" y="119" text-anchor="middle" fill="#64748b" font-size="9">...</text>
+                    <rect x="50" y="105" width="30" height="22" rx="4" fill="#1e293b" stroke="#475569" stroke-width="1"/>
+                    <text x="65" y="119" text-anchor="middle" fill="#64748b" font-size="9">...</text>
+                    <rect x="90" y="105" width="30" height="22" rx="4" fill="#1e293b" stroke="#475569" stroke-width="1"/>
+                    <text x="105" y="119" text-anchor="middle" fill="#64748b" font-size="9">...</text>
+                  </g>
+                  
+                  <!-- Arrow -->
+                  <g transform="translate(190, 165)">
+                    <path d="M0,0 L0,30" stroke="#ef4444" stroke-width="3" marker-end="url(#arr-del)"/>
+                    <text x="50" y="20" fill="#ef4444" font-size="13" font-weight="bold">合并</text>
+                  </g>
+                  
+                  <!-- After: 3-layer tree (merged) -->
+                  <g transform="translate(190, 215)">
+                    <text x="0" y="0" text-anchor="middle" fill="#22c55e" font-size="14">合并后：父key下移，节点合一</text>
+                    <!-- Root (Level 0) -->
+                    <rect x="-28" y="12" width="56" height="26" rx="5" fill="#1e3a5f" stroke="#3b82f6" stroke-width="1.5"/>
+                    <text x="0" y="30" text-anchor="middle" fill="#fff" font-size="13">50</text>
+                    <!-- Edges to Level 1 -->
+                    <line x1="-8" y1="38" x2="-45" y2="60" stroke="#475569" stroke-width="1.5"/>
+                    <line x1="8" y1="38" x2="55" y2="60" stroke="#475569" stroke-width="1.5"/>
+                    <!-- Level 1 nodes (parent lost one key) -->
+                    <rect x="-72" y="60" width="54" height="24" rx="5" fill="#1e3a5f" stroke="#22c55e" stroke-width="2"/>
+                    <text x="-45" y="76" text-anchor="middle" fill="#22c55e" font-size="12" font-weight="bold">35</text>
+                    <text x="-115" y="76" fill="#fbbf24" font-size="10">少了20!</text>
+                    <rect x="28" y="60" width="60" height="24" rx="5" fill="#1e3a5f" stroke="#3b82f6" stroke-width="1.5"/>
+                    <text x="58" y="76" text-anchor="middle" fill="#fff" font-size="12">70 | 85</text>
+                    <!-- Edges to Level 2 -->
+                    <line x1="-55" y1="84" x2="-70" y2="105" stroke="#475569" stroke-width="1"/>
+                    <line x1="-35" y1="84" x2="-20" y2="105" stroke="#475569" stroke-width="1"/>
+                    <!-- Level 2 (merged leaf) nodes -->
+                    <rect x="-120" y="105" width="80" height="22" rx="4" fill="#0f172a" stroke="#22c55e" stroke-width="2"/>
+                    <text x="-80" y="119" text-anchor="middle" fill="#22c55e" font-size="10" font-weight="bold">5|10|20|30</text>
+                    <text x="-70" y="140" fill="#a855f7" font-size="9" text-anchor="middle">20下移合并!</text>
+                    <rect x="-30" y="105" width="40" height="22" rx="4" fill="#0f172a" stroke="#3b82f6" stroke-width="1"/>
+                    <text x="-10" y="119" text-anchor="middle" fill="#fff" font-size="10">40|45</text>
+                    
+                    <!-- Right Subtree (Simplified) -->
+                    <line x1="40" y1="84" x2="25" y2="105" stroke="#475569" stroke-width="1"/>
+                    <line x1="55" y1="84" x2="65" y2="105" stroke="#475569" stroke-width="1"/>
+                    <line x1="70" y1="84" x2="105" y2="105" stroke="#475569" stroke-width="1"/>
+                    <rect x="15" y="105" width="30" height="22" rx="4" fill="#1e293b" stroke="#475569" stroke-width="1"/>
+                    <text x="30" y="119" text-anchor="middle" fill="#64748b" font-size="9">...</text>
+                    <rect x="50" y="105" width="30" height="22" rx="4" fill="#1e293b" stroke="#475569" stroke-width="1"/>
+                    <text x="65" y="119" text-anchor="middle" fill="#64748b" font-size="9">...</text>
+                    <rect x="90" y="105" width="30" height="22" rx="4" fill="#1e293b" stroke="#475569" stroke-width="1"/>
+                    <text x="105" y="119" text-anchor="middle" fill="#64748b" font-size="9">...</text>
+                  </g>
+                  
+                  <!-- Warning -->
+                  <g transform="translate(190, 395)">
+                    <rect x="-165" y="-25" width="330" height="55" rx="8" fill="rgba(239,68,68,0.1)" stroke="#ef4444" stroke-width="1.5"/>
+                    <text x="0" y="-2" text-anchor="middle" fill="#ef4444" font-size="15" font-weight="bold">⚠️ 父节点 [20|35] → [35]</text>
+                    <text x="0" y="18" text-anchor="middle" fill="#fbbf24" font-size="13">若父也低于下限，合并继续向上传播！</text>
+                  </g>
+                  
+                  <defs>
+                    <marker id="arr-del" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+                      <polygon points="0 0, 10 4, 0 8" fill="#ef4444"/>
+                    </marker>
+                  </defs>
+                </svg>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- P09: 删除演示 -->
+      <section class="slide" data-title="删除演示">
+        <h2>删除（Delete）演示：三种情况</h2>
+        <div class="grid grid-cols-3 gap-6 h-full">
+          <!-- 左侧：动画区域 -->
+          <div class="col-span-2 card p-0 relative overflow-hidden flex items-center justify-center bg-black/20">
+            <svg id="delete-svg" width="1000" height="620" viewBox="0 0 1000 620" class="overflow-visible">
+              <defs>
+                <filter id="glow-green-d">
+                  <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                  <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                </filter>
+                <filter id="glow-gold-d">
+                  <feGaussianBlur stdDeviation="2.5" result="coloredBlur"/>
+                  <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                </filter>
+                <filter id="glow-red-d">
+                  <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                  <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                </filter>
+                <filter id="glow-purple-d">
+                  <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                  <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                </filter>
+                <marker id="arr-down-d" markerWidth="10" markerHeight="8" refX="5" refY="0" orient="auto">
+                  <polygon points="0 0, 5 8, 10 0" fill="#a855f7"/>
+                </marker>
+              </defs>
+              
+              <!-- 动态树容器 -->
+              <g id="d-tree-container"></g>
+              
+              <!-- 操作提示 -->
+              <g id="d-action-hint" transform="translate(450, 550)" opacity="0">
+                <rect x="-180" y="-30" width="360" height="60" rx="10" fill="#0f172a" stroke="#ef4444" stroke-width="2"/>
+                <text id="d-hint-text" x="0" y="8" text-anchor="middle" fill="#ef4444" font-size="22" font-weight="bold"></text>
+              </g>
+            </svg>
+          </div>
+
+          <!-- 右侧：控制面板 -->
+          <div class="flex flex-col gap-4">
+            <div class="card p-6 border-red-500/30 bg-red-500/5 min-h-[690px]">
+              <h3 class="text-[28px] text-red-400"><i class="fas fa-minus-circle mr-3"></i>删除步骤</h3>
+              <div class="mt-4 space-y-4">
+                <!-- 当前情况指示 -->
+                <div id="d-case-indicator" class="p-3 rounded-xl border-2 border-green-500/50 bg-green-500/10">
+                  <span class="text-green-400 text-[22px] font-bold"><i class="fas fa-check-circle mr-2"></i>情况一：直接删除</span>
+                </div>
+                
+                <!-- 步骤说明 -->
+                <div class="p-4 bg-slate-800/80 rounded-xl border border-slate-700 min-h-[70px] flex items-center">
+                  <p id="d-step-text" class="text-[22px] text-white leading-relaxed">5阶B树：每节点2~4个key。点击开始演示...</p>
+                </div>
+                
+                <!-- 三种情况说明 -->
+                <div class="space-y-2">
+                  <div id="d-case-1" class="flex items-center text-slate-500 transition-all p-2 rounded-lg">
+                    <i class="fas fa-circle text-[10px] mr-3"></i>
+                    <span class="text-[22px]">① 删除 90：直接删除</span>
+                  </div>
+                  <div id="d-case-2" class="flex items-center text-slate-500 transition-all p-2 rounded-lg">
+                    <i class="fas fa-circle text-[10px] mr-3"></i>
+                    <span class="text-[22px]">② 删除 60：借用兄弟</span>
+                  </div>
+                  <div id="d-case-3" class="flex items-center text-slate-500 transition-all p-2 rounded-lg">
+                    <i class="fas fa-circle text-[10px] mr-3"></i>
+                    <span class="text-[22px]">③ 删除 25：合并节点</span>
+                  </div>
+                </div>
+                
+              </div>
+            </div>
+            <div class="flex gap-3">
+              <button id="btn-delete-prev" class="btn-secondary flex-1"><i class="fas fa-step-backward mr-2"></i>上一步</button>
+              <button id="btn-delete-next" class="btn-primary flex-1"><i class="fas fa-step-forward mr-2"></i>下一步</button>
+              <button id="btn-delete-reset" class="btn-secondary"><i class="fas fa-redo mr-2"></i>重置</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- P10: 删除逻辑说明 -->
+      <section class="slide" data-title="删除逻辑说明">
+        <h2>删除操作逻辑概览</h2>
+        <div class="h-full flex flex-col justify-center items-center -mt-10">
+            
+            <div class="mb-16 text-center">
+                <p class="text-[42px] font-bold text-slate-200">
+                    删除 <span class="text-slate-400 border-b-2 border-slate-500 mx-1">非叶结点</span> 元素最终都转换成删除 <span class="text-warn border-b-2 border-warn mx-1">叶结点</span> 元素
+                </p>
+            </div>
+
+            <div class="relative w-full max-w-6xl pl-10">
+                <!-- Tree Structure Visualization -->
+                <div class="flex items-center justify-center">
+                    
+                    <!-- Root: Leaf Node Element -->
+                    <div class="flex flex-col items-center mr-12 relative z-10">
+                        <div class="text-[48px] font-bold text-white bg-slate-800/80 px-8 py-4 rounded-xl border border-slate-600 shadow-lg">
+                            叶结点元素
+                        </div>
+                    </div>
+
+                    <!-- Connecting Lines Container -->
+                    <div class="flex flex-col gap-16 border-l-[6px] border-slate-600 pl-20 py-8 relative">
+                        
+                        <!-- Branch 1: No Underflow -->
+                        <div class="relative group">
+                            <!-- Horizontal Line -->
+                            <div class="absolute -left-[86px] top-1/2 w-[80px] h-[6px] bg-slate-600 rounded-full"></div>
+                            
+                            <div class="flex items-center gap-6">
+                                <span class="text-[36px] text-slate-300 font-bold">没有下溢出</span>
+                                <span class="text-[28px] text-slate-500">无需调整</span>
+                                <span class="px-4 py-1 bg-green-500/20 text-green-400 rounded text-[24px] border border-green-500/30">OK</span>
+                            </div>
+                        </div>
+
+                        <!-- Branch 2: Underflow -->
+                        <div class="relative">
+                            <!-- Horizontal Line -->
+                            <div class="absolute -left-[86px] top-8 w-[80px] h-[6px] bg-slate-600 rounded-full"></div>
+                            
+                            <div class="flex flex-col gap-8">
+                                <div class="text-[36px] text-slate-300 font-bold">下溢出</div>
+                                
+                                <!-- Sub-branches -->
+                                <div class="flex flex-col gap-8 border-l-[6px] border-slate-600 pl-16 py-2 relative ml-4">
+                                    
+                                    <!-- Sub-branch 1: Borrow -->
+                                    <div class="relative">
+                                        <div class="absolute -left-[70px] top-1/2 w-[64px] h-[6px] bg-slate-600 rounded-full"></div>
+                                        <div class="flex items-center gap-4">
+                                            <span class="text-[36px] text-slate-300">兄弟够借</span>
+                                            <i class="fas fa-arrow-right text-slate-500 text-2xl"></i>
+                                            <span class="text-[40px] text-warn font-bold">借</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Sub-branch 2: Merge -->
+                                    <div class="relative">
+                                        <div class="absolute -left-[70px] top-1/2 w-[64px] h-[6px] bg-slate-600 rounded-full"></div>
+                                        <div class="flex flex-col">
+                                            <div class="flex items-center gap-4">
+                                                <span class="text-[36px] text-slate-300">兄弟不够借</span>
+                                                <i class="fas fa-arrow-right text-slate-500 text-2xl"></i>
+                                                <span class="text-[40px] text-warn font-bold">合并</span>
+                                            </div>
+                                            <div class="text-[24px] text-slate-500 mt-2 italic">(可能导致父结点下溢出)</div>
+                                        </div>
+                                    </div>
+
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+      </section>
+
+      <!-- P11: 总结与展望 -->
+      <section class="slide" data-title="总结">
+        <h2>B 树总结与展望</h2>
+        <div class="grid grid-cols-2 gap-8 h-full">
+          <!-- 左侧：B树特性与场景 -->
+          <div class="flex flex-col gap-5">
+            <div class="card p-6 border-accent/50 bg-accent/5">
+              <h3 class="text-accent"><i class="fas fa-star mr-3"></i>B 树核心特性</h3>
+              <ul class="mt-4 space-y-3 leading-tight">
+                <li class="text-[28px]"><i class="fas fa-check text-green-400 mr-2"></i><strong>多路平衡</strong>：一个节点存多个 key，树高极低</li>
+                <li class="text-[28px]"><i class="fas fa-check text-green-400 mr-2"></i><strong>磁盘友好</strong>：节点大小 ≈ 磁盘页，减少 I/O</li>
+                <li class="text-[28px]"><i class="fas fa-check text-green-400 mr-2"></i><strong>自平衡</strong>：插入/删除自动调整，无需手动维护</li>
+                <li class="text-[28px]"><i class="fas fa-check text-green-400 mr-2"></i><strong>空间利用率高</strong>：节点至少半满</li>
+              </ul>
+            </div>
+            <div class="card p-6">
+              <h3><i class="fas fa-crosshairs mr-3"></i>B 树的定位</h3>
+              <ul class="mt-4 space-y-3 leading-tight">
+                <li class="text-[28px]"><i class="fas fa-graduation-cap text-blue-400 mr-2"></i><strong>理论基础</strong>：B+树、B*树等变体的根基</li>
+                <li class="text-[28px]"><i class="fas fa-memory text-purple-400 mr-2"></i><strong>内存索引</strong>：内部节点可直接命中数据</li>
+                <li class="text-[28px]"><i class="fas fa-microchip text-cyan-400 mr-2"></i><strong>嵌入式系统</strong>：资源受限场景的简单实现</li>
+              </ul>
+            </div>
+            <div class="card bg-warn/10 border-warn/30 p-5">
+              <p class="text-[26px] text-white mb-0">
+                <i class="fas fa-lightbulb text-warn mr-2"></i>
+                <strong>核心思想</strong>：用"胖节点"换取"矮树高"，以空间换时间（I/O）
+              </p>
+            </div>
+          </div>
+          
+          <!-- 右侧：B+树引出 -->
+          <div class="flex flex-col gap-5">
+            <div class="card p-6 border-purple-500/50 bg-purple-500/5">
+              <h3 class="text-purple-400"><i class="fas fa-question-circle mr-3"></i>B 树的不足</h3>
+              <ul class="mt-4 space-y-3 leading-tight">
+                <li class="text-[28px]"><i class="fas fa-times text-red-400 mr-2"></i>数据分散在所有节点，<strong>范围查询效率低</strong></li>
+                <li class="text-[28px]"><i class="fas fa-times text-red-400 mr-2"></i>中间节点存数据，<strong>扇出度受限</strong></li>
+                <li class="text-[28px]"><i class="fas fa-times text-red-400 mr-2"></i>遍历需要中序递归，<strong>顺序访问不连续</strong></li>
+              </ul>
+            </div>
+            <div class="card p-6 border-green-500/50 bg-green-500/5 flex-1">
+              <h3 class="text-green-400"><i class="fas fa-arrow-right mr-3"></i>下一站：B+ 树</h3>
+              <div class="mt-4 space-y-4">
+                <p class="text-[28px] text-slate-300">B+ 树是 B 树的变体，专为<span class="text-green-400">数据库</span>和<span class="text-green-400">文件系统</span>优化：</p>
+                <ul class="space-y-3 leading-tight">
+                  <li class="text-[28px]"><i class="fas fa-check text-green-400 mr-2"></i><strong>数据只在叶子</strong>：内部节点仅存索引</li>
+                  <li class="text-[28px]"><i class="fas fa-check text-green-400 mr-2"></i><strong>叶子链表相连</strong>：范围查询一次扫描</li>
+                  <li class="text-[28px]"><i class="fas fa-check text-green-400 mr-2"></i><strong>更高扇出度</strong>：树更矮，I/O 更少</li>
+                </ul>
+                <div class="mt-4 p-4 rounded-xl bg-slate-800/50 border border-slate-600/50">
+                  <p class="text-[22px] text-slate-400 mb-2">
+                    <i class="fas fa-database text-blue-400 mr-2"></i><strong class="text-white">数据库</strong>：MySQL InnoDB、PostgreSQL、SQLite
+                  </p>
+                  <p class="text-[22px] text-slate-400 mb-0">
+                    <i class="fas fa-hdd text-purple-400 mr-2"></i><strong class="text-white">文件系统</strong>：NTFS、HFS+、ext4、Btrfs
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="absolute bottom-8 right-10 text-2xl text-white/30 z-50">
+        <span id="page-number">1 / 10</span>
+      </div>
+    </div>
+
+    <script>
+      // Navigation
+      const slides = document.querySelectorAll('.slide');
+      const pageNumberEl = document.getElementById('page-number');
+      function getPageFromUrl() {
+        const params = new URLSearchParams(window.location.search);
+        const page = parseInt(params.get('page'));
+        if (!isNaN(page) && page >= 1 && page <= slides.length) return page - 1;
+        return 0;
+      }
+      let currentSlide = getPageFromUrl();
+      function updateSlide() {
+        document.querySelectorAll('.slide').forEach((slide, index) => {
+          slide.classList.remove('active');
+          if (index === currentSlide) slide.classList.add('active');
+        });
+        pageNumberEl.textContent = `${currentSlide + 1} / ${document.querySelectorAll('.slide').length}`;
+        try {
+          const url = new URL(window.location.href);
+          url.searchParams.set('page', currentSlide + 1);
+          window.history.replaceState(null, '', url.href);
+        } catch (e) {}
+      }
+      function nextSlide() { if (currentSlide < document.querySelectorAll('.slide').length - 1) { currentSlide++; updateSlide(); } }
+      function prevSlide() { if (currentSlide > 0) { currentSlide--; updateSlide(); } }
+      function resizeApp() {
+        const app = document.getElementById('app');
+        const scale = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+        app.style.transform = `scale(${scale})`;
+      }
+      window.addEventListener('resize', resizeApp);
+      window.addEventListener('load', () => { resizeApp(); updateSlide(); initSearchDemo(); initInsertDemo(); initDeleteDemo(); });
+      document.addEventListener('keydown', (e) => {
+        if (['ArrowRight', ' ', 'Enter'].includes(e.key)) nextSlide();
+        else if (e.key === 'ArrowLeft') prevSlide();
+      });
+    </script>
+
+    <script>
+      window.MathJax = { tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] } };
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
+    <script>
+      // Search Demo Logic
+      const searchSteps = [
+        {
+          text: '点击"下一步"开始查找 Key = 30',
+          action: () => {
+            resetSearchVisuals();
+          }
+        },
+        {
+          text: '1. 读取根节点 (Page 0) 到内存',
+          stateId: 's-state-1',
+          action: () => {
+            setOpacity('s-root', 1);
+            setStroke('s-root-rect', '#fbbf24', 3);
+            setFilter('s-root-rect', 'url(#glow-gold-s)');
+            setText('s-io-count', '1');
+          }
+        },
+        {
+          text: '2. 节点内比较：30 < 50，确定在左子树',
+          stateId: 's-state-2',
+          action: () => {
+            setOpacity('s-root-hint', 1);
+          }
+        },
+        {
+          text: '3. 读取左子节点 (Page 1) 到内存',
+          stateId: 's-state-3',
+          action: () => {
+            setOpacity('s-path-1', 1);
+            animatePath('s-path-1');
+            setTimeout(() => {
+                setOpacity('s-l2-left', 1);
+                setStroke('s-l2-left-rect', '#fbbf24', 3);
+                setFilter('s-l2-left-rect', 'url(#glow-gold-s)');
+                setText('s-io-count', '2');
+            }, 500);
+          }
+        },
+        {
+          text: '4. 节点内比较：20 < 30 < 35，确定在中间子树',
+          stateId: 's-state-3',
+          action: () => {
+            setOpacity('s-l2-hint', 1);
+          }
+        },
+        {
+          text: '5. 读取中间子节点 (Page 2) 到内存',
+          stateId: 's-state-3',
+          action: () => {
+            setOpacity('s-path-2', 1);
+            animatePath('s-path-2');
+            setTimeout(() => {
+                setOpacity('s-l3-target', 1);
+                setStroke('s-l3-target-rect', '#fbbf24', 3);
+                setFilter('s-l3-target-rect', 'url(#glow-gold-s)');
+                setText('s-io-count', '3');
+            }, 500);
+          }
+        },
+        {
+          text: '6. 在叶子中查找：25, 30... 找到目标！',
+          stateId: 's-state-4',
+          action: () => {
+            setOpacity('s-target-box', 1);
+            const box = document.getElementById('s-target-box');
+            if(box) {
+                box.innerHTML = `<rect x="5" y="-18" width="46" height="36" rx="4" fill="none" stroke="#0ea5e9" stroke-width="4" filter="url(#glow-blue-s)">
+                  <animate attributeName="stroke-opacity" values="1;0.4;1" dur="1.5s" repeatCount="indefinite"/>
+                  <animate attributeName="stroke-width" values="4;6;4" dur="1.5s" repeatCount="indefinite"/>
+                </rect>
+                <text x="0" y="60" text-anchor="middle" fill="#0ea5e9" font-size="24" font-weight="bold">Found!</text>`;
+            }
+          }
+        }
+      ];
+
+      let currentSearchStep = 0;
+
+      function initSearchDemo() {
+        const btnNext = document.getElementById('btn-search-next');
+        const btnReset = document.getElementById('btn-search-reset');
+        
+        if(btnNext) btnNext.addEventListener('click', nextSearchStep);
+        if(btnReset) btnReset.addEventListener('click', resetSearchDemo);
+        
+        resetSearchDemo();
+      }
+
+      function nextSearchStep() {
+        if (currentSearchStep < searchSteps.length - 1) {
+          currentSearchStep++;
+          renderSearchStep();
+        }
+      }
+
+      function resetSearchDemo() {
+        currentSearchStep = 0;
+        renderSearchStep();
+      }
+
+      function renderSearchStep() {
+        const step = searchSteps[currentSearchStep];
+        if (!step) return;
+
+        const textEl = document.getElementById('s-step-text');
+        if (textEl) textEl.textContent = step.text;
+
+        for (let i = 1; i <= 4; i++) {
+            const el = document.getElementById(`s-state-${i}`);
+            if (el) {
+                el.classList.remove('text-accent', 'font-bold');
+                el.classList.add('text-slate-500');
+                const icon = el.querySelector('i');
+                if(icon) icon.className = 'fas fa-circle text-[12px] mr-3';
+            }
+        }
+        if (step.stateId) {
+            const el = document.getElementById(step.stateId);
+            if (el) {
+                el.classList.remove('text-slate-500');
+                el.classList.add('text-accent', 'font-bold');
+                const icon = el.querySelector('i');
+                if(icon) icon.className = 'fas fa-check-circle text-[12px] mr-3';
+            }
+        }
+        
+        resetSearchVisuals();
+        for (let i = 0; i <= currentSearchStep; i++) {
+            if (searchSteps[i].action) searchSteps[i].action();
+        }
+      }
+
+      function animatePath(id) {
+        const path = document.getElementById(id);
+        if(path) {
+            path.style.transition = 'none';
+            path.style.strokeDashoffset = '100';
+            path.getBoundingClientRect();
+            path.style.transition = 'stroke-dashoffset 0.5s linear';
+            path.style.strokeDashoffset = '0';
+        }
+      }
+
+      function resetSearchVisuals() {
+        setOpacity('s-root', 0.5);
+        setStroke('s-root-rect', '#3b82f6', 3);
+        setFilter('s-root-rect', 'none');
+        setOpacity('s-root-hint', 0);
+        
+        setOpacity('s-path-1', 0);
+        setOpacity('s-path-2', 0);
+        
+        setOpacity('s-l2-left', 0.5);
+        setStroke('s-l2-left-rect', '#3b82f6', 3);
+        setFilter('s-l2-left-rect', 'none');
+        setOpacity('s-l2-hint', 0);
+        
+        setOpacity('s-l3-target', 0.5);
+        setStroke('s-l3-target-rect', '#3b82f6', 3);
+        setFilter('s-l3-target-rect', 'none');
+        
+        setOpacity('s-target-box', 0);
+        setText('s-io-count', '0');
+      }
+
+      function setOpacity(id, val) {
+        const el = document.getElementById(id);
+        if (el) el.setAttribute('opacity', val);
+      }
+      function setStroke(id, color, width) {
+        const el = document.getElementById(id);
+        if (el) {
+            el.setAttribute('stroke', color);
+            el.setAttribute('stroke-width', width);
+        }
+      }
+      function setFilter(id, val) {
+        const el = document.getElementById(id);
+        if (el) el.setAttribute('filter', val);
+      }
+      function setText(id, val) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = val;
+      }
+    </script>
+
+    <script>
+      // Insert Demo Logic
+      let insertStep = 0;
+      const insertContainer = () => document.getElementById('i-tree-container');
+      
+      // 绘制节点
+      function drawNode(keys, x, y, id, highlight = '', animate = false) {
+        const width = 50 + keys.length * 45;
+        const keyStr = keys.join(' | ');
+        let strokeColor = '#3b82f6';
+        let filterAttr = '';
+        let strokeWidth = 2;
+        
+        if (highlight === 'target') {
+          strokeColor = '#fbbf24';
+          filterAttr = 'filter="url(#glow-gold-i)"';
+          strokeWidth = 3;
+        } else if (highlight === 'split') {
+          strokeColor = '#ef4444';
+          filterAttr = 'filter="url(#glow-purple-i)"';
+          strokeWidth = 3;
+        } else if (highlight === 'new') {
+          strokeColor = '#22c55e';
+          filterAttr = 'filter="url(#glow-green-i)"';
+          strokeWidth = 3;
+        } else if (highlight === 'promote') {
+          strokeColor = '#a855f7';
+          filterAttr = 'filter="url(#glow-purple-i)"';
+          strokeWidth = 3;
+        }
+        
+        const animClass = animate ? 'class="node-animate"' : '';
+        return `
+          <g id="${id}" transform="translate(${x}, ${y})" ${animClass}>
+            <rect x="${-width/2}" y="-25" width="${width}" height="50" rx="8" 
+                  fill="#1e3a5f" stroke="${strokeColor}" stroke-width="${strokeWidth}" ${filterAttr}/>
+            <text x="0" y="8" text-anchor="middle" fill="#fff" font-size="22" font-weight="bold">${keyStr}</text>
+          </g>
+        `;
+      }
+      
+      // 绘制边
+      function drawEdge(x1, y1, x2, y2, highlight = false) {
+        const color = highlight ? '#a855f7' : '#3b82f6';
+        const width = highlight ? 3 : 2;
+        const opacity = highlight ? 1 : 0.5;
+        return `<path d="M${x1} ${y1+25} L${x2} ${y2-25}" stroke="${color}" stroke-width="${width}" opacity="${opacity}"/>`;
+      }
+      
+      // 绘制上提箭头
+      function drawPromoteArrow(x1, y1, x2, y2, key) {
+        // 计算箭头旋转角度
+        const angle = Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI + 90;
+        return `
+          <g class="promote-arrow">
+            <path d="M${x1} ${y1} L${x2} ${y2}" stroke="#a855f7" stroke-width="3" stroke-dasharray="8,4"/>
+            <polygon points="-8,10 0,-2 8,10" fill="#a855f7" transform="translate(${x2},${y2}) rotate(${angle})"/>
+            <circle cx="${x1}" cy="${y1}" r="22" fill="#7c3aed" stroke="#a855f7" stroke-width="2"/>
+            <text x="${x1}" y="${y1+7}" text-anchor="middle" fill="#fff" font-size="20" font-weight="bold">${key}</text>
+          </g>
+        `;
+      }
+      
+      // 渲染初始树
+      function renderInitialTree() {
+        const svg = insertContainer();
+        if (!svg) return;
+        
+        let html = '';
+        // 边
+        html += drawEdge(400, 80, 250, 220);
+        html += drawEdge(400, 80, 550, 220);
+        // 节点（三阶B树：每节点最多2个key）
+        html += drawNode([50], 400, 80, 'i-root');
+        html += drawNode([20], 250, 220, 'i-child-0');
+        html += drawNode([70, 90], 550, 220, 'i-child-1');
+        
+        svg.innerHTML = html;
+      }
+      
+      // 插入步骤定义
+      const insertSteps = [
+        // Step 0: 初始状态
+        {
+          text: '初始状态：3阶B树，每个节点最多存储 2 个 key',
+          case: 0,
+          render: () => {
+            renderInitialTree();
+            setHint('');
+          }
+        },
+        // Step 1: 情况一（直接插入）- 定位（插入30）
+        {
+          text: '插入 30：定位到目标叶子节点 [20]',
+          case: 1,
+          caseType: 'green',
+          caseName: '情况一：直接插入',
+          render: () => {
+            let html = '';
+            html += drawEdge(400, 80, 250, 220, true);
+            html += drawEdge(400, 80, 550, 220);
+            html += drawNode([50], 400, 80, 'i-root');
+            html += drawNode([20], 250, 220, 'i-child-0', 'target');
+            html += drawNode([70, 90], 550, 220, 'i-child-1');
+            insertContainer().innerHTML = html;
+            setHint('30 < 50，走左子树');
+          }
+        },
+        // Step 2: 情况一（直接插入）- 插入完成
+        {
+          text: '节点 [20] 有空位（当前1个，最多2个），直接插入 30',
+          case: 1,
+          caseType: 'green',
+          caseName: '情况一：直接插入',
+          render: () => {
+            let html = '';
+            html += drawEdge(400, 80, 250, 220);
+            html += drawEdge(400, 80, 550, 220);
+            html += drawNode([50], 400, 80, 'i-root');
+            html += drawNode([20, 30], 250, 220, 'i-child-0', 'new');
+            html += drawNode([70, 90], 550, 220, 'i-child-1');
+            insertContainer().innerHTML = html;
+            setHint('✓ 直接插入完成！');
+          }
+        },
+        // Step 3: 情况二（节点分裂）- 定位（插入80）
+        {
+          text: '插入 80：定位到目标叶子节点 [70|90]',
+          case: 2,
+          caseType: 'amber',
+          caseName: '情况二：节点分裂',
+          render: () => {
+            let html = '';
+            html += drawEdge(400, 80, 250, 220);
+            html += drawEdge(400, 80, 550, 220, true);
+            html += drawNode([50], 400, 80, 'i-root');
+            html += drawNode([20, 30], 250, 220, 'i-child-0');
+            html += drawNode([70, 90], 550, 220, 'i-child-1', 'target');
+            insertContainer().innerHTML = html;
+            setHint('80 > 50，走右子树');
+          }
+        },
+        // Step 4: 情况二（节点分裂）- 发现满了
+        {
+          text: '节点 [70|90] 已满！插入后临时变成 [70|80|90]（3个key，超限）',
+          case: 2,
+          caseType: 'amber',
+          caseName: '情况二：节点分裂',
+          render: () => {
+            let html = '';
+            html += drawEdge(400, 80, 250, 220);
+            html += drawEdge(400, 80, 550, 220);
+            html += drawNode([50], 400, 80, 'i-root');
+            html += drawNode([20, 30], 250, 220, 'i-child-0');
+            html += drawNode([70, 80, 90], 550, 220, 'i-child-1', 'split');
+            insertContainer().innerHTML = html;
+            setHint('⚠️ 节点超限，需要分裂！');
+          }
+        },
+        // Step 5: 情况二（节点分裂）- 分裂过程
+        {
+          text: '分裂：中间值 80 上提到父节点',
+          case: 2,
+          caseType: 'amber',
+          caseName: '情况二：节点分裂',
+          render: () => {
+            let html = '';
+            html += drawEdge(400, 80, 250, 220);
+            html += drawEdge(400, 80, 480, 220);
+            html += drawEdge(400, 80, 620, 220);
+            html += drawNode([50], 400, 80, 'i-root', 'target');
+            html += drawNode([20, 30], 250, 220, 'i-child-0');
+            html += drawNode([70], 480, 220, 'i-child-1');
+            html += drawNode([90], 620, 220, 'i-child-2');
+            // 上提箭头：从 [70] 和 [90] 中间位置向上指向父节点
+            html += drawPromoteArrow(550, 185, 420, 110, '80');
+            insertContainer().innerHTML = html;
+            setHint('80 上提到父节点');
+          }
+        },
+        // Step 6: 情况二（节点分裂）- 完成
+        {
+          text: '父节点 [50] 有空位，接收 80，变成 [50|80]',
+          case: 2,
+          caseType: 'amber',
+          caseName: '情况二：节点分裂',
+          render: () => {
+            let html = '';
+            html += drawEdge(400, 80, 200, 220);
+            html += drawEdge(400, 80, 400, 220);
+            html += drawEdge(400, 80, 600, 220);
+            html += drawNode([50, 80], 400, 80, 'i-root', 'new');
+            html += drawNode([20, 30], 200, 220, 'i-child-0');
+            html += drawNode([70], 400, 220, 'i-child-1');
+            html += drawNode([90], 600, 220, 'i-child-2');
+            insertContainer().innerHTML = html;
+            setHint('✓ 分裂完成！父节点成功接收');
+          }
+        },
+        // Step 7: 情况三（分裂传播）- 定位（插入25）
+        {
+          text: '插入 25：定位到目标叶子节点 [20|30]',
+          case: 3,
+          caseType: 'red',
+          caseName: '情况三：分裂传播',
+          render: () => {
+            let html = '';
+            html += drawEdge(400, 80, 200, 220, true);
+            html += drawEdge(400, 80, 400, 220);
+            html += drawEdge(400, 80, 600, 220);
+            html += drawNode([50, 80], 400, 80, 'i-root');
+            html += drawNode([20, 30], 200, 220, 'i-child-0', 'target');
+            html += drawNode([70], 400, 220, 'i-child-1');
+            html += drawNode([90], 600, 220, 'i-child-2');
+            insertContainer().innerHTML = html;
+            setHint('25 < 50，走最左子树');
+          }
+        },
+        // Step 8: 情况三（分裂传播）- 发现满了
+        {
+          text: '节点 [20|30] 已满！插入后临时变成 [20|25|30]',
+          case: 3,
+          caseType: 'red',
+          caseName: '情况三：分裂传播',
+          render: () => {
+            let html = '';
+            html += drawEdge(400, 80, 200, 220);
+            html += drawEdge(400, 80, 400, 220);
+            html += drawEdge(400, 80, 600, 220);
+            html += drawNode([50, 80], 400, 80, 'i-root');
+            html += drawNode([20, 25, 30], 200, 220, 'i-child-0', 'split');
+            html += drawNode([70], 400, 220, 'i-child-1');
+            html += drawNode([90], 600, 220, 'i-child-2');
+            insertContainer().innerHTML = html;
+            setHint('⚠️ 节点超限，需要分裂！');
+          }
+        },
+        // Step 9: 情况三（分裂传播）- 叶子分裂
+        {
+          text: '叶子分裂：中间值 25 上提到父节点',
+          case: 3,
+          caseType: 'red',
+          caseName: '情况三：分裂传播',
+          render: () => {
+            let html = '';
+            html += drawEdge(400, 80, 120, 220);
+            html += drawEdge(400, 80, 280, 220);
+            html += drawEdge(400, 80, 480, 220);
+            html += drawEdge(400, 80, 650, 220);
+            html += drawNode([50, 80], 400, 80, 'i-root', 'target');
+            html += drawNode([20], 120, 220, 'i-child-0');
+            html += drawNode([30], 280, 220, 'i-child-1');
+            html += drawNode([70], 480, 220, 'i-child-2');
+            html += drawNode([90], 650, 220, 'i-child-3');
+            // 上提箭头：从 [20] 和 [30] 中间位置向上指向父节点
+            html += drawPromoteArrow(200, 185, 350, 110, '25');
+            insertContainer().innerHTML = html;
+            setHint('25 上提到父节点');
+          }
+        },
+        // Step 10: 情况三（分裂传播）- 父节点也满了
+        {
+          text: '⚠️ 父节点 [50|80] 也满了！接收 25 后变成 [25|50|80]',
+          case: 3,
+          caseType: 'red',
+          caseName: '情况三：分裂传播',
+          render: () => {
+            let html = '';
+            html += drawEdge(400, 80, 120, 220);
+            html += drawEdge(400, 80, 280, 220);
+            html += drawEdge(400, 80, 480, 220);
+            html += drawEdge(400, 80, 650, 220);
+            html += drawNode([25, 50, 80], 400, 80, 'i-root', 'split');
+            html += drawNode([20], 120, 220, 'i-child-0');
+            html += drawNode([30], 280, 220, 'i-child-1');
+            html += drawNode([70], 480, 220, 'i-child-2');
+            html += drawNode([90], 650, 220, 'i-child-3');
+            insertContainer().innerHTML = html;
+            setHint('⚠️ 根节点也超限！继续分裂！');
+          }
+        },
+        // Step 11: 情况三（分裂传播）- 根分裂
+        {
+          text: '根分裂：中间值 50 成为新根，树高度 +1',
+          case: 3,
+          caseType: 'red',
+          caseName: '情况三：分裂传播',
+          render: () => {
+            let html = '';
+            // Level 0 -> Level 1
+            html += drawEdge(400, 60, 220, 160, true);
+            html += drawEdge(400, 60, 580, 160, true);
+            // Level 1 -> Level 2
+            html += drawEdge(220, 160, 120, 280);
+            html += drawEdge(220, 160, 320, 280);
+            html += drawEdge(580, 160, 480, 280);
+            html += drawEdge(580, 160, 680, 280);
+            // Nodes
+            html += drawNode([50], 400, 60, 'i-root', 'promote');
+            html += drawNode([25], 220, 160, 'i-l1-0', 'new');
+            html += drawNode([80], 580, 160, 'i-l1-1', 'new');
+            html += drawNode([20], 120, 280, 'i-l2-0');
+            html += drawNode([30], 320, 280, 'i-l2-1');
+            html += drawNode([70], 480, 280, 'i-l2-2');
+            html += drawNode([90], 680, 280, 'i-l2-3');
+            insertContainer().innerHTML = html;
+            setHint('✓ 根分裂完成！树高度从 2 变成 3');
+          }
+        },
+        // Step 12: 总结
+        {
+          text: '演示完成！三种插入情况都已展示',
+          case: 0,
+          render: () => {
+            let html = '';
+            html += drawEdge(400, 60, 220, 160);
+            html += drawEdge(400, 60, 580, 160);
+            html += drawEdge(220, 160, 120, 280);
+            html += drawEdge(220, 160, 320, 280);
+            html += drawEdge(580, 160, 480, 280);
+            html += drawEdge(580, 160, 680, 280);
+            html += drawNode([50], 400, 60, 'i-root');
+            html += drawNode([25], 220, 160, 'i-l1-0');
+            html += drawNode([80], 580, 160, 'i-l1-1');
+            html += drawNode([20], 120, 280, 'i-l2-0');
+            html += drawNode([30], 320, 280, 'i-l2-1');
+            html += drawNode([70], 480, 280, 'i-l2-2');
+            html += drawNode([90], 680, 280, 'i-l2-3');
+            insertContainer().innerHTML = html;
+            setHint('点击"重置"可重新演示');
+          }
+        }
+      ];
+      
+      function fitHintText(hint, hintText) {
+        const rect = hint.querySelector('rect');
+        const baseFontSize = 22;
+        const baseRectWidth = 360;
+        const maxRectWidth = 460;
+        const padding = 40;
+        hintText.setAttribute('font-size', baseFontSize);
+        hintText.removeAttribute('textLength');
+        hintText.removeAttribute('lengthAdjust');
+        const textLength = hintText.getComputedTextLength ? hintText.getComputedTextLength() : 0;
+        const targetRectWidth = Math.min(Math.max(baseRectWidth, textLength + padding), maxRectWidth);
+        if (rect) {
+          rect.setAttribute('width', targetRectWidth);
+          rect.setAttribute('x', -targetRectWidth / 2);
+        }
+        const maxTextWidth = targetRectWidth - padding;
+        if (textLength > maxTextWidth && maxTextWidth > 0) {
+          hintText.setAttribute('textLength', maxTextWidth);
+          hintText.setAttribute('lengthAdjust', 'spacingAndGlyphs');
+        }
+      }
+      
+      function setHint(text) {
+        const hint = document.getElementById('i-action-hint');
+        const hintText = document.getElementById('i-hint-text');
+        if (hint && hintText) {
+          if (text) {
+            hint.setAttribute('opacity', '1');
+            hintText.textContent = text;
+            fitHintText(hint, hintText);
+          } else {
+            hint.setAttribute('opacity', '0');
+          }
+        }
+      }
+      
+      function updateInsertUI() {
+        const step = insertSteps[insertStep];
+        if (!step) return;
+        
+        // 更新步骤文字
+        const textEl = document.getElementById('i-step-text');
+        if (textEl) textEl.textContent = step.text;
+        
+        // 更新情况指示器
+        const indicator = document.getElementById('i-case-indicator');
+        if (indicator && step.caseName) {
+          let borderColor = 'border-green-500/50';
+          let bgColor = 'bg-green-500/10';
+          let textColor = 'text-green-400';
+          let icon = 'fa-check-circle';
+          
+          if (step.caseType === 'amber') {
+            borderColor = 'border-amber-500/50';
+            bgColor = 'bg-amber-500/10';
+            textColor = 'text-amber-400';
+            icon = 'fa-exclamation-triangle';
+          } else if (step.caseType === 'red') {
+            borderColor = 'border-red-500/50';
+            bgColor = 'bg-red-500/10';
+            textColor = 'text-red-400';
+            icon = 'fa-sitemap';
+          }
+          
+          indicator.className = `p-3 rounded-xl border-2 ${borderColor} ${bgColor}`;
+          indicator.innerHTML = `<span class="${textColor} text-[22px] font-bold"><i class="fas ${icon} mr-2"></i>${step.caseName}</span>`;
+        } else if (indicator) {
+          indicator.className = 'p-3 rounded-xl border-2 border-slate-500/50 bg-slate-500/10';
+          indicator.innerHTML = '<span class="text-slate-400 text-[22px] font-bold"><i class="fas fa-info-circle mr-2"></i>准备就绪</span>';
+        }
+        
+        // 更新情况列表高亮
+        for (let i = 1; i <= 3; i++) {
+          const caseEl = document.getElementById(`i-case-${i}`);
+          if (caseEl) {
+            if (step.case === i) {
+              caseEl.classList.remove('text-slate-500');
+              caseEl.classList.add('text-white', 'bg-slate-700/50');
+              const icon = caseEl.querySelector('i');
+              if (icon) icon.className = 'fas fa-play text-[10px] mr-3 text-accent';
+            } else if (step.case > i || (insertStep === insertSteps.length - 1)) {
+              caseEl.classList.remove('text-slate-500', 'bg-slate-700/50');
+              caseEl.classList.add('text-green-400');
+              const icon = caseEl.querySelector('i');
+              if (icon) icon.className = 'fas fa-check text-[10px] mr-3 text-green-400';
+            } else {
+              caseEl.classList.remove('text-white', 'text-green-400', 'bg-slate-700/50');
+              caseEl.classList.add('text-slate-500');
+              const icon = caseEl.querySelector('i');
+              if (icon) icon.className = 'fas fa-circle text-[10px] mr-3';
+            }
+          }
+        }
+        
+        // 渲染树
+        if (step.render) step.render();
+      }
+      
+      function nextInsertStep() {
+        if (insertStep < insertSteps.length - 1) {
+          insertStep++;
+          updateInsertUI();
+        }
+      }
+      
+      function prevInsertStep() {
+        if (insertStep > 0) {
+          insertStep--;
+          updateInsertUI();
+        }
+      }
+      
+      function resetInsertDemo() {
+        insertStep = 0;
+        updateInsertUI();
+      }
+      
+      function initInsertDemo() {
+        const btnPrev = document.getElementById('btn-insert-prev');
+        const btnNext = document.getElementById('btn-insert-next');
+        const btnReset = document.getElementById('btn-insert-reset');
+        
+        if (btnPrev) btnPrev.addEventListener('click', prevInsertStep);
+        if (btnNext) btnNext.addEventListener('click', nextInsertStep);
+        if (btnReset) btnReset.addEventListener('click', resetInsertDemo);
+        
+        resetInsertDemo();
+      }
+      
+    </script>
+
+    <script>
+      // Delete Demo Logic
+      let deleteStep = 0;
+      const deleteContainer = () => document.getElementById('d-tree-container');
+      
+      // 绘制删除演示节点
+      function drawDeleteNode(keys, x, y, id, highlight = '', strikeKey = null) {
+        const width = 40 + keys.length * 35;
+        const keyStr = keys.map((k, i) => {
+          if (strikeKey !== null && k === strikeKey) {
+            return `<tspan fill="#ef4444" text-decoration="line-through">${k}</tspan>`;
+          }
+          return k;
+        }).join(' | ');
+        let strokeColor = '#3b82f6';
+        let filterAttr = '';
+        let strokeWidth = 2;
+        
+        if (highlight === 'target') {
+          strokeColor = '#fbbf24';
+          filterAttr = 'filter="url(#glow-gold-d)"';
+          strokeWidth = 3;
+        } else if (highlight === 'delete') {
+          strokeColor = '#ef4444';
+          filterAttr = 'filter="url(#glow-red-d)"';
+          strokeWidth = 3;
+        } else if (highlight === 'new') {
+          strokeColor = '#22c55e';
+          filterAttr = 'filter="url(#glow-green-d)"';
+          strokeWidth = 3;
+        } else if (highlight === 'borrow') {
+          strokeColor = '#a855f7';
+          filterAttr = 'filter="url(#glow-purple-d)"';
+          strokeWidth = 3;
+        } else if (highlight === 'merge') {
+          strokeColor = '#f59e0b';
+          filterAttr = 'filter="url(#glow-gold-d)"';
+          strokeWidth = 3;
+        } else if (highlight === 'sibling') {
+          strokeColor = '#22c55e';
+          filterAttr = 'filter="url(#glow-green-d)"';
+          strokeWidth = 2;
+        }
+        
+        return `
+          <g id="${id}" transform="translate(${x}, ${y})">
+            <rect x="${-width/2}" y="-25" width="${width}" height="50" rx="8" 
+                  fill="#1e3a5f" stroke="${strokeColor}" stroke-width="${strokeWidth}" ${filterAttr}/>
+            <text x="0" y="8" text-anchor="middle" fill="#fff" font-size="22" font-weight="bold">${keyStr}</text>
+          </g>
+        `;
+      }
+      
+      // 绘制删除演示边
+      function drawDeleteEdge(x1, y1, x2, y2, highlight = false) {
+        const color = highlight ? '#a855f7' : '#3b82f6';
+        const width = highlight ? 3 : 2;
+        const opacity = highlight ? 1 : 0.5;
+        return `<path d="M${x1} ${y1+25} L${x2} ${y2-25}" stroke="${color}" stroke-width="${width}" opacity="${opacity}"/>`;
+      }
+      
+      // 绘制借用/下移箭头
+      function drawMoveArrow(x1, y1, x2, y2, key, direction = 'down') {
+        const color = direction === 'down' ? '#a855f7' : '#22c55e';
+        const angle = Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI + 90;
+        return `
+          <g class="move-arrow">
+            <path d="M${x1} ${y1} L${x2} ${y2}" stroke="${color}" stroke-width="3" stroke-dasharray="8,4"/>
+            <polygon points="-8,10 0,-2 8,10" fill="${color}" transform="translate(${x2},${y2}) rotate(${angle})"/>
+            <circle cx="${(x1+x2)/2}" cy="${(y1+y2)/2}" r="20" fill="#0f172a" stroke="${color}" stroke-width="2"/>
+            <text x="${(x1+x2)/2}" y="${(y1+y2)/2+6}" text-anchor="middle" fill="${color}" font-size="18" font-weight="bold">${key}</text>
+          </g>
+        `;
+      }
+      
+      // 删除步骤定义 - 使用三层五阶B树
+      const deleteSteps = [
+        // Step 0: 初始状态 - 三层五阶B树（更宽松的布局）
+        {
+          text: '初始状态：5阶B树，每个节点2~4个key（三层）',
+          case: 0,
+          render: () => {
+            let html = '';
+            // Level 0 -> Level 1
+            html += drawDeleteEdge(450, 55, 200, 155);
+            html += drawDeleteEdge(450, 55, 700, 155);
+            // Level 1 -> Level 2 (Left subtree)
+            html += drawDeleteEdge(200, 155, 70, 280);
+            html += drawDeleteEdge(200, 155, 200, 280);
+            html += drawDeleteEdge(200, 155, 330, 280);
+            // Level 1 -> Level 2 (Right subtree)
+            html += drawDeleteEdge(700, 155, 490, 280);
+            html += drawDeleteEdge(700, 155, 680, 280);
+            html += drawDeleteEdge(700, 155, 890, 280);
+            // Nodes
+            html += drawDeleteNode([50], 450, 55, 'd-root');
+            html += drawDeleteNode([20, 35], 200, 155, 'd-l1-0');
+            html += drawDeleteNode([70, 85], 700, 155, 'd-l1-1');
+            html += drawDeleteNode([5, 10], 70, 280, 'd-l2-0');
+            html += drawDeleteNode([25, 30], 200, 280, 'd-l2-1');
+            html += drawDeleteNode([40, 45], 330, 280, 'd-l2-2');
+            html += drawDeleteNode([55, 60], 490, 280, 'd-l2-3');
+            html += drawDeleteNode([75, 80, 82], 680, 280, 'd-l2-4');
+            html += drawDeleteNode([90, 95, 99, 105], 890, 280, 'd-l2-5');
+            deleteContainer().innerHTML = html;
+            setDeleteHint('');
+          }
+        },
+        // Step 1: 情况一 - 定位
+        {
+          text: '删除 90：首先定位到目标叶子节点 [90|95|99]',
+          case: 1,
+          caseType: 'green',
+          caseName: '情况一：直接删除',
+          render: () => {
+            let html = '';
+            html += drawDeleteEdge(450, 55, 200, 155);
+            html += drawDeleteEdge(450, 55, 700, 155, true);
+            html += drawDeleteEdge(200, 155, 70, 280);
+            html += drawDeleteEdge(200, 155, 200, 280);
+            html += drawDeleteEdge(200, 155, 330, 280);
+            html += drawDeleteEdge(700, 155, 490, 280);
+            html += drawDeleteEdge(700, 155, 680, 280);
+            html += drawDeleteEdge(700, 155, 830, 280, true);
+            html += drawDeleteNode([50], 450, 55, 'd-root');
+            html += drawDeleteNode([20, 35], 200, 155, 'd-l1-0');
+            html += drawDeleteNode([70, 85], 700, 155, 'd-l1-1');
+            html += drawDeleteNode([5, 10], 70, 280, 'd-l2-0');
+            html += drawDeleteNode([25, 30], 200, 280, 'd-l2-1');
+            html += drawDeleteNode([40, 45], 330, 280, 'd-l2-2');
+            html += drawDeleteNode([55, 60], 490, 280, 'd-l2-3');
+            html += drawDeleteNode([75, 80, 82], 680, 280, 'd-l2-4');
+            html += drawDeleteNode([90, 95, 99, 105], 890, 280, 'd-l2-5', 'target');
+            deleteContainer().innerHTML = html;
+            setDeleteHint('90 > 50 > 85，走最右子树');
+          }
+        },
+        // Step 2: 情况一 - 删除完成
+        {
+          text: '节点 [90|95|99|105] 有4个key，删除90后仍有3个，满足下限(≥2)',
+          case: 1,
+          caseType: 'green',
+          caseName: '情况一：直接删除',
+          render: () => {
+            let html = '';
+            html += drawDeleteEdge(450, 55, 200, 155);
+            html += drawDeleteEdge(450, 55, 700, 155);
+            html += drawDeleteEdge(200, 155, 70, 280);
+            html += drawDeleteEdge(200, 155, 200, 280);
+            html += drawDeleteEdge(200, 155, 330, 280);
+            html += drawDeleteEdge(700, 155, 490, 280);
+            html += drawDeleteEdge(700, 155, 680, 280);
+            html += drawDeleteEdge(700, 155, 890, 280);
+            html += drawDeleteNode([50], 450, 55, 'd-root');
+            html += drawDeleteNode([20, 35], 200, 155, 'd-l1-0');
+            html += drawDeleteNode([70, 85], 700, 155, 'd-l1-1');
+            html += drawDeleteNode([5, 10], 70, 280, 'd-l2-0');
+            html += drawDeleteNode([25, 30], 200, 280, 'd-l2-1');
+            html += drawDeleteNode([40, 45], 330, 280, 'd-l2-2');
+            html += drawDeleteNode([55, 60], 490, 280, 'd-l2-3');
+            html += drawDeleteNode([75, 80, 82], 680, 280, 'd-l2-4');
+            html += drawDeleteNode([95, 99, 105], 890, 280, 'd-l2-5', 'new');
+            deleteContainer().innerHTML = html;
+            setDeleteHint('✓ 直接删除完成！节点仍有3个key');
+          }
+        },
+        // Step 3: 情况二 - 定位
+        {
+          text: '删除 60：定位到目标叶子节点 [55|60]',
+          case: 2,
+          caseType: 'amber',
+          caseName: '情况二：借用兄弟',
+          render: () => {
+            let html = '';
+            html += drawDeleteEdge(450, 55, 200, 155);
+            html += drawDeleteEdge(450, 55, 700, 155, true);
+            html += drawDeleteEdge(200, 155, 70, 280);
+            html += drawDeleteEdge(200, 155, 200, 280);
+            html += drawDeleteEdge(200, 155, 330, 280);
+            html += drawDeleteEdge(700, 155, 570, 280, true);
+            html += drawDeleteEdge(700, 155, 680, 280);
+            html += drawDeleteEdge(700, 155, 890, 280);
+            html += drawDeleteNode([50], 450, 55, 'd-root');
+            html += drawDeleteNode([20, 35], 200, 155, 'd-l1-0');
+            html += drawDeleteNode([70, 85], 700, 155, 'd-l1-1');
+            html += drawDeleteNode([5, 10], 70, 280, 'd-l2-0');
+            html += drawDeleteNode([25, 30], 200, 280, 'd-l2-1');
+            html += drawDeleteNode([40, 45], 330, 280, 'd-l2-2');
+            html += drawDeleteNode([55, 60], 490, 280, 'd-l2-3', 'target');
+            html += drawDeleteNode([75, 80, 82], 680, 280, 'd-l2-4');
+            html += drawDeleteNode([95, 99, 105], 890, 280, 'd-l2-5');
+            deleteContainer().innerHTML = html;
+            setDeleteHint('60 > 50，进入右子树，60 < 70');
+          }
+        },
+        // Step 4: 情况二 - 发现问题
+        {
+          text: '节点 [55|60] 有2个key，删除60后只剩1个，低于下限(≥2)',
+          case: 2,
+          caseType: 'amber',
+          caseName: '情况二：借用兄弟',
+          render: () => {
+            let html = '';
+            html += drawDeleteEdge(450, 55, 200, 155);
+            html += drawDeleteEdge(450, 55, 700, 155);
+            html += drawDeleteEdge(200, 155, 70, 280);
+            html += drawDeleteEdge(200, 155, 200, 280);
+            html += drawDeleteEdge(200, 155, 330, 280);
+            html += drawDeleteEdge(700, 155, 490, 280);
+            html += drawDeleteEdge(700, 155, 680, 280);
+            html += drawDeleteEdge(700, 155, 890, 280);
+            html += drawDeleteNode([50], 450, 55, 'd-root');
+            html += drawDeleteNode([20, 35], 200, 155, 'd-l1-0');
+            html += drawDeleteNode([70, 85], 700, 155, 'd-l1-1');
+            html += drawDeleteNode([5, 10], 70, 280, 'd-l2-0');
+            html += drawDeleteNode([25, 30], 200, 280, 'd-l2-1');
+            html += drawDeleteNode([40, 45], 330, 280, 'd-l2-2');
+            html += drawDeleteNode([55, 60], 490, 280, 'd-l2-3', 'delete', 60);
+            html += drawDeleteNode([75, 80, 82], 680, 280, 'd-l2-4');
+            html += drawDeleteNode([95, 99, 105], 890, 280, 'd-l2-5');
+            deleteContainer().innerHTML = html;
+            setDeleteHint('删除后只剩[55]，低于下限，需要处理');
+          }
+        },
+        // Step 5: 情况二 - 检查兄弟
+        {
+          text: '检查兄弟：右兄弟 [75|80|82] 有3个key，可以借用！',
+          case: 2,
+          caseType: 'amber',
+          caseName: '情况二：借用兄弟',
+          render: () => {
+            let html = '';
+            html += drawDeleteEdge(450, 55, 200, 155);
+            html += drawDeleteEdge(450, 55, 700, 155);
+            html += drawDeleteEdge(200, 155, 70, 280);
+            html += drawDeleteEdge(200, 155, 200, 280);
+            html += drawDeleteEdge(200, 155, 330, 280);
+            html += drawDeleteEdge(700, 155, 490, 280);
+            html += drawDeleteEdge(700, 155, 680, 280);
+            html += drawDeleteEdge(700, 155, 890, 280);
+            html += drawDeleteNode([50], 450, 55, 'd-root');
+            html += drawDeleteNode([20, 35], 200, 155, 'd-l1-0');
+            html += drawDeleteNode([70, 85], 700, 155, 'd-l1-1', 'borrow');
+            html += drawDeleteNode([5, 10], 70, 280, 'd-l2-0');
+            html += drawDeleteNode([25, 30], 200, 280, 'd-l2-1');
+            html += drawDeleteNode([40, 45], 330, 280, 'd-l2-2');
+            html += drawDeleteNode([55], 490, 280, 'd-l2-3', 'delete');
+            html += drawDeleteNode([75, 80, 82], 680, 280, 'd-l2-4', 'sibling');
+            html += drawDeleteNode([95, 99, 105], 890, 280, 'd-l2-5');
+            deleteContainer().innerHTML = html;
+            setDeleteHint('右兄弟有富余！可以借用');
+          }
+        },
+        // Step 6: 情况二 - 借用过程
+        {
+          text: '借用：父key [70] 下移到左节点，兄弟最小key [75] 上移到父节点',
+          case: 2,
+          caseType: 'amber',
+          caseName: '情况二：借用兄弟',
+          render: () => {
+            let html = '';
+            html += drawDeleteEdge(450, 55, 200, 155);
+            html += drawDeleteEdge(450, 55, 700, 155);
+            html += drawDeleteEdge(200, 155, 70, 280);
+            html += drawDeleteEdge(200, 155, 200, 280);
+            html += drawDeleteEdge(200, 155, 330, 280);
+            html += drawDeleteEdge(700, 155, 490, 280);
+            html += drawDeleteEdge(700, 155, 680, 280);
+            html += drawDeleteEdge(700, 155, 890, 280);
+            html += drawDeleteNode([50], 450, 55, 'd-root');
+            html += drawDeleteNode([20, 35], 200, 155, 'd-l1-0');
+            html += drawDeleteNode([70, 85], 700, 155, 'd-l1-1', 'borrow');
+            html += drawDeleteNode([5, 10], 70, 280, 'd-l2-0');
+            html += drawDeleteNode([25, 30], 200, 280, 'd-l2-1');
+            html += drawDeleteNode([40, 45], 330, 280, 'd-l2-2');
+            html += drawDeleteNode([55], 490, 280, 'd-l2-3');
+            html += drawDeleteNode([80, 82], 680, 280, 'd-l2-4');
+            html += drawDeleteNode([95, 99, 105], 890, 280, 'd-l2-5');
+            // 下移和上移箭头
+            html += drawMoveArrow(620, 175, 520, 255, '70', 'down');
+            html += drawMoveArrow(655, 255, 715, 180, '75', 'up');
+            deleteContainer().innerHTML = html;
+            setDeleteHint('70下移，75上移 — "旋转"操作');
+          }
+        },
+        // Step 7: 情况二 - 完成
+        {
+          text: '借用完成！节点 [55|70]，父节点变为 [75|85]',
+          case: 2,
+          caseType: 'amber',
+          caseName: '情况二：借用兄弟',
+          render: () => {
+            let html = '';
+            html += drawDeleteEdge(450, 55, 200, 155);
+            html += drawDeleteEdge(450, 55, 700, 155);
+            html += drawDeleteEdge(200, 155, 70, 280);
+            html += drawDeleteEdge(200, 155, 200, 280);
+            html += drawDeleteEdge(200, 155, 330, 280);
+            html += drawDeleteEdge(700, 155, 490, 280);
+            html += drawDeleteEdge(700, 155, 680, 280);
+            html += drawDeleteEdge(700, 155, 890, 280);
+            html += drawDeleteNode([50], 450, 55, 'd-root');
+            html += drawDeleteNode([20, 35], 200, 155, 'd-l1-0');
+            html += drawDeleteNode([75, 85], 700, 155, 'd-l1-1', 'new');
+            html += drawDeleteNode([5, 10], 70, 280, 'd-l2-0');
+            html += drawDeleteNode([25, 30], 200, 280, 'd-l2-1');
+            html += drawDeleteNode([40, 45], 330, 280, 'd-l2-2');
+            html += drawDeleteNode([55, 70], 490, 280, 'd-l2-3', 'new');
+            html += drawDeleteNode([80, 82], 680, 280, 'd-l2-4', 'new');
+            html += drawDeleteNode([95, 99, 105], 890, 280, 'd-l2-5');
+            deleteContainer().innerHTML = html;
+            setDeleteHint('✓ 借用完成！所有节点仍满足B树性质');
+          }
+        },
+        // Step 8: 情况三 - 定位
+        {
+          text: '删除 25：定位到目标叶子节点 [25|30]',
+          case: 3,
+          caseType: 'red',
+          caseName: '情况三：合并节点',
+          render: () => {
+            let html = '';
+            html += drawDeleteEdge(450, 55, 200, 155, true);
+            html += drawDeleteEdge(450, 55, 700, 155);
+            html += drawDeleteEdge(200, 155, 70, 280);
+            html += drawDeleteEdge(200, 155, 200, 280, true);
+            html += drawDeleteEdge(200, 155, 330, 280);
+            html += drawDeleteEdge(700, 155, 490, 280);
+            html += drawDeleteEdge(700, 155, 680, 280);
+            html += drawDeleteEdge(700, 155, 890, 280);
+            html += drawDeleteNode([50], 450, 55, 'd-root');
+            html += drawDeleteNode([20, 35], 200, 155, 'd-l1-0');
+            html += drawDeleteNode([75, 85], 700, 155, 'd-l1-1');
+            html += drawDeleteNode([5, 10], 70, 280, 'd-l2-0');
+            html += drawDeleteNode([25, 30], 200, 280, 'd-l2-1', 'target');
+            html += drawDeleteNode([40, 45], 330, 280, 'd-l2-2');
+            html += drawDeleteNode([55, 70], 490, 280, 'd-l2-3');
+            html += drawDeleteNode([80, 82], 680, 280, 'd-l2-4');
+            html += drawDeleteNode([95, 99, 105], 890, 280, 'd-l2-5');
+            deleteContainer().innerHTML = html;
+            setDeleteHint('25 < 50，进入左子树；20 < 25 < 35，定位到[25|30]');
+          }
+        },
+        // Step 9: 情况三 - 发现问题
+        {
+          text: '删除 25 后，节点只剩 [30]，低于下限(≥2)，触发合并',
+          case: 3,
+          caseType: 'red',
+          caseName: '情况三：合并节点',
+          render: () => {
+            let html = '';
+            html += drawDeleteEdge(450, 55, 200, 155);
+            html += drawDeleteEdge(450, 55, 700, 155);
+            html += drawDeleteEdge(200, 155, 70, 280);
+            html += drawDeleteEdge(200, 155, 200, 280);
+            html += drawDeleteEdge(200, 155, 330, 280);
+            html += drawDeleteEdge(700, 155, 490, 280);
+            html += drawDeleteEdge(700, 155, 680, 280);
+            html += drawDeleteEdge(700, 155, 890, 280);
+            html += drawDeleteNode([50], 450, 55, 'd-root');
+            html += drawDeleteNode([20, 35], 200, 155, 'd-l1-0');
+            html += drawDeleteNode([75, 85], 700, 155, 'd-l1-1');
+            html += drawDeleteNode([5, 10], 70, 280, 'd-l2-0', 'sibling');
+            html += drawDeleteNode([30], 200, 280, 'd-l2-1', 'delete');
+            html += drawDeleteNode([40, 45], 330, 280, 'd-l2-2');
+            html += drawDeleteNode([55, 70], 490, 280, 'd-l2-3');
+            html += drawDeleteNode([80, 82], 680, 280, 'd-l2-4');
+            html += drawDeleteNode([95, 99, 105], 890, 280, 'd-l2-5');
+            deleteContainer().innerHTML = html;
+            setDeleteHint('节点 [30] 下溢，且左兄弟 [5|10] 只有2个，无法借用');
+          }
+        },
+        // Step 10: 情况三 - 合并过程
+        {
+          text: '合并：左兄弟 [5|10] + 父key [20] + 当前节点 [30] → [5|10|20|30]',
+          case: 3,
+          caseType: 'red',
+          caseName: '情况三：合并节点',
+          render: () => {
+            let html = '';
+            html += drawDeleteEdge(450, 55, 200, 155);
+            html += drawDeleteEdge(450, 55, 700, 155);
+            html += drawDeleteEdge(200, 155, 135, 280);
+            html += drawDeleteEdge(200, 155, 330, 280);
+            html += drawDeleteEdge(700, 155, 490, 280);
+            html += drawDeleteEdge(700, 155, 680, 280);
+            html += drawDeleteEdge(700, 155, 890, 280);
+            html += drawDeleteNode([50], 450, 55, 'd-root');
+            html += drawDeleteNode([35], 200, 155, 'd-l1-0', 'borrow');
+            html += drawDeleteNode([75, 85], 700, 155, 'd-l1-1');
+            html += drawDeleteNode([5, 10, 20, 30], 135, 280, 'd-l2-0', 'merge');
+            html += drawDeleteNode([40, 45], 330, 280, 'd-l2-2');
+            html += drawDeleteNode([55, 70], 490, 280, 'd-l2-3');
+            html += drawDeleteNode([80, 82], 680, 280, 'd-l2-4');
+            html += drawDeleteNode([95, 99, 105], 890, 280, 'd-l2-5');
+            // 下移箭头
+            html += drawMoveArrow(180, 175, 150, 255, '20', 'down');
+            deleteContainer().innerHTML = html;
+            setDeleteHint('父节点的 20 下移，与左兄弟和当前节点合并');
+          }
+        },
+        // Step 11: 情况三 - 父节点下溢
+        {
+          text: '合并后父节点 [35] 只有1个关键字(Min=2)，发生下溢！',
+          case: 3,
+          caseType: 'red',
+          caseName: '情况三：递归合并',
+          render: () => {
+            let html = '';
+            html += drawDeleteEdge(450, 55, 200, 155);
+            html += drawDeleteEdge(450, 55, 700, 155);
+            html += drawDeleteEdge(200, 155, 135, 280);
+            html += drawDeleteEdge(200, 155, 330, 280);
+            html += drawDeleteEdge(700, 155, 490, 280);
+            html += drawDeleteEdge(700, 155, 680, 280);
+            html += drawDeleteEdge(700, 155, 890, 280);
+            html += drawDeleteNode([50], 450, 55, 'd-root');
+            html += drawDeleteNode([35], 200, 155, 'd-l1-0', 'delete'); // 红色高亮表示下溢
+            html += drawDeleteNode([75, 85], 700, 155, 'd-l1-1');
+            html += drawDeleteNode([5, 10, 20, 30], 135, 280, 'd-l2-0', 'new');
+            html += drawDeleteNode([40, 45], 330, 280, 'd-l2-2');
+            html += drawDeleteNode([55, 70], 490, 280, 'd-l2-3');
+            html += drawDeleteNode([80, 82], 680, 280, 'd-l2-4');
+            html += drawDeleteNode([95, 99, 105], 890, 280, 'd-l2-5');
+            deleteContainer().innerHTML = html;
+            setDeleteHint('⚠️ 父节点需 ≥2 个关键字，当前仅 1 个，触发递归处理');
+          }
+        },
+        // Step 12: 情况三 - 递归合并
+        {
+          text: '递归：根节点 [50] 下移，与 [35] 和 [75|85] 合并',
+          case: 3,
+          caseType: 'red',
+          caseName: '情况三：递归合并',
+          render: () => {
+            let html = '';
+            // 根节点下移的连线
+            html += drawDeleteEdge(450, 55, 450, 155, true); 
+            
+            html += drawDeleteEdge(200, 155, 135, 280);
+            html += drawDeleteEdge(200, 155, 330, 280);
+            html += drawDeleteEdge(700, 155, 490, 280);
+            html += drawDeleteEdge(700, 155, 680, 280);
+            html += drawDeleteEdge(700, 155, 890, 280);
+            
+            html += drawDeleteNode([50], 450, 55, 'd-root', 'borrow'); // 借出的根
+            html += drawDeleteNode([35, 50, 75, 85], 450, 155, 'd-l1-merged', 'merge'); // 合并后的大节点
+            
+            html += drawDeleteNode([5, 10, 20, 30], 135, 280, 'd-l2-0');
+            html += drawDeleteNode([40, 45], 330, 280, 'd-l2-2');
+            html += drawDeleteNode([55, 70], 490, 280, 'd-l2-3');
+            html += drawDeleteNode([80, 82], 680, 280, 'd-l2-4');
+            html += drawDeleteNode([95, 99, 105], 890, 280, 'd-l2-5');
+            
+            // 下移箭头
+            html += drawMoveArrow(450, 80, 450, 130, '50', 'down');
+            
+            deleteContainer().innerHTML = html;
+            setDeleteHint('根节点变空，树高度降低一层');
+          }
+        },
+        // Step 13: 最终结果
+        {
+          text: '最终结果：新根产生，高度减 1，所有节点满足 B 树性质',
+          case: 3,
+          caseType: 'green',
+          caseName: '演示结束',
+          render: () => {
+            let html = '';
+            // 新根到各子节点的连线
+            const rootX = 512;
+            const rootY = 80;
+            html += drawDeleteEdge(rootX, rootY, 135, 280);
+            html += drawDeleteEdge(rootX, rootY, 330, 280);
+            html += drawDeleteEdge(rootX, rootY, 490, 280);
+            html += drawDeleteEdge(rootX, rootY, 680, 280);
+            html += drawDeleteEdge(rootX, rootY, 890, 280);
+            
+            html += drawDeleteNode([35, 50, 75, 85], rootX, rootY, 'd-new-root', 'new');
+            
+            html += drawDeleteNode([5, 10, 20, 30], 135, 280, 'd-l2-0');
+            html += drawDeleteNode([40, 45], 330, 280, 'd-l2-2');
+            html += drawDeleteNode([55, 70], 490, 280, 'd-l2-3');
+            html += drawDeleteNode([80, 82], 680, 280, 'd-l2-4');
+            html += drawDeleteNode([95, 99, 105], 890, 280, 'd-l2-5');
+            
+            deleteContainer().innerHTML = html;
+            setDeleteHint('✓ 删除完成！整棵树重新平衡');
+          }
+        }
+      ];
+      
+      function setDeleteHint(text) {
+        const hint = document.getElementById('d-action-hint');
+        const hintText = document.getElementById('d-hint-text');
+        if (hint && hintText) {
+          if (text) {
+            hint.setAttribute('opacity', '1');
+            hintText.textContent = text;
+            fitHintText(hint, hintText);
+          } else {
+            hint.setAttribute('opacity', '0');
+          }
+        }
+      }
+      
+      function updateDeleteUI() {
+        const step = deleteSteps[deleteStep];
+        if (!step) return;
+        
+        // 更新步骤文字
+        const textEl = document.getElementById('d-step-text');
+        if (textEl) textEl.textContent = step.text;
+        
+        // 更新情况指示器
+        const indicator = document.getElementById('d-case-indicator');
+        if (indicator && step.caseName) {
+          let borderColor = 'border-green-500/50';
+          let bgColor = 'bg-green-500/10';
+          let textColor = 'text-green-400';
+          let icon = 'fa-check-circle';
+          
+          if (step.caseType === 'amber') {
+            borderColor = 'border-amber-500/50';
+            bgColor = 'bg-amber-500/10';
+            textColor = 'text-amber-400';
+            icon = 'fa-exchange-alt';
+          } else if (step.caseType === 'red') {
+            borderColor = 'border-red-500/50';
+            bgColor = 'bg-red-500/10';
+            textColor = 'text-red-400';
+            icon = 'fa-compress-arrows-alt';
+          }
+          
+          indicator.className = `p-3 rounded-xl border-2 ${borderColor} ${bgColor}`;
+          indicator.innerHTML = `<span class="${textColor} text-[22px] font-bold"><i class="fas ${icon} mr-2"></i>${step.caseName}</span>`;
+        } else if (indicator) {
+          indicator.className = 'p-3 rounded-xl border-2 border-slate-500/50 bg-slate-500/10';
+          indicator.innerHTML = '<span class="text-slate-400 text-[22px] font-bold"><i class="fas fa-info-circle mr-2"></i>准备就绪</span>';
+        }
+        
+        // 更新情况列表高亮
+        for (let i = 1; i <= 3; i++) {
+          const caseEl = document.getElementById(`d-case-${i}`);
+          if (caseEl) {
+            if (step.case === i) {
+              caseEl.classList.remove('text-slate-500');
+              caseEl.classList.add('text-white', 'bg-slate-700/50');
+              const icon = caseEl.querySelector('i');
+              if (icon) icon.className = 'fas fa-play text-[10px] mr-3 text-red-400';
+            } else if (step.case > i || (deleteStep === deleteSteps.length - 1)) {
+              caseEl.classList.remove('text-slate-500', 'bg-slate-700/50');
+              caseEl.classList.add('text-green-400');
+              const icon = caseEl.querySelector('i');
+              if (icon) icon.className = 'fas fa-check text-[10px] mr-3 text-green-400';
+            } else {
+              caseEl.classList.remove('text-white', 'text-green-400', 'bg-slate-700/50');
+              caseEl.classList.add('text-slate-500');
+              const icon = caseEl.querySelector('i');
+              if (icon) icon.className = 'fas fa-circle text-[10px] mr-3';
+            }
+          }
+        }
+        
+        // 渲染树
+        if (step.render) step.render();
+      }
+      
+      function nextDeleteStep() {
+        if (deleteStep < deleteSteps.length - 1) {
+          deleteStep++;
+          updateDeleteUI();
+        }
+      }
+      
+      function prevDeleteStep() {
+        if (deleteStep > 0) {
+          deleteStep--;
+          updateDeleteUI();
+        }
+      }
+      
+      function resetDeleteDemo() {
+        deleteStep = 0;
+        updateDeleteUI();
+      }
+      
+      function initDeleteDemo() {
+        const btnPrev = document.getElementById('btn-delete-prev');
+        const btnNext = document.getElementById('btn-delete-next');
+        const btnReset = document.getElementById('btn-delete-reset');
+        
+        if (btnPrev) btnPrev.addEventListener('click', prevDeleteStep);
+        if (btnNext) btnNext.addEventListener('click', nextDeleteStep);
+        if (btnReset) btnReset.addEventListener('click', resetDeleteDemo);
+        
+        resetDeleteDemo();
+      }
+    </script>
+  </body>
+</html>
