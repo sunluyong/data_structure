@@ -1,0 +1,1284 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>17 图的存储：邻接矩阵与邻接表</title>
+    <script src="https://unpkg.com/@tailwindcss/browser@4"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+    <style type="text/tailwindcss">
+      @theme {
+        --color-bg-dark: #030712;
+        --color-text-main: #f1f5f9;
+        --color-accent: #8b5cf6; /* Violet */
+        --color-secondary: #ec4899; /* Pink */
+        --color-tertiary: #06b6d4; /* Cyan */
+        --color-warn: #f59e0b;
+        --color-code-bg: #1e293b;
+      }
+      @layer base {
+        body { @apply bg-black text-text-main font-sans overflow-hidden flex justify-center items-center h-screen; }
+      }
+      @layer utilities {
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateX(-10px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        .slide-container { @apply relative w-[1920px] h-[1080px] bg-bg-dark overflow-hidden shadow-2xl; }
+        .slide { @apply absolute inset-0 hidden flex-col p-14 opacity-0 transition-opacity duration-400 ease-in-out; }
+        .slide.active { @apply flex opacity-100; }
+        .bg-decoration { @apply absolute inset-0 z-0 pointer-events-none; background-image: radial-gradient(circle at 15% 15%, rgba(139,92,246,0.05) 0%, transparent 30%), radial-gradient(circle at 85% 85%, rgba(6,182,212,0.05) 0%, transparent 30%); }
+        .grid-overlay { @apply absolute inset-0 z-0; background-size: 60px 60px; background-image: linear-gradient(to right, rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.02) 1px, transparent 1px); }
+        h1 { @apply text-[100px] font-extrabold leading-tight mb-8; background: linear-gradient(135deg, #fff 0%, var(--color-accent) 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+        h2 { @apply text-[64px] mb-8 text-accent inline-block pb-4 border-b-4 border-accent/30; }
+        h3 { @apply text-[42px] mb-6 text-secondary; }
+        p { @apply text-[32px] mb-4 text-slate-200; }
+        .slide-content li { @apply text-[32px] mb-4 text-slate-200; }
+        strong { @apply text-accent font-bold; }
+        .card { @apply bg-white/5 border border-white/10 rounded-3xl p-6 mb-6 backdrop-blur-sm; }
+        .code-block { @apply font-mono bg-code-bg p-6 rounded-2xl border border-slate-700 text-[22px] leading-relaxed text-slate-200 overflow-auto whitespace-pre; }
+        .code-kw { @apply text-[#c678dd]; }
+        .code-type { @apply text-[#e5c07b]; }
+        .code-cm { @apply text-[#94a3b8] italic; }
+        .code-num { @apply text-[#d19a66]; }
+        .code-str { @apply text-[#98c379]; }
+        .btn-primary { @apply px-6 py-3 bg-accent/20 border border-accent/50 rounded-xl text-accent font-bold text-[24px] cursor-pointer transition-all hover:bg-accent/30 hover:scale-105 active:scale-95; }
+        .btn-secondary { @apply px-6 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-slate-200 font-bold text-[24px] cursor-pointer transition-all hover:bg-slate-600/50; }
+        
+        /* Custom Scrollbar for code blocks */
+        .custom-scrollbar::-webkit-scrollbar { width: 10px; height: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #1e293b; border-radius: 5px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; border-radius: 5px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Global Defs -->
+    <svg width="0" height="0" style="position:absolute">
+        <defs>
+            <marker id="arrow-matrix" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L9,3 z" fill="#8b5cf6" />
+            </marker>
+        </defs>
+    </svg>
+    <div id="app" class="slide-container">
+      <div class="bg-decoration"></div>
+      <div class="grid-overlay"></div>
+
+      <!-- P01: 封面 -->
+      <section class="slide active justify-center items-center text-center" data-title="封面">
+        <div class="flex flex-col items-center z-10 relative -mt-32">
+          <!-- 图标放在最上面 -->
+          <div class="mb-12 flex gap-8">
+            <div class="flex flex-col items-center">
+                <div class="w-24 h-24 border-2 border-accent grid grid-cols-3 gap-1 p-1 rounded-lg bg-accent/10">
+                    <div class="bg-accent/50"></div><div class="bg-accent/20"></div><div class="bg-accent/50"></div>
+                    <div class="bg-accent/20"></div><div class="bg-accent/50"></div><div class="bg-accent/20"></div>
+                    <div class="bg-accent/50"></div><div class="bg-accent/20"></div><div class="bg-accent/50"></div>
+                </div>
+                <span class="mt-4 text-slate-300 text-xl font-mono">Matrix</span>
+            </div>
+            <div class="flex flex-col items-center">
+                <div class="w-24 h-24 border-2 border-secondary flex flex-col justify-around p-2 rounded-lg bg-secondary/10">
+                    <div class="h-4 w-full bg-secondary/50 rounded flex"><div class="w-4 h-4 bg-white rounded-full ml-auto"></div></div>
+                    <div class="h-4 w-3/4 bg-secondary/50 rounded flex"><div class="w-4 h-4 bg-white rounded-full ml-auto"></div></div>
+                    <div class="h-4 w-1/2 bg-secondary/50 rounded flex"><div class="w-4 h-4 bg-white rounded-full ml-auto"></div></div>
+                </div>
+                <span class="mt-4 text-slate-300 text-xl font-mono">List</span>
+            </div>
+          </div>
+
+          <div class="bg-purple-500/10 px-6 py-2 rounded-full border border-purple-500/30 mb-6">
+            <span class="text-purple-400 text-2xl font-mono tracking-widest">GRAPH STORAGE</span>
+          </div>
+          <h1>数据结构与算法</h1>
+          <p class="text-[56px] text-secondary">图2：邻接矩阵 & 邻接表</p>
+        </div>
+      </section>
+
+      <!-- P02: 存储的核心问题 -->
+      <section class="slide" data-title="核心问题">
+        <h2>为什么要讨论存储？</h2>
+        <div class="grid grid-cols-2 gap-16 flex-1 min-h-0 items-center">
+            <div class="flex flex-col gap-8">
+                <div class="card border-l-8 border-warn p-8">
+                    <h3 class="text-warn text-[40px] mb-4">核心挑战</h3>
+                    <p class="text-[32px] text-white leading-relaxed">
+                        图的结构比线性表和树更复杂：<br/>
+                        <span class="text-slate-300">任意两个顶点都可能相关联。</span>
+                    </p>
+                </div>
+                <div class="card bg-slate-800/30 p-8">
+                    <h3 class="text-slate-200 text-[32px] mb-6">我们需要权衡：</h3>
+                    <ul class="space-y-6">
+                        <li class="flex items-center text-[28px]">
+                            <i class="fas fa-hdd w-12 text-center text-accent"></i>
+                            <span class="text-slate-200">空间复杂度：存下所有边需要多少内存？</span>
+                        </li>
+                        <li class="flex items-center text-[28px]">
+                            <i class="fas fa-bolt w-12 text-center text-secondary"></i>
+                            <span class="text-slate-200">时间复杂度：判断两点是否相连有多快？</span>
+                        </li>
+                        <li class="flex items-center text-[28px]">
+                            <i class="fas fa-list-ol w-12 text-center text-tertiary"></i>
+                            <span class="text-slate-200">遍历效率：找到某个点的所有邻居有多快？</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            <div class="flex flex-col justify-center items-center relative">
+                <!-- Visual Metaphor -->
+                <div class="relative w-[500px] h-[500px]">
+                    <div class="absolute inset-0 border-4 border-dashed border-slate-700 rounded-full animate-[spin_20s_linear_infinite]"></div>
+                    <div class="absolute inset-0 flex items-center justify-center">
+                        <div class="text-center">
+                            <div class="text-[60px] font-bold text-white mb-2">Trade-off</div>
+                            <div class="text-[30px] text-slate-300">时间 vs 空间</div>
+                        </div>
+                    </div>
+                    <div class="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-bg-dark px-4 text-accent text-2xl font-mono">Dense Graph</div>
+                    <div class="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 bg-bg-dark px-4 text-secondary text-2xl font-mono">Sparse Graph</div>
+                </div>
+            </div>
+        </div>
+      </section>
+
+      <!-- P03: 邻接矩阵 - 概念 -->
+      <section class="slide" data-title="邻接矩阵：概念">
+        <h2>邻接矩阵：有向图 (Directed)</h2>
+        <div class="grid grid-cols-2 gap-12 flex-1 min-h-0">
+            <div class="flex flex-col">
+                <div class="card p-8 border-slate-700 bg-slate-800/30">
+                    <h3 class="text-accent text-[36px] mb-4">定义</h3>
+                    <p class="text-[28px] text-slate-200 leading-relaxed">
+                        使用一个 <strong class="text-white">二维数组</strong> <span class="font-mono text-accent">G[N][N]</span> 来表示顶点之间的连接关系。
+                    </p>
+                    <ul class="mt-6 space-y-4 text-[26px] text-slate-300">
+                        <li>• 若顶点 <span class="font-mono text-accent">i</span> 和 <span class="font-mono text-accent">j</span> 之间有边，则 <span class="font-mono text-accent">G[i][j] = 1</span> (或权重)。</li>
+                        <li>• 若无边，则 <span class="font-mono text-accent">G[i][j] = 0</span> (或 ∞)。</li>
+                    </ul>
+                </div>
+                
+                <div class="mt-6 card p-6 border-slate-700 bg-slate-800/30">
+                    <h3 class="text-white text-[30px] mb-4">特点</h3>
+                    <ul class="space-y-3 text-[26px] text-slate-300">
+                        <li><i class="fas fa-check text-green-500 mr-2"></i> <strong class="text-white">查边快</strong>：O(1) 判断两点是否相连。</li>
+                        <li><i class="fas fa-check text-green-500 mr-2"></i> <strong class="text-white">算度快</strong>：行和=出度，列和=入度。</li>
+                        <li><i class="fas fa-exclamation-triangle text-warn mr-2"></i> <strong class="text-white">耗空间</strong>：固定 O(V²)，适合稠密图。</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="flex flex-col items-center justify-center bg-slate-900/50 rounded-3xl border border-slate-700 p-8">
+                <div class="flex gap-12 items-center">
+                    <!-- Graph Visualization -->
+                    <svg width="300" height="300" viewBox="0 0 300 300" class="overflow-visible" id="matrix-graph">
+                        <!-- Edges will be injected here -->
+                        <g id="matrix-edges"></g>
+                        <!-- Nodes will be injected here -->
+                        <g id="matrix-nodes"></g>
+                    </svg>
+
+                    <!-- Arrow -->
+                    <div class="text-4xl text-slate-400"><i class="fas fa-arrow-right"></i></div>
+
+                    <!-- Matrix Visualization -->
+                    <div class="flex flex-col items-center">
+                        <div class="grid grid-cols-6 gap-1 text-center font-mono text-xl" id="matrix-grid">
+                            <!-- Matrix cells will be injected here -->
+                        </div>
+                        <!-- Controls -->
+                        <div class="flex gap-4 mt-6">
+                            <button onclick="prevMatrixStep()" class="btn-secondary text-xs py-1 px-3">Prev</button>
+                            <button onclick="resetMatrixStep()" class="btn-secondary text-xs py-1 px-3">Reset</button>
+                            <button onclick="nextMatrixStep()" class="btn-primary text-xs py-1 px-3">Next</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+      </section>
+
+      <!-- P03b: 邻接矩阵 - 无向图 -->
+      <section class="slide" data-title="邻接矩阵：无向图">
+        <h2>邻接矩阵：无向图 (Undirected)</h2>
+        <div class="grid grid-cols-2 gap-12 flex-1 min-h-0">
+            <div class="flex flex-col justify-center">
+                <div class="card p-8 border-slate-700 bg-slate-800/30">
+                    <h3 class="text-white text-[36px] mb-6">对称性 (Symmetry)</h3>
+                    <p class="text-[28px] text-slate-200 leading-relaxed">
+                        无向图的边没有方向，<span class="font-mono text-accent">(i, j)</span> 等同于 <span class="font-mono text-accent">(j, i)</span>。
+                    </p>
+                    <ul class="mt-8 space-y-6 text-[26px] text-slate-300">
+                        <li><i class="fas fa-check text-green-500 mr-4"></i> 矩阵关于<strong class="text-white">主对角线</strong>对称。</li>
+                        <li><i class="fas fa-check text-green-500 mr-4"></i> <span class="font-mono text-accent">G[i][j] == G[j][i]</span></li>
+                        <li><i class="fas fa-info-circle text-blue-400 mr-4"></i> 存储时可以只存上三角或下三角以节省空间。</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="flex flex-col items-center justify-center bg-slate-900/50 rounded-3xl border border-slate-700 p-8">
+                <div class="flex gap-12 items-center">
+                    <!-- Graph Visualization -->
+                    <svg width="300" height="300" viewBox="0 0 300 300" class="overflow-visible" id="undirected-graph">
+                        <!-- Edges will be injected here -->
+                        <g id="undirected-edges"></g>
+                        <!-- Nodes will be injected here -->
+                        <g id="undirected-nodes"></g>
+                    </svg>
+
+                    <!-- Arrow -->
+                    <div class="text-4xl text-slate-400"><i class="fas fa-arrow-right"></i></div>
+
+                    <!-- Matrix Visualization -->
+                    <div class="flex flex-col items-center">
+                        <div class="grid grid-cols-6 gap-1 text-center font-mono text-xl" id="undirected-grid">
+                            <!-- Matrix cells will be injected here -->
+                        </div>
+                        <!-- Controls -->
+                        <div class="flex gap-4 mt-6">
+                            <button onclick="prevUndirectedStep()" class="btn-secondary text-xs py-1 px-3">Prev</button>
+                            <button onclick="resetUndirectedStep()" class="btn-secondary text-xs py-1 px-3"> Reset</button>
+                            <button onclick="nextUndirectedStep()" class="btn-primary text-xs py-1 px-3">Next</button>
+                        </div>
+                    </div>
+                </div>
+                <p class="mt-8 text-slate-300 text-center text-[24px]">同时也更新对称位置，保持矩阵对称。</p>
+            </div>
+        </div>
+      </section>
+
+      <!-- P04: 邻接矩阵 - 代码 -->
+      <section class="slide" data-title="邻接矩阵：代码">
+        <h2>邻接矩阵：代码实现</h2>
+        <div class="grid grid-cols-2 gap-8 flex-1 min-h-0">
+            <div class="flex flex-col h-full min-h-0">
+                <div class="code-block h-full custom-scrollbar text-[20px]"><span class="code-kw">#define</span> MAX_V 100
+<span class="code-kw">#define</span> INF 65535  <span class="code-cm">// 表示无穷大（无边）</span>
+
+<span class="code-kw">typedef struct</span> {
+    <span class="code-type">char</span> V[MAX_V];           <span class="code-cm">// 顶点表</span>
+    <span class="code-type">int</span> Edge[MAX_V][MAX_V];  <span class="code-cm">// 邻接矩阵 (边表)</span>
+    <span class="code-type">int</span> numV, numE;          <span class="code-cm">// 当前顶点数和边数</span>
+} <span class="code-type">MGraph</span>;
+
+<span class="code-type">void</span> <span class="code-kw">CreateMGraph</span>(<span class="code-type">MGraph</span> *G) {
+    <span class="code-type">int</span> i, j, k, w;
+    
+    <span class="code-cm">// 1. 输入顶点数和边数</span>
+    <span class="code-kw">printf</span>(<span class="code-str">"输入顶点数和边数: "</span>);
+    <span class="code-kw">scanf</span>(<span class="code-str">"%d,%d"</span>, &G->numV, &G->numE);
+    
+    <span class="code-cm">// 2. 初始化邻接矩阵</span>
+    <span class="code-kw">for</span>(i = 0; i < G->numV; i++) {
+        <span class="code-kw">for</span>(j = 0; j < G->numV; j++) {
+            <span class="code-kw">if</span> (i == j) G->Edge[i][j] = 0;
+            <span class="code-kw">else</span> G->Edge[i][j] = INF;
+        }
+    }
+
+    <span class="code-cm">// 3. 建立边 (读入边的数据)</span>
+    <span class="code-kw">for</span>(k = 0; k < G->numE; k++) {
+        <span class="code-kw">printf</span>(<span class="code-str">"输入边(vi,vj)的下标i,j和权重w: "</span>);
+        <span class="code-kw">scanf</span>(<span class="code-str">"%d,%d,%d"</span>, &i, &j, &w);
+        
+        G->Edge[i][j] = w;
+        G->Edge[j][i] = w; <span class="code-cm">// 无向图需对称赋值</span>
+    }
+} </div>
+            </div>
+            <div class="flex flex-col justify-center gap-8">
+                <div class="card bg-slate-800/30 p-8 border-l-8 border-accent">
+                    <h3 class="text-white text-[32px] mb-4">关键点解析</h3>
+                    <ul class="space-y-6 text-[28px] text-slate-200">
+                        <li><strong class="text-accent">初始化</strong>：所有边初始化为 <span class="font-mono text-warn">INF</span> (或0)，对角线为0。</li>
+                        <li><strong class="text-accent">对称性</strong>：无向图 <span class="font-mono">G->Edge[i][j] = G->Edge[j][i]</span>。</li>
+                        <li><strong class="text-accent">下标映射</strong>：实际应用中通常需要一个 Map 将顶点名映射为数组下标 0, 1, 2...</li>
+                    </ul>
+                </div>
+                <div class="card bg-slate-800/30 p-8 border-l-8 border-warn">
+                    <h3 class="text-white text-[32px] mb-4">适用场景</h3>
+                    <p class="text-[28px] text-slate-200">
+                        适用于 <strong class="text-white">稠密图 (Dense Graph)</strong>，即边数接近顶点数的平方 (<span class="font-mono">E ≈ V²</span>)。
+                    </p>
+                </div>
+            </div>
+        </div>
+      </section>
+
+      <!-- P05: 邻接表 - 概念 -->
+      <section class="slide" data-title="邻接表：概念">
+        <h2>2. 邻接表 (Adjacency List)</h2>
+        <div class="grid grid-cols-2 gap-12 flex-1 min-h-0">
+            <div class="flex flex-col">
+                <div class="card p-8 border-slate-700 bg-slate-800/30">
+                    <h3 class="text-secondary text-[36px] mb-4">定义</h3>
+                    <p class="text-[28px] text-slate-200 leading-relaxed">
+                        数组与链表的结合。每个顶点建立一个<strong class="text-white">单链表</strong>，链表中存储该顶点的所有邻居。
+                    </p>
+                    <ul class="mt-6 space-y-4 text-[26px] text-slate-300">
+                        <li>• 顶点数组 <span class="font-mono text-secondary">AdjList[N]</span> 存储表头。</li>
+                        <li>• 链表节点存储邻接点下标 <span class="font-mono text-secondary">adjvex</span> 和权重 <span class="font-mono text-secondary">weight</span>。</li>
+                    </ul>
+                </div>
+                
+                <div class="mt-6 card p-6 border-slate-700 bg-slate-800/30">
+                    <h3 class="text-white text-[30px] mb-4">特点</h3>
+                    <ul class="space-y-3 text-[26px] text-slate-300">
+                        <li><i class="fas fa-check text-green-500 mr-2"></i> 节省空间，只存实际存在的边。</li>
+                        <li><i class="fas fa-check text-green-500 mr-2"></i> 空间复杂度 <strong class="text-secondary">O(V + E)</strong>。</li>
+                        <li><i class="fas fa-exclamation-triangle text-warn mr-2"></i> 无向图中每条边存储两次 (A->B, B->A)。</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="flex flex-col items-center justify-center bg-slate-900/50 rounded-3xl border border-slate-700 p-8 w-full">
+                <div class="flex gap-8 items-start w-full justify-center">
+                    <!-- Graph Visualization -->
+                    <svg width="280" height="280" viewBox="0 0 300 300" class="overflow-visible flex-shrink-0" id="list-graph">
+                        <g id="list-edges"></g>
+                        <g id="list-nodes"></g>
+                    </svg>
+
+                    <!-- Arrow -->
+                    <div class="text-4xl text-slate-400 self-center"><i class="fas fa-arrow-right"></i></div>
+
+                    <!-- List Visualization -->
+                    <div class="flex flex-col items-start flex-grow min-w-0">
+                        <div class="flex flex-col gap-3 w-full" id="list-container">
+                            <!-- Lists will be injected here -->
+                        </div>
+                        <!-- Controls -->
+                        <div class="flex gap-4 mt-6 self-center">
+                            <button onclick="prevListStep()" class="btn-secondary text-xs py-1 px-3">Prev</button>
+                            <button onclick="resetListStep()" class="btn-secondary text-xs py-1 px-3">Reset</button>
+                            <button onclick="nextListStep()" class="btn-primary text-xs py-1 px-3">Next</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+      </section>
+
+      <!-- P05b: 邻接表 - 无向图 -->
+      <section class="slide" data-title="邻接表：无向图">
+        <h2>邻接表：无向图 (Undirected)</h2>
+        <div class="grid grid-cols-2 gap-12 flex-1 min-h-0">
+            <div class="flex flex-col">
+                <div class="card p-8 border-slate-700 bg-slate-800/30">
+                    <h3 class="text-secondary text-[36px] mb-4">冗余存储</h3>
+                    <p class="text-[28px] text-slate-200 leading-relaxed">
+                        无向图的边 <span class="font-mono text-white">(i, j)</span> 没有方向，需要在两个顶点的链表中分别存储。
+                    </p>
+                    <ul class="mt-6 space-y-4 text-[26px] text-slate-300">
+                        <li>• 在 <span class="font-mono text-secondary">AdjList[i]</span> 中插入节点 <span class="font-mono text-white">j</span>。</li>
+                        <li>• 在 <span class="font-mono text-secondary">AdjList[j]</span> 中插入节点 <span class="font-mono text-white">i</span>。</li>
+                    </ul>
+                </div>
+                
+                <div class="mt-6 card p-6 border-slate-700 bg-slate-800/30">
+                    <h3 class="text-white text-[30px] mb-4">影响</h3>
+                    <ul class="space-y-3 text-[26px] text-slate-300">
+                        <li><i class="fas fa-info-circle text-blue-400 mr-2"></i> 边表节点总数是边数的 <strong class="text-white">2倍</strong> (2E)。</li>
+                        <li><i class="fas fa-check text-green-500 mr-2"></i> 容易求顶点的度（链表长度即为度）。</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="flex flex-col items-center justify-center bg-slate-900/50 rounded-3xl border border-slate-700 p-8 w-full">
+                <div class="flex gap-8 items-start w-full justify-center">
+                    <!-- Graph Visualization -->
+                    <svg width="280" height="280" viewBox="0 0 300 300" class="overflow-visible flex-shrink-0" id="ulist-graph">
+                        <g id="ulist-edges"></g>
+                        <g id="ulist-nodes"></g>
+                    </svg>
+
+                    <!-- Arrow -->
+                    <div class="text-4xl text-slate-400 self-center"><i class="fas fa-arrow-right"></i></div>
+
+                    <!-- List Visualization -->
+                    <div class="flex flex-col items-start flex-grow min-w-0">
+                        <div class="flex flex-col gap-3 w-full" id="ulist-container">
+                            <!-- Lists will be injected here -->
+                        </div>
+                        <!-- Controls -->
+                        <div class="flex gap-4 mt-6 self-center">
+                            <button onclick="prevUListStep()" class="btn-secondary text-xs py-1 px-3">Prev</button>
+                            <button onclick="resetUListStep()" class="btn-secondary text-xs py-1 px-3">Reset</button>
+                            <button onclick="nextUListStep()" class="btn-primary text-xs py-1 px-3">Next</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+      </section>
+
+      <!-- P06: 邻接表 - 代码 -->
+      <section class="slide" data-title="邻接表：代码">
+        <h2>邻接表：代码实现</h2>
+        <div class="grid grid-cols-2 gap-8 flex-1 min-h-0">
+            <div class="flex flex-col h-full min-h-0">
+                <div class="code-block h-full custom-scrollbar text-[18px]"><span class="code-kw">typedef struct</span> EdgeNode {
+    <span class="code-type">int</span> adjvex;              <span class="code-cm">// 邻接点下标</span>
+    <span class="code-type">int</span> weight;              <span class="code-cm">// 权重</span>
+    <span class="code-kw">struct</span> EdgeNode *next;   <span class="code-cm">// 指向下一个邻接点</span>
+} <span class="code-type">EdgeNode</span>;
+
+<span class="code-kw">typedef struct</span> VertexNode {
+    <span class="code-type">char</span> data;               <span class="code-cm">// 顶点信息</span>
+    <span class="code-type">EdgeNode</span> *firstedge;     <span class="code-cm">// 边表头指针</span>
+} <span class="code-type">VertexNode</span>, <span class="code-type">AdjList</span>[MAX_V];
+
+<span class="code-kw">typedef struct</span> {
+    <span class="code-type">AdjList</span> adjList;
+    <span class="code-type">int</span> numV, numE;
+} <span class="code-type">GraphAdjList</span>;
+
+<span class="code-type">void</span> <span class="code-kw">CreateALGraph</span>(<span class="code-type">GraphAdjList</span> *G) {
+    <span class="code-type">int</span> i, j, k;
+    <span class="code-type">EdgeNode</span> *e;
+    <span class="code-kw">scanf</span>(<span class="code-str">"%d,%d"</span>, &G->numV, &G->numE);
+    
+    <span class="code-cm">// 初始化顶点表</span>
+    <span class="code-kw">for</span>(i = 0; i < G->numV; i++) {
+        <span class="code-kw">scanf</span>(<span class="code-str">"%c"</span>, &G->adjList[i].data);
+        G->adjList[i].firstedge = <span class="code-kw">NULL</span>;
+    }
+    
+    <span class="code-cm">// 头插法建立边表</span>
+    <span class="code-kw">for</span>(k = 0; k < G->numE; k++) {
+        <span class="code-kw">scanf</span>(<span class="code-str">"%d,%d"</span>, &i, &j);
+        
+        e = (<span class="code-type">EdgeNode</span> *)<span class="code-kw">malloc</span>(<span class="code-kw">sizeof</span>(<span class="code-type">EdgeNode</span>));
+        e->adjvex = j;
+        e->next = G->adjList[i].firstedge;
+        G->adjList[i].firstedge = e;
+        
+        <span class="code-cm">// 无向图需重复一次 (j -> i)</span>
+        e = (<span class="code-type">EdgeNode</span> *)<span class="code-kw">malloc</span>(<span class="code-kw">sizeof</span>(<span class="code-type">EdgeNode</span>));
+        e->adjvex = i;
+        e->next = G->adjList[j].firstedge;
+        G->adjList[j].firstedge = e;
+    }
+}</div>
+            </div>
+            <div class="flex flex-col justify-center gap-8">
+                <div class="card bg-slate-800/30 p-8 border-l-8 border-secondary">
+                    <h3 class="text-white text-[32px] mb-4">关键点解析</h3>
+                    <ul class="space-y-6 text-[28px] text-slate-200">
+                        <li><strong class="text-secondary">结构体嵌套</strong>：EdgeNode (边) 挂在 VertexNode (点) 下。</li>
+                        <li><strong class="text-secondary">头插法</strong>：新边插入链表头部，O(1) 速度，但导致邻居顺序与输入相反。</li>
+                        <li><strong class="text-secondary">出度容易，入度难</strong>：求入度需要遍历整个图（或者使用逆邻接表）。</li>
+                    </ul>
+                </div>
+                <div class="card bg-slate-800/30 p-8 border-l-8 border-warn">
+                    <h3 class="text-white text-[32px] mb-4">适用场景</h3>
+                    <p class="text-[28px] text-slate-200">
+                        适用于 <strong class="text-white">稀疏图 (Sparse Graph)</strong>，即边数远小于顶点数的平方。
+                    </p>
+                </div>
+            </div>
+        </div>
+      </section>
+
+      <!-- P07: 对比总结 -->
+      <section class="slide" data-title="对比总结">
+        <h2>哪种存储更好？</h2>
+        <div class="flex flex-col items-center justify-center flex-1 min-h-0 w-full">
+            <div class="w-full max-w-[1600px] overflow-hidden rounded-3xl border border-slate-700 shadow-2xl">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-800 text-white text-[32px]">
+                            <th class="p-6 border-b border-slate-600">特性</th>
+                            <th class="p-6 border-b border-slate-600 text-accent">邻接矩阵 (Matrix)</th>
+                            <th class="p-6 border-b border-slate-600 text-secondary">邻接表 (List)</th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-[28px] text-slate-200 bg-slate-900/50">
+                        <tr class="hover:bg-slate-800/50 transition-colors">
+                            <td class="p-6 border-b border-slate-700 font-bold text-white">空间复杂度</td>
+                            <td class="p-6 border-b border-slate-700 font-mono text-warn">O(V²)</td>
+                            <td class="p-6 border-b border-slate-700 font-mono text-green-400">O(V + E)</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition-colors">
+                            <td class="p-6 border-b border-slate-700 font-bold text-white">判断两点连接</td>
+                            <td class="p-6 border-b border-slate-700 font-mono text-green-400">O(1)</td>
+                            <td class="p-6 border-b border-slate-700 font-mono text-warn">O(Degree)</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition-colors">
+                            <td class="p-6 border-b border-slate-700 font-bold text-white">找所有邻居</td>
+                            <td class="p-6 border-b border-slate-700 font-mono text-warn">O(V)</td>
+                            <td class="p-6 border-b border-slate-700 font-mono text-green-400">O(Degree)</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition-colors">
+                            <td class="p-6 border-b border-slate-700 font-bold text-white">适用场景</td>
+                            <td class="p-6 border-b border-slate-700">稠密图，需要快速判断边的存在</td>
+                            <td class="p-6 border-b border-slate-700">稀疏图，频繁增删节点</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition-colors">
+                            <td class="p-6 font-bold text-white">实现难度</td>
+                            <td class="p-6 text-green-400">简单 (数组)</td>
+                            <td class="p-6 text-warn">中等 (指针操作)</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="mt-12 flex gap-8">
+                <div class="bg-blue-900/20 border border-blue-500/30 px-8 py-4 rounded-xl">
+                    <p class="text-[28px] text-blue-300"><i class="fas fa-lightbulb mr-3"></i> <strong>十字链表</strong>：解决有向图求入度难的问题。</p>
+                </div>
+                <div class="bg-blue-900/20 border border-blue-500/30 px-8 py-4 rounded-xl">
+                    <p class="text-[28px] text-blue-300"><i class="fas fa-lightbulb mr-3"></i> <strong>邻接多重表</strong>：优化无向图边的操作。</p>
+                </div>
+            </div>
+        </div>
+      </section>
+
+      <!-- P08: 小结 -->
+      <section class="slide" data-title="小结">
+        <h2>本节小结</h2>
+        <div class="flex items-center justify-center flex-1 min-h-0">
+            <div class="card p-10 border-slate-700 bg-slate-800/30 w-2/3">
+                <ul class="space-y-8 text-[36px]">
+                    <li class="flex items-start">
+                        <span class="w-12 h-12 rounded-full bg-accent flex items-center justify-center text-white text-xl font-bold mr-6 mt-1">1</span>
+                        <span><strong class="text-white">邻接矩阵</strong>用二维数组，适合稠密图，查边快 <span class="font-mono text-accent">O(1)</span>，但费空间。</span>
+                    </li>
+                    <li class="flex items-start">
+                        <span class="w-12 h-12 rounded-full bg-secondary flex items-center justify-center text-white text-xl font-bold mr-6 mt-1">2</span>
+                        <span><strong class="text-white">邻接表</strong>用链表数组，适合稀疏图，省空间 <span class="font-mono text-secondary">O(V+E)</span>，但查边慢。</span>
+                    </li>
+                    <li class="flex items-start">
+                        <span class="w-12 h-12 rounded-full bg-tertiary flex items-center justify-center text-white text-xl font-bold mr-6 mt-1">3</span>
+                        <span>算法选择存储结构时，要根据<strong class="text-white">图的规模</strong>和<strong class="text-white">操作类型</strong>来决定。</span>
+                    </li>
+                </ul>
+                <div class="mt-16 text-center">
+                    <p class="text-[32px] text-slate-400">Next : 图的遍历 (BFS & DFS)</p>
+                </div>
+            </div>
+        </div>
+      </section>
+
+      <!-- Page Number -->
+      <div id="page-number" class="absolute bottom-6 right-8 text-slate-400 text-[24px] font-mono z-50"></div>
+    </div>
+
+    <script>
+      let currentSlide = 0;
+      const pageNumberEl = document.getElementById('page-number');
+      
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.has('page')) {
+        const page = parseInt(urlParams.get('page'));
+        if (!isNaN(page) && page > 0) currentSlide = page - 1;
+      }
+
+      function updateSlide() {
+        const slides = document.querySelectorAll('.slide');
+        if (currentSlide >= slides.length) currentSlide = slides.length - 1;
+        if (currentSlide < 0) currentSlide = 0;
+        
+        slides.forEach((slide, index) => {
+          slide.classList.remove('active');
+          if (index === currentSlide) {
+            slide.classList.add('active');
+            // Init demos if needed
+            const title = slide.getAttribute('data-title');
+            if (title === '邻接矩阵：概念') {
+                if(document.getElementById('matrix-grid').children.length === 0) {
+                    initDirectedDemo();
+                }
+            } else if (title === '邻接矩阵：无向图') {
+                if(document.getElementById('undirected-grid').children.length === 0) {
+                    initUndirectedDemo();
+                }
+            } else if (title === '邻接表：概念') {
+                if(document.getElementById('list-container').children.length === 0) {
+                    initListDemo();
+                }
+            } else if (title === '邻接表：无向图') {
+                if(document.getElementById('ulist-container').children.length === 0) {
+                    initUListDemo();
+                }
+            }
+          }
+        });
+        
+        if(pageNumberEl) pageNumberEl.textContent = `${currentSlide + 1} / ${slides.length}`;
+
+        try {
+          const url = new URL(window.location.href);
+          url.searchParams.set('page', currentSlide + 1);
+          window.history.replaceState(null, '', url.href);
+        } catch (e) {}
+      }
+      
+      function nextSlide() { 
+        if (currentSlide < document.querySelectorAll('.slide').length - 1) { 
+            currentSlide++; 
+            updateSlide(); 
+        } 
+      }
+      
+      function prevSlide() { 
+        if (currentSlide > 0) { 
+            currentSlide--; 
+            updateSlide(); 
+        } 
+      }
+      
+      function resizeApp() {
+        const app = document.getElementById('app');
+        const scale = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+        app.style.transform = `scale(${scale})`;
+      }
+      
+      window.addEventListener('resize', resizeApp);
+      window.addEventListener('load', () => { 
+        resizeApp(); 
+        updateSlide(); 
+      });
+      document.addEventListener('keydown', (e) => {
+        if (['ArrowRight', ' ', 'Enter'].includes(e.key)) nextSlide();
+        else if (e.key === 'ArrowLeft') prevSlide();
+      });
+
+      // --- Matrix Animation Logic (Directed & Undirected) ---
+      
+      // --- Directed Graph Data ---
+      const directedData = {
+          nodes: [
+              { id: 0, x: 150, y: 40 },
+              { id: 1, x: 260, y: 120 },
+              { id: 2, x: 220, y: 250 },
+              { id: 3, x: 80, y: 250 },
+              { id: 4, x: 40, y: 120 }
+          ],
+          edges: [
+              [0, 1], [1, 2], [2, 3], [3, 4], [4, 0], // Cycle
+              [0, 2], [1, 4] // Cross edges
+          ]
+      };
+
+      // --- Undirected Graph Data ---
+      const undirectedData = {
+          nodes: [
+              { id: 0, x: 150, y: 40 },
+              { id: 1, x: 260, y: 120 },
+              { id: 2, x: 220, y: 250 },
+              { id: 3, x: 80, y: 250 },
+              { id: 4, x: 40, y: 120 }
+          ],
+          edges: [
+              [0, 1], [1, 2], [2, 3], [3, 4], [4, 0], 
+              [0, 2], [1, 4]
+          ]
+      };
+
+      let directedStep = 0;
+      let undirectedStep = 0;
+
+      // --- Directed Functions ---
+      function initDirectedDemo() {
+          const svgEdges = document.getElementById('matrix-edges');
+          const svgNodes = document.getElementById('matrix-nodes');
+          const grid = document.getElementById('matrix-grid');
+          
+          if(!svgEdges || !svgNodes || !grid) return;
+
+          svgEdges.innerHTML = '';
+          svgNodes.innerHTML = '';
+          grid.innerHTML = '';
+
+          // Draw Edges
+          directedData.edges.forEach((edge, index) => {
+              const [u, v] = edge;
+              const uNode = directedData.nodes[u];
+              const vNode = directedData.nodes[v];
+              
+              const dx = vNode.x - uNode.x;
+              const dy = vNode.y - uNode.y;
+              const length = Math.sqrt(dx*dx + dy*dy);
+              const padding = 25; 
+              
+              const x2 = vNode.x - (dx / length) * padding;
+              const y2 = vNode.y - (dy / length) * padding;
+              
+              const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+              line.id = `directed-edge-${index}`;
+              line.setAttribute('x1', uNode.x);
+              line.setAttribute('y1', uNode.y);
+              line.setAttribute('x2', x2);
+              line.setAttribute('y2', y2);
+              line.setAttribute('stroke', '#334155'); 
+              line.setAttribute('stroke-width', '2');
+              line.setAttribute('marker-end', 'url(#arrow-matrix)');
+              line.style.transition = 'stroke 0.3s';
+              svgEdges.appendChild(line);
+          });
+
+          // Draw Nodes
+          directedData.nodes.forEach(node => {
+              const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+              g.innerHTML = `
+                  <circle cx="${node.x}" cy="${node.y}" r="20" fill="#4c1d95" stroke="#8b5cf6" stroke-width="2"/>
+                  <text x="${node.x}" y="${node.y + 6}" text-anchor="middle" fill="#fff" font-size="16" font-weight="bold">${node.id}</text>
+              `;
+              svgNodes.appendChild(g);
+          });
+
+          // Draw Matrix
+          const corner = document.createElement('div');
+          grid.appendChild(corner);
+          for(let i=0; i<5; i++) {
+              const h = document.createElement('div');
+              h.className = 'text-accent font-bold w-12 h-12 flex items-center justify-center';
+              h.textContent = i;
+              grid.appendChild(h);
+          }
+          for(let i=0; i<5; i++) {
+              const h = document.createElement('div');
+              h.className = 'text-accent font-bold w-12 h-12 flex items-center justify-center';
+              h.textContent = i;
+              grid.appendChild(h);
+              for(let j=0; j<5; j++) {
+                  const cell = document.createElement('div');
+                  cell.id = `directed-cell-${i}-${j}`;
+                  cell.className = 'bg-slate-800 w-12 h-12 flex items-center justify-center rounded text-slate-500 border-2 border-transparent transition-all duration-300';
+                  cell.textContent = (i === j) ? '0' : '∞';
+                  grid.appendChild(cell);
+              }
+          }
+          updateDirectedVisuals();
+      }
+
+      function updateDirectedVisuals() {
+          for(let i=0; i<directedData.edges.length; i++) {
+              const line = document.getElementById(`directed-edge-${i}`);
+              if(line) {
+                  line.setAttribute('stroke', i < directedStep ? '#8b5cf6' : '#334155');
+              }
+          }
+          for(let i=0; i<5; i++) {
+              for(let j=0; j<5; j++) {
+                  const cell = document.getElementById(`directed-cell-${i}-${j}`);
+                  if(cell) {
+                      let isActive = false;
+                      for(let k=0; k<directedStep; k++) {
+                          const [u, v] = directedData.edges[k];
+                          if(u === i && v === j) isActive = true;
+                      }
+                      if(isActive) {
+                          cell.textContent = '1';
+                          cell.className = 'bg-purple-900/80 text-white w-12 h-12 flex items-center justify-center rounded border-2 border-purple-500 transition-all duration-300';
+                      } else {
+                          cell.textContent = (i === j) ? '0' : '∞';
+                          cell.className = 'bg-slate-800 text-slate-500 w-12 h-12 flex items-center justify-center rounded border-2 border-transparent transition-all duration-300';
+                      }
+                  }
+              }
+          }
+      }
+
+      function nextMatrixStep() {
+          if(directedStep < directedData.edges.length) {
+              directedStep++;
+              updateDirectedVisuals();
+          }
+      }
+      function prevMatrixStep() {
+          if(directedStep > 0) {
+              directedStep--;
+              updateDirectedVisuals();
+          }
+      }
+      function resetMatrixStep() {
+          directedStep = 0;
+          updateDirectedVisuals();
+      }
+
+      // --- Undirected Functions ---
+      function initUndirectedDemo() {
+          const svgEdges = document.getElementById('undirected-edges');
+          const svgNodes = document.getElementById('undirected-nodes');
+          const grid = document.getElementById('undirected-grid');
+          
+          if(!svgEdges || !svgNodes || !grid) return;
+
+          svgEdges.innerHTML = '';
+          svgNodes.innerHTML = '';
+          grid.innerHTML = '';
+
+          // Draw Edges
+          undirectedData.edges.forEach((edge, index) => {
+              const [u, v] = edge;
+              const uNode = undirectedData.nodes[u];
+              const vNode = undirectedData.nodes[v];
+              
+              const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+              line.id = `undirected-edge-${index}`;
+              line.setAttribute('x1', uNode.x);
+              line.setAttribute('y1', uNode.y);
+              line.setAttribute('x2', vNode.x);
+              line.setAttribute('y2', vNode.y);
+              line.setAttribute('stroke', '#334155'); 
+              line.setAttribute('stroke-width', '2');
+              line.style.transition = 'stroke 0.3s';
+              svgEdges.appendChild(line);
+          });
+
+          // Draw Nodes
+          undirectedData.nodes.forEach(node => {
+              const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+              g.innerHTML = `
+                  <circle cx="${node.x}" cy="${node.y}" r="20" fill="#4c1d95" stroke="#8b5cf6" stroke-width="2"/>
+                  <text x="${node.x}" y="${node.y + 6}" text-anchor="middle" fill="#fff" font-size="16" font-weight="bold">${node.id}</text>
+              `;
+              svgNodes.appendChild(g);
+          });
+
+          // Draw Matrix
+          const corner = document.createElement('div');
+          grid.appendChild(corner);
+          grid.classList.add('relative');
+          for(let i=0; i<5; i++) {
+              const h = document.createElement('div');
+              h.className = 'text-accent font-bold w-12 h-12 flex items-center justify-center';
+              h.textContent = i;
+              grid.appendChild(h);
+          }
+          for(let i=0; i<5; i++) {
+              const h = document.createElement('div');
+              h.className = 'text-accent font-bold w-12 h-12 flex items-center justify-center';
+              h.textContent = i;
+              grid.appendChild(h);
+              for(let j=0; j<5; j++) {
+                  const cell = document.createElement('div');
+                  cell.id = `undirected-cell-${i}-${j}`;
+                  cell.className = 'bg-slate-800 w-12 h-12 flex items-center justify-center rounded text-slate-500 border-2 border-transparent transition-all duration-300';
+                  cell.textContent = (i === j) ? '0' : '∞';
+                  grid.appendChild(cell);
+              }
+          }
+
+          // Add Overlay for Lower Triangle Shadow & Diagonal Line
+          const overlay = document.createElement('div');
+          overlay.className = 'absolute pointer-events-none z-10';
+          overlay.style.top = '52px';
+          overlay.style.left = '52px';
+          overlay.style.width = '256px';
+          overlay.style.height = '256px';
+          // Gradient: Bottom-Left (Dark) -> Top-Right (Transparent)
+          overlay.style.background = 'linear-gradient(45deg, rgba(3,7,18,0.5) 50%, transparent 0%)';
+          grid.appendChild(overlay);
+
+          updateUndirectedVisuals();
+      }
+
+      function updateUndirectedVisuals() {
+          for(let i=0; i<undirectedData.edges.length; i++) {
+              const line = document.getElementById(`undirected-edge-${i}`);
+              if(line) {
+                  line.setAttribute('stroke', i < undirectedStep ? '#8b5cf6' : '#334155');
+              }
+          }
+          for(let i=0; i<5; i++) {
+              for(let j=0; j<5; j++) {
+                  const cell = document.getElementById(`undirected-cell-${i}-${j}`);
+                  if(cell) {
+                      let isActive = false;
+                      for(let k=0; k<undirectedStep; k++) {
+                          const [u, v] = undirectedData.edges[k];
+                          // Check both directions
+                          if((u === i && v === j) || (u === j && v === i)) isActive = true;
+                      }
+                      if(isActive) {
+                          cell.textContent = '1';
+                          cell.className = 'bg-purple-900/80 text-white w-12 h-12 flex items-center justify-center rounded border-2 border-purple-500 transition-all duration-300';
+                      } else {
+                          cell.textContent = (i === j) ? '0' : '∞';
+                          cell.className = 'bg-slate-800 text-slate-500 w-12 h-12 flex items-center justify-center rounded border-2 border-transparent transition-all duration-300';
+                      }
+                  }
+              }
+          }
+      }
+
+      function nextUndirectedStep() {
+          if(undirectedStep < undirectedData.edges.length) {
+              undirectedStep++;
+              updateUndirectedVisuals();
+          }
+      }
+      function prevUndirectedStep() {
+          if(undirectedStep > 0) {
+              undirectedStep--;
+              updateUndirectedVisuals();
+          }
+      }
+      function resetUndirectedStep() {
+          undirectedStep = 0;
+          updateUndirectedVisuals();
+      }
+
+      // Initialize on load
+      window.addEventListener('load', () => {
+         setTimeout(() => {
+             // 强制触发一次 updateSlide 以确保当前页面的图被初始化
+             updateSlide();
+         }, 100);
+      });
+
+      // --- List Animation Logic ---
+      let listStep = 0;
+      
+      // Re-ordered edges for "Node-by-Node" processing (Head Insertion)
+      const listDemoEdges = [
+          [0, 1], [0, 2], // Node 0's edges
+          [1, 2], [1, 4], // Node 1's edges
+          [2, 3],         // Node 2's edges
+          [3, 4],         // Node 3's edges
+          [4, 0]          // Node 4's edges
+      ];
+
+      function initListDemo() {
+          const svgEdges = document.getElementById('list-edges');
+          const svgNodes = document.getElementById('list-nodes');
+          const listContainer = document.getElementById('list-container');
+          
+          if(!svgEdges || !svgNodes || !listContainer) return;
+
+          svgEdges.innerHTML = '';
+          svgNodes.innerHTML = '';
+          listContainer.innerHTML = '';
+
+          // Draw Edges (Graph) - Draw ALL edges initially
+          directedData.edges.forEach((edge) => {
+              const [u, v] = edge;
+              const uNode = directedData.nodes[u];
+              const vNode = directedData.nodes[v];
+              
+              const dx = vNode.x - uNode.x;
+              const dy = vNode.y - uNode.y;
+              const length = Math.sqrt(dx*dx + dy*dy);
+              const padding = 25; 
+              
+              const x2 = vNode.x - (dx / length) * padding;
+              const y2 = vNode.y - (dy / length) * padding;
+              
+              const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+              // Use u-v based ID for easier lookup
+              line.id = `list-edge-${u}-${v}`;
+              line.setAttribute('x1', uNode.x);
+              line.setAttribute('y1', uNode.y);
+              line.setAttribute('x2', x2);
+              line.setAttribute('y2', y2);
+              line.setAttribute('stroke', '#334155'); 
+              line.setAttribute('stroke-width', '2');
+              line.setAttribute('marker-end', 'url(#arrow-matrix)');
+              line.style.transition = 'stroke 0.3s';
+              svgEdges.appendChild(line);
+          });
+
+          // Draw Nodes (Graph)
+          directedData.nodes.forEach(node => {
+              const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+              g.innerHTML = `
+                  <circle cx="${node.x}" cy="${node.y}" r="20" fill="#4c1d95" stroke="#8b5cf6" stroke-width="2"/>
+                  <text x="${node.x}" y="${node.y + 6}" text-anchor="middle" fill="#fff" font-size="16" font-weight="bold">${node.id}</text>
+              `;
+              svgNodes.appendChild(g);
+          });
+
+          // Initialize List Structure (Heads)
+          for(let i=0; i<5; i++) {
+              const row = document.createElement('div');
+              row.className = 'flex items-center h-14'; 
+              row.id = `list-row-${i}`;
+              
+              // Head Node
+              const head = document.createElement('div');
+              head.className = 'w-10 h-10 bg-slate-700 border-2 border-slate-500 flex items-center justify-center text-lg font-bold text-white rounded-l-lg z-10 flex-shrink-0';
+              head.textContent = i;
+              row.appendChild(head);
+              
+              // Initial pointer line
+              const line = document.createElement('div');
+              line.className = 'h-1 w-2 bg-slate-500 transition-all duration-300';
+              line.id = `list-head-line-${i}`;
+              row.appendChild(line);
+
+              // Container for nodes
+              const nodesContainer = document.createElement('div');
+              nodesContainer.className = 'flex items-center';
+              nodesContainer.id = `list-nodes-${i}`;
+              row.appendChild(nodesContainer);
+
+              listContainer.appendChild(row);
+          }
+          
+          updateListVisuals();
+      }
+
+      function updateListVisuals() {
+          // Reset all edges first
+          directedData.edges.forEach(([u, v]) => {
+              const line = document.getElementById(`list-edge-${u}-${v}`);
+              if(line) line.setAttribute('stroke', '#334155');
+          });
+
+          // 1. Highlight Active Edges & Build Lists (Head Insertion)
+          const adj = Array.from({length: 5}, () => []);
+          
+          for(let k=0; k<listStep; k++) {
+              const [u, v] = listDemoEdges[k];
+              
+              // Highlight edge
+              const line = document.getElementById(`list-edge-${u}-${v}`);
+              if(line) line.setAttribute('stroke', '#ec4899');
+
+              // Head Insertion: Add to beginning of array
+              adj[u].unshift(v);
+          }
+
+          // 2. Render Lists
+          for(let i=0; i<5; i++) {
+              const nodesContainer = document.getElementById(`list-nodes-${i}`);
+              const headLine = document.getElementById(`list-head-line-${i}`);
+              
+              if(nodesContainer) nodesContainer.innerHTML = '';
+              
+              if(adj[i].length > 0) {
+                  if(headLine) {
+                      headLine.className = 'h-1 w-6 bg-secondary transition-all duration-300';
+                  }
+                  
+                  adj[i].forEach((neighbor, idx) => {
+                      // Node Box
+                      const node = document.createElement('div');
+                      // Add animation only for the first element (newly added) if it's the latest step
+                      // But since we rebuild, let's just animate all for simplicity or refine logic
+                      // To make it look like head insertion, the first element is the "newest"
+                      const isNewest = (idx === 0); 
+                      node.className = `flex border border-secondary bg-secondary/10 rounded overflow-hidden ${isNewest ? 'animate-[fadeIn_0.3s_ease-out]' : ''}`;
+                      
+                      node.innerHTML = `
+                          <div class="px-3 py-1 border-r border-secondary text-secondary font-bold text-lg">${neighbor}</div>
+                          <div class="px-2 py-1 text-slate-300 text-xs flex items-center font-mono">next</div>
+                      `;
+                      nodesContainer.appendChild(node);
+
+                      // Arrow to next (if not last)
+                      if (idx < adj[i].length - 1) {
+                           const arrow = document.createElement('div');
+                           arrow.className = 'h-1 w-6 bg-secondary mx-0';
+                           nodesContainer.appendChild(arrow);
+                      } else {
+                          // Pointer to null
+                          const arrow = document.createElement('div');
+                           arrow.className = 'h-1 w-4 bg-secondary mx-0';
+                           nodesContainer.appendChild(arrow);
+                           
+                           const nullNode = document.createElement('div');
+                           nullNode.className = 'text-secondary font-bold text-lg px-1';
+                           nullNode.innerHTML = '^';
+                           nodesContainer.appendChild(nullNode);
+                      }
+                  });
+              } else {
+                   // Empty list
+                   if(headLine) {
+                       headLine.className = 'h-1 w-4 bg-slate-500 transition-all duration-300';
+                   }
+                   const nullNode = document.createElement('div');
+                   nullNode.className = 'text-slate-500 font-bold text-lg px-1';
+                   nullNode.innerHTML = '^';
+                   nodesContainer.appendChild(nullNode);
+              }
+          }
+      }
+
+      function nextListStep() {
+          if(listStep < listDemoEdges.length) {
+              listStep++;
+              updateListVisuals();
+          }
+      }
+      function prevListStep() {
+          if(listStep > 0) {
+              listStep--;
+              updateListVisuals();
+          }
+      }
+      function resetListStep() {
+          listStep = 0;
+          updateListVisuals();
+      }
+
+      // --- Undirected List Animation Logic ---
+      let ulistStep = 0;
+      
+      function initUListDemo() {
+          const svgEdges = document.getElementById('ulist-edges');
+          const svgNodes = document.getElementById('ulist-nodes');
+          const listContainer = document.getElementById('ulist-container');
+          
+          if(!svgEdges || !svgNodes || !listContainer) return;
+
+          svgEdges.innerHTML = '';
+          svgNodes.innerHTML = '';
+          listContainer.innerHTML = '';
+
+          // Draw Edges (Graph) - No arrows for undirected
+          undirectedData.edges.forEach((edge, index) => {
+              const [u, v] = edge;
+              const uNode = undirectedData.nodes[u];
+              const vNode = undirectedData.nodes[v];
+              
+              const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+              line.id = `ulist-edge-${index}`;
+              line.setAttribute('x1', uNode.x);
+              line.setAttribute('y1', uNode.y);
+              line.setAttribute('x2', vNode.x);
+              line.setAttribute('y2', vNode.y);
+              line.setAttribute('stroke', '#334155'); 
+              line.setAttribute('stroke-width', '2');
+              line.style.transition = 'stroke 0.3s';
+              svgEdges.appendChild(line);
+          });
+
+          // Draw Nodes (Graph)
+          undirectedData.nodes.forEach(node => {
+              const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+              g.innerHTML = `
+                  <circle cx="${node.x}" cy="${node.y}" r="20" fill="#4c1d95" stroke="#8b5cf6" stroke-width="2"/>
+                  <text x="${node.x}" y="${node.y + 6}" text-anchor="middle" fill="#fff" font-size="16" font-weight="bold">${node.id}</text>
+              `;
+              svgNodes.appendChild(g);
+          });
+
+          // Initialize List Structure (Heads)
+          for(let i=0; i<5; i++) {
+              const row = document.createElement('div');
+              row.className = 'flex items-center h-14';
+              row.id = `ulist-row-${i}`;
+              
+              // Head Node
+              const head = document.createElement('div');
+              head.className = 'w-10 h-10 bg-slate-700 border-2 border-slate-500 flex items-center justify-center text-lg font-bold text-white rounded-l-lg z-10 flex-shrink-0';
+              head.textContent = i;
+              row.appendChild(head);
+              
+              // Initial pointer line
+              const line = document.createElement('div');
+              line.className = 'h-1 w-2 bg-slate-500 transition-all duration-300';
+              line.id = `ulist-head-line-${i}`;
+              row.appendChild(line);
+
+              // Container for nodes
+              const nodesContainer = document.createElement('div');
+              nodesContainer.className = 'flex items-center';
+              nodesContainer.id = `ulist-nodes-${i}`;
+              row.appendChild(nodesContainer);
+
+              listContainer.appendChild(row);
+          }
+          
+          updateUListVisuals();
+      }
+
+      function updateUListVisuals() {
+          // 1. Highlight Edges
+          for(let i=0; i<undirectedData.edges.length; i++) {
+              const line = document.getElementById(`ulist-edge-${i}`);
+              if(line) {
+                  line.setAttribute('stroke', i < ulistStep ? '#ec4899' : '#334155');
+              }
+          }
+
+          // 2. Rebuild Lists (Head Insertion for BOTH ends)
+          const adj = Array.from({length: 5}, () => []);
+          
+          for(let k=0; k<ulistStep; k++) {
+              const [u, v] = undirectedData.edges[k];
+              // Head Insertion for both
+              adj[u].unshift(v);
+              adj[v].unshift(u);
+          }
+
+          // Render
+          for(let i=0; i<5; i++) {
+              const nodesContainer = document.getElementById(`ulist-nodes-${i}`);
+              const headLine = document.getElementById(`ulist-head-line-${i}`);
+              
+              if(nodesContainer) nodesContainer.innerHTML = '';
+              
+              if(adj[i].length > 0) {
+                  if(headLine) {
+                      headLine.className = 'h-1 w-6 bg-secondary transition-all duration-300';
+                  }
+                  
+                  adj[i].forEach((neighbor, idx) => {
+                      // Node Box
+                      const node = document.createElement('div');
+                      // Animate new nodes (first one in list if it's the latest step)
+                      // For simplicity, just animate all on rebuild or refine logic
+                      node.className = 'flex border border-secondary bg-secondary/10 rounded overflow-hidden animate-[fadeIn_0.3s_ease-out]';
+                      node.innerHTML = `
+                          <div class="px-3 py-1 border-r border-secondary text-secondary font-bold text-lg">${neighbor}</div>
+                          <div class="px-2 py-1 text-slate-300 text-xs flex items-center font-mono">next</div>
+                      `;
+                      nodesContainer.appendChild(node);
+
+                      // Arrow to next
+                      if (idx < adj[i].length - 1) {
+                           const arrow = document.createElement('div');
+                           arrow.className = 'h-1 w-6 bg-secondary mx-0';
+                           nodesContainer.appendChild(arrow);
+                      } else {
+                          // Pointer to null
+                          const arrow = document.createElement('div');
+                           arrow.className = 'h-1 w-4 bg-secondary mx-0';
+                           nodesContainer.appendChild(arrow);
+                           
+                           const nullNode = document.createElement('div');
+                           nullNode.className = 'text-secondary font-bold text-lg px-1';
+                           nullNode.innerHTML = '^';
+                           nodesContainer.appendChild(nullNode);
+                      }
+                  });
+              } else {
+                   // Empty list
+                   if(headLine) {
+                       headLine.className = 'h-1 w-4 bg-slate-500 transition-all duration-300';
+                   }
+                   const nullNode = document.createElement('div');
+                   nullNode.className = 'text-slate-500 font-bold text-lg px-1';
+                   nullNode.innerHTML = '^';
+                   nodesContainer.appendChild(nullNode);
+              }
+          }
+      }
+
+      function nextUListStep() {
+          if(ulistStep < undirectedData.edges.length) {
+              ulistStep++;
+              updateUListVisuals();
+          }
+      }
+      function prevUListStep() {
+          if(ulistStep > 0) {
+              ulistStep--;
+              updateUListVisuals();
+          }
+      }
+      function resetUListStep() {
+          ulistStep = 0;
+          updateUListVisuals();
+      }
+    </script>
+  </body>
+</html>
