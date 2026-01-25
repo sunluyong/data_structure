@@ -1,0 +1,1662 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>15 B+树：数据库索引的基石</title>
+    <script src="https://unpkg.com/@tailwindcss/browser@4"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+    <style type="text/tailwindcss">
+      @theme {
+        --color-bg-dark: #030712;
+        --color-text-main: #f1f5f9;
+        --color-accent: #0ea5e9;
+        --color-secondary: #3b82f6;
+        --color-tertiary: #6366f1;
+        --color-warn: #ef4444;
+        --color-code-bg: #1e293b;
+      }
+      @layer base {
+        body { @apply bg-black text-text-main font-sans overflow-hidden flex justify-center items-center h-screen; }
+      }
+      @layer utilities {
+        .slide-container { @apply relative w-[1920px] h-[1080px] bg-bg-dark overflow-hidden shadow-2xl; }
+        .slide { @apply absolute inset-0 hidden flex-col p-14 opacity-0 transition-opacity duration-400 ease-in-out; }
+        .slide.active { @apply flex opacity-100; }
+        .bg-decoration { @apply absolute inset-0 z-0 pointer-events-none; background-image: radial-gradient(circle at 15% 15%, rgba(14,165,233,0.03) 0%, transparent 25%), radial-gradient(circle at 85% 85%, rgba(99,102,241,0.03) 0%, transparent 25%); }
+        .grid-overlay { @apply absolute inset-0 z-0; background-size: 60px 60px; background-image: linear-gradient(to right, rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.02) 1px, transparent 1px); }
+        h1 { @apply text-[100px] font-extrabold leading-tight mb-8; background: linear-gradient(135deg, #fff 0%, var(--color-accent) 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+        h2 { @apply text-[64px] mb-8 text-accent inline-block pb-4 border-b-4 border-accent/30; }
+        h3 { @apply text-[42px] mb-6 text-secondary; }
+        p { @apply text-[32px] mb-4 text-slate-300; }
+        .slide-content li { @apply text-[32px] mb-4 text-slate-300; }
+        strong { @apply text-accent font-bold; }
+        .card { @apply bg-white/5 border border-white/10 rounded-3xl p-6 mb-6 backdrop-blur-sm; }
+        .code-block { @apply font-mono bg-code-bg p-6 rounded-2xl border border-slate-700 text-[22px] leading-relaxed text-slate-200 overflow-x-auto whitespace-pre; }
+        .code-kw { @apply text-[#c678dd]; }
+        .code-type { @apply text-[#e5c07b]; }
+        .code-cm { @apply text-[#64748b] italic; }
+        .code-num { @apply text-[#d19a66]; }
+        .btn-primary { @apply px-6 py-3 bg-accent/20 border border-accent/50 rounded-xl text-accent font-bold text-[24px] cursor-pointer transition-all hover:bg-accent/30 hover:scale-105 active:scale-95; }
+        .btn-secondary { @apply px-6 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-slate-300 font-bold text-[24px] cursor-pointer transition-all hover:bg-slate-600/50; }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app" class="slide-container">
+      <div class="bg-decoration"></div>
+      <div class="grid-overlay"></div>
+
+      <!-- P01: 封面 -->
+      <section class="slide active justify-center items-center text-center" data-title="封面">
+        <div class="flex flex-col items-center z-10">
+          <svg width="750" height="300" viewBox="0 0 750 300" class="mb-8 overflow-visible">
+            <defs>
+              <linearGradient id="nodeGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" style="stop-color:#2563eb;stop-opacity:0.3" />
+                <stop offset="100%" style="stop-color:#1e3a8a;stop-opacity:0.5" />
+              </linearGradient>
+              <filter id="glow-blue"><feGaussianBlur stdDeviation="3" result="coloredBlur"/><feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+            </defs>
+            <!-- Root Node -->
+            <g transform="translate(375, 50)">
+              <rect x="-120" y="-30" width="240" height="60" rx="10" fill="url(#nodeGrad)" stroke="#3b82f6" stroke-width="2" filter="url(#glow-blue)"/>
+              <text x="0" y="10" text-anchor="middle" fill="#fff" font-size="24" font-weight="bold">35 | 65</text>
+            </g>
+            <!-- Edges -->
+            <path d="M295 80 L150 150 M375 80 L375 150 M455 80 L600 150" stroke="#3b82f6" stroke-width="2"/>
+            <!-- Children -->
+            <g transform="translate(120, 190)">
+              <rect x="-80" y="-30" width="160" height="60" rx="10" fill="url(#nodeGrad)" stroke="#3b82f6" stroke-width="2"/>
+              <text x="0" y="10" text-anchor="middle" fill="#fff" font-size="20" font-weight="bold">5 | 10 | 20</text>
+              <!-- Link to next leaf -->
+              <path d="M80 0 L130 0" stroke="#3b82f6" stroke-width="2" stroke-dasharray="4,2" marker-end="url(#arrow)"/>
+            </g>
+            <g transform="translate(375, 190)">
+              <rect x="-120" y="-30" width="240" height="60" rx="10" fill="url(#nodeGrad)" stroke="#3b82f6" stroke-width="2"/>
+              <text x="0" y="10" text-anchor="middle" fill="#fff" font-size="20" font-weight="bold">35 | 40 | 45 | 50 | 55</text>
+              <!-- Link to next leaf -->
+              <path d="M120 0 L150 0" stroke="#3b82f6" stroke-width="2" stroke-dasharray="4,2" marker-end="url(#arrow)"/>
+            </g>
+            <g transform="translate(630, 190)">
+              <rect x="-100" y="-30" width="200" height="60" rx="10" fill="url(#nodeGrad)" stroke="#3b82f6" stroke-width="2"/>
+              <text x="0" y="10" text-anchor="middle" fill="#fff" font-size="20" font-weight="bold">65 | 70 | 80 | 90</text>
+            </g>
+            
+            <defs>
+                <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+                    <path d="M0,0 L0,6 L9,3 z" fill="#3b82f6" />
+                </marker>
+            </defs>
+          </svg>
+          <div class="bg-blue-500/10 px-6 py-2 rounded-full border border-blue-500/30 mb-6">
+            <span class="text-blue-400 text-2xl font-mono tracking-widest">B+ TREE</span>
+          </div>
+          <h1>数据结构与算法</h1>
+          <p class="text-[56px] text-secondary">B+ Tree：数据库索引的基石</p>
+        </div>
+      </section>
+
+      <!-- P02: B树回顾与痛点 -->
+      <section class="slide" data-title="B树回顾与痛点">
+        <h2>B 树回顾：优秀，但还不够完美</h2>
+        <div class="grid grid-cols-2 gap-10 h-full">
+          <!-- 左侧：文本与代码 -->
+          <div class="flex flex-col gap-6">
+            <div class="card p-6 border-green-500/30 bg-green-500/5">
+              <h3 class="text-green-400 text-[32px] mb-4"><i class="fas fa-thumbs-up mr-3"></i>B 树的优势</h3>
+              <ul class="space-y-2">
+                <li class="text-[26px]"><i class="fas fa-check text-green-400 mr-2"></i><strong>多路平衡</strong>：树高极低，减少磁盘 I/O</li>
+                <li class="text-[26px]"><i class="fas fa-check text-green-400 mr-2"></i><strong>磁盘友好</strong>：节点大小对齐磁盘页 (4KB/8KB)</li>
+              </ul>
+            </div>
+
+            <div class="card p-6 border-warn/30 bg-warn/5 flex-1">
+              <h3 class="text-warn text-[32px] mb-4"><i class="fas fa-exclamation-triangle mr-3"></i>工程痛点</h3>
+              <ul class="space-y-4">
+                <li class="text-[26px] flex items-start">
+                  <span class="text-warn mr-2">1.</span>
+                  <span><strong>索引密度低</strong>：内部节点存 Data，导致能存的 Key 变少 → 树变高 → I/O 增加</span>
+                </li>
+                <li class="text-[26px] flex items-start">
+                  <span class="text-warn mr-2">2.</span>
+                  <span><strong>范围查询慢</strong>：需要中序遍历（回溯），在节点间反复跳转，产生大量随机 I/O</span>
+                </li>
+              </ul>
+              
+              <div class="mt-4">
+                <div class="code-block text-[20px] p-4"><span class="code-kw">SELECT</span> * <span class="code-kw">FROM</span> users <span class="code-kw">WHERE</span> age <span class="code-kw">BETWEEN</span> <span class="code-num">20</span> <span class="code-kw">AND</span> <span class="code-num">50</span>;
+<span class="code-cm">-- B树需要：Find(20) -> 回溯父节点 -> Find(Next) ...</span>
+
+<span class="code-kw">SELECT</span> * <span class="code-kw">FROM</span> orders <span class="code-kw">ORDER BY</span> created_at <span class="code-kw">DESC</span> <span class="code-kw">LIMIT</span> <span class="code-num">10</span>;
+<span class="code-cm">-- B树需要：全树遍历或复杂回溯</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 右侧：5阶B树示意图 -->
+          <div class="flex flex-col items-center justify-center relative">
+            <div class="absolute top-0 right-0 bg-slate-800/80 px-4 py-2 rounded-lg border border-slate-600">
+                <span class="text-slate-300 text-xl font-mono">5阶 B-Tree (m=5)</span>
+            </div>
+            <svg width="800" height="600" viewBox="0 0 800 600" class="overflow-visible">
+              <defs>
+                <filter id="shadow"><feDropShadow dx="2" dy="4" stdDeviation="4" flood-opacity="0.3"/></filter>
+              </defs>
+              
+              <!-- Root Node: [ 40 | 80 ] -->
+              <g transform="translate(400, 100)">
+                <rect x="-120" y="-30" width="240" height="60" rx="8" fill="#1e293b" stroke="#64748b" stroke-width="2" filter="url(#shadow)"/>
+                <!-- Key 40 -->
+                <rect x="-100" y="-20" width="40" height="40" rx="4" fill="#0f172a" stroke="#fbbf24"/>
+                <text x="-80" y="8" text-anchor="middle" fill="#fbbf24" font-size="20" font-weight="bold">40</text>
+                <!-- Data -->
+                <rect x="-55" y="-15" width="30" height="30" rx="2" fill="#ef4444" opacity="0.2"/>
+                <text x="-40" y="5" text-anchor="middle" fill="#ef4444" font-size="12">Data</text>
+                
+                <!-- Key 80 -->
+                <rect x="10" y="-20" width="40" height="40" rx="4" fill="#0f172a" stroke="#fbbf24"/>
+                <text x="30" y="8" text-anchor="middle" fill="#fbbf24" font-size="20" font-weight="bold">80</text>
+                <!-- Data -->
+                <rect x="55" y="-15" width="30" height="30" rx="2" fill="#ef4444" opacity="0.2"/>
+                <text x="70" y="5" text-anchor="middle" fill="#ef4444" font-size="12">Data</text>
+              </g>
+
+              <!-- Edges -->
+              <path d="M300 130 L150 250 M400 130 L400 250 M500 130 L650 250" stroke="#64748b" stroke-width="2"/>
+
+              <!-- Child 1 (<40): [ 10 | 20 | 30 ] -->
+              <g transform="translate(150, 280)">
+                <rect x="-110" y="-30" width="220" height="60" rx="8" fill="#1e293b" stroke="#64748b" stroke-width="2" filter="url(#shadow)"/>
+                <text x="0" y="10" text-anchor="middle" fill="#fff" font-size="18">10 | 20 | 30</text>
+                <!-- Small Data Indicators -->
+                <rect x="-80" y="20" width="160" height="4" fill="#ef4444" opacity="0.4"/>
+              </g>
+
+              <!-- Child 2 (40-80): [ 50 | 60 | 70 ] -->
+              <g transform="translate(400, 280)">
+                <rect x="-110" y="-30" width="220" height="60" rx="8" fill="#1e293b" stroke="#64748b" stroke-width="2" filter="url(#shadow)"/>
+                <text x="0" y="10" text-anchor="middle" fill="#fff" font-size="18">50 | 60 | 70</text>
+                <rect x="-80" y="20" width="160" height="4" fill="#ef4444" opacity="0.4"/>
+              </g>
+
+              <!-- Child 3 (>80): [ 90 | 100 ] -->
+              <g transform="translate(650, 280)">
+                <rect x="-80" y="-30" width="160" height="60" rx="8" fill="#1e293b" stroke="#64748b" stroke-width="2" filter="url(#shadow)"/>
+                <text x="0" y="10" text-anchor="middle" fill="#fff" font-size="18">90 | 100</text>
+                <rect x="-50" y="20" width="100" height="4" fill="#ef4444" opacity="0.4"/>
+              </g>
+              
+              <!-- Range Query Path Visualization -->
+              <path d="M200 310 Q 230 370, 300 240 T 380 250" stroke="#ef4444" stroke-width="3" stroke-dasharray="8,4" fill="none" marker-end="url(#arrow-red)">
+                <animate attributeName="stroke-dashoffset" from="100" to="0" dur="2s" repeatCount="indefinite"/>
+              </path>
+              <text x="400" y="380" text-anchor="middle" fill="#ef4444" font-size="20" font-weight="bold">范围查询 (20~60) 需要反复回溯</text>
+              
+              <defs>
+                <marker id="arrow-red" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+                    <path d="M0,0 L0,6 L9,3 z" fill="#ef4444" />
+                </marker>
+              </defs>
+            </svg>
+            
+            <div class="bg-red-500/10 border border-red-500/30 p-4 rounded-xl mt-4 max-w-[600px]">
+                <p class="text-[20px] text-red-300 mb-0 text-center">
+                    <i class="fas fa-arrow-up mr-2"></i>
+                    非叶子节点携带 Data，浪费了宝贵的内存空间
+                </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- P03: B+ 树定义与结构 -->
+      <section class="slide" data-title="B+ 树定义">
+        <h2>B+ 树：进化的 B 树</h2>
+        <div class="grid grid-cols-2 gap-10 h-full">
+          <!-- 左侧：定义与特性 -->
+          <div class="flex flex-col gap-6">
+            <div class="card p-8 border-accent/50 bg-accent/5">
+              <h3 class="text-accent text-[36px] mb-6"><i class="fas fa-project-diagram mr-3"></i>核心定义</h3>
+              <ul class="space-y-6">
+                <li class="flex items-start text-[30px]">
+                  <span class="text-accent mr-3 font-bold">1.</span>
+                  <div>
+                    <strong>非叶子节点只存索引</strong>
+                    <p class="text-slate-400 text-[24px] mt-1">不存 Data，只存 Key 作为路标，包含更多 Key → 树更矮</p>
+                  </div>
+                </li>
+                <li class="flex items-start text-[30px]">
+                  <span class="text-accent mr-3 font-bold">2.</span>
+                  <div>
+                    <strong>所有数据都在叶子节点</strong>
+                    <p class="text-slate-400 text-[24px] mt-1">无论 Key 在上面是否出现，最终都要去叶子找 Data</p>
+                  </div>
+                </li>
+                <li class="flex items-start text-[30px]">
+                  <span class="text-accent mr-3 font-bold">3.</span>
+                  <div>
+                    <strong>叶子节点构成有序链表</strong>
+                    <p class="text-slate-400 text-[24px] mt-1">叶子之间用指针连接，支持高效的范围查询和排序</p>
+                  </div>
+                </li>
+              </ul>
+            </div>
+            
+            <div class="card p-6 border-tertiary/30 bg-tertiary/5">
+               <h3 class="text-tertiary text-[32px] mb-4"><i class="fas fa-rocket mr-3"></i>性能优势</h3>
+               <div class="grid grid-cols-3 gap-4 text-center">
+                 <div class="p-4 bg-slate-800/50 rounded-xl border border-slate-700">
+                    <div class="text-tertiary text-[40px] mb-2"><i class="fas fa-compress-alt"></i></div>
+                    <div class="text-white text-[24px] font-bold">更矮</div>
+                    <div class="text-slate-400 text-[18px]">索引密度高</div>
+                 </div>
+                 <div class="p-4 bg-slate-800/50 rounded-xl border border-slate-700">
+                    <div class="text-tertiary text-[40px] mb-2"><i class="fas fa-stopwatch"></i></div>
+                    <div class="text-white text-[24px] font-bold">更稳</div>
+                    <div class="text-slate-400 text-[18px]">路径长度一致</div>
+                 </div>
+                 <div class="p-4 bg-slate-800/50 rounded-xl border border-slate-700">
+                    <div class="text-tertiary text-[40px] mb-2"><i class="fas fa-list-ol"></i></div>
+                    <div class="text-white text-[24px] font-bold">更顺</div>
+                    <div class="text-slate-400 text-[18px]">全表扫描快</div>
+                 </div>
+               </div>
+            </div>
+          </div>
+
+          <!-- 右侧：B+ 树结构图 -->
+          <div class="flex flex-col items-center justify-center relative">
+            <div class="absolute top-0 right-0 bg-slate-800/80 px-4 py-2 rounded-lg border border-slate-600">
+                <span class="text-slate-300 text-xl font-mono">3阶 B+ Tree</span>
+            </div>
+            <svg width="850" height="450" viewBox="0 0 850 450" class="overflow-visible">
+              <defs>
+                <filter id="shadow-blue"><feDropShadow dx="2" dy="4" stdDeviation="4" flood-color="#0ea5e9" flood-opacity="0.2"/></filter>
+                <marker id="arrow-link-gold" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                  <path d="M0,0 L6,3 L0,6" fill="#fbbf24"/>
+                </marker>
+                <marker id="arrow-ptr" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+                    <path d="M0,0 L0,6 L9,3 z" fill="#ef4444" />
+                </marker>
+              </defs>
+              
+              <!-- Level 1: Root (Index) -->
+              <g transform="translate(425, 50)">
+                <text x="0" y="-35" text-anchor="middle" fill="#ef4444" font-size="20" font-weight="bold">root</text>
+                <rect x="-60" y="-25" width="120" height="50" rx="6" fill="#1e3a8a" stroke="#3b82f6" stroke-width="2" filter="url(#shadow-blue)"/>
+                <text x="0" y="8" text-anchor="middle" fill="#fff" font-size="22" font-weight="bold">40</text>
+                <text x="80" y="8" fill="#3b82f6" font-size="16">根节点</text>
+              </g>
+
+              <!-- Level 2: Internal (Index) -->
+              <g transform="translate(0, 0)">
+                <!-- L2 Left -->
+                <g transform="translate(220, 160)">
+                    <rect x="-60" y="-25" width="120" height="50" rx="6" fill="#1e3a8a" stroke="#3b82f6" stroke-width="2" filter="url(#shadow-blue)"/>
+                    <text x="0" y="8" text-anchor="middle" fill="#fff" font-size="22" font-weight="bold">20</text>
+                </g>
+                <!-- L2 Right -->
+                <g transform="translate(630, 160)">
+                    <rect x="-80" y="-25" width="160" height="50" rx="6" fill="#1e3a8a" stroke="#3b82f6" stroke-width="2" filter="url(#shadow-blue)"/>
+                    <text x="0" y="8" text-anchor="middle" fill="#fff" font-size="22" font-weight="bold">60 | 80</text>
+                    <text x="100" y="8" fill="#3b82f6" font-size="16">内部节点</text>
+                </g>
+              </g>
+
+              <!-- Tree Edges L1 -> L2 -->
+              <path d="M380 75 L220 135 M470 75 L630 135" stroke="#3b82f6" stroke-width="2" opacity="0.4"/>
+
+              <!-- Level 3: Leaves (Data) -->
+              <g transform="translate(0, 300)">
+                  <!-- Leaf 1 -->
+                  <g transform="translate(100, 0)">
+                    <text x="-80" y="10" text-anchor="end" fill="#ef4444" font-size="20" font-weight="bold">head</text>
+                    <rect x="-55" y="-30" width="110" height="70" rx="6" fill="#064e3b" stroke="#10b981" stroke-width="2"/>
+                    <text x="0" y="0" text-anchor="middle" fill="#fff" font-size="18">5 | 10</text>
+                    <g transform="translate(0, 20)">
+                        <rect x="-40" y="0" width="30" height="6" rx="2" fill="#34d399"/>
+                        <rect x="10" y="0" width="30" height="6" rx="2" fill="#34d399"/>
+                    </g>
+                  </g>
+                  <!-- Leaf 2 -->
+                  <g transform="translate(260, 0)">
+                    <rect x="-55" y="-30" width="110" height="70" rx="6" fill="#064e3b" stroke="#10b981" stroke-width="2"/>
+                    <text x="0" y="0" text-anchor="middle" fill="#fff" font-size="18"><tspan fill="#fbbf24" font-weight="bold">20</tspan> | 30</text>
+                    <g transform="translate(0, 20)">
+                        <rect x="-40" y="0" width="30" height="6" rx="2" fill="#34d399"/>
+                        <rect x="10" y="0" width="30" height="6" rx="2" fill="#34d399"/>
+                    </g>
+                  </g>
+                  <!-- Leaf 3 -->
+                  <g transform="translate(420, 0)">
+                    <rect x="-55" y="-30" width="110" height="70" rx="6" fill="#064e3b" stroke="#10b981" stroke-width="2"/>
+                    <text x="0" y="0" text-anchor="middle" fill="#fff" font-size="18"><tspan fill="#fbbf24" font-weight="bold">40</tspan> | 50</text>
+                    <g transform="translate(0, 20)">
+                        <rect x="-40" y="0" width="30" height="6" rx="2" fill="#34d399"/>
+                        <rect x="10" y="0" width="30" height="6" rx="2" fill="#34d399"/>
+                    </g>
+                  </g>
+                  <!-- Leaf 4 -->
+                  <g transform="translate(580, 0)">
+                    <rect x="-55" y="-30" width="110" height="70" rx="6" fill="#064e3b" stroke="#10b981" stroke-width="2"/>
+                    <text x="0" y="0" text-anchor="middle" fill="#fff" font-size="18"><tspan fill="#fbbf24" font-weight="bold">60</tspan> | 70</text>
+                    <g transform="translate(0, 20)">
+                        <rect x="-40" y="0" width="30" height="6" rx="2" fill="#34d399"/>
+                        <rect x="10" y="0" width="30" height="6" rx="2" fill="#34d399"/>
+                    </g>
+                  </g>
+                  <!-- Leaf 5 -->
+                  <g transform="translate(740, 0)">
+                    <rect x="-55" y="-30" width="110" height="70" rx="6" fill="#064e3b" stroke="#10b981" stroke-width="2"/>
+                    <text x="0" y="0" text-anchor="middle" fill="#fff" font-size="18"><tspan fill="#fbbf24" font-weight="bold">80</tspan> | 90</text>
+                    <g transform="translate(0, 20)">
+                        <rect x="-40" y="0" width="30" height="6" rx="2" fill="#34d399"/>
+                        <rect x="10" y="0" width="30" height="6" rx="2" fill="#34d399"/>
+                    </g>
+                    <text x="70" y="10" fill="#10b981" font-size="16">叶子节点</text>
+                  </g>
+              </g>
+
+              <!-- Tree Edges L2 -> L3 -->
+              <path d="M180 185 L100 270 M220 185 L260 270" stroke="#3b82f6" stroke-width="2" opacity="0.4"/>
+              <path d="M570 185 L420 270 M630 185 L580 270 M690 185 L740 270" stroke="#3b82f6" stroke-width="2" opacity="0.4"/>
+
+              <!-- Linked List Arrows (Smaller) -->
+              <g transform="translate(0, 300)">
+                  <path d="M160 0 L200 0" stroke="#fbbf24" stroke-width="3" marker-end="url(#arrow-link-gold)"/>
+                  <path d="M320 0 L360 0" stroke="#fbbf24" stroke-width="3" marker-end="url(#arrow-link-gold)"/>
+                  <path d="M480 0 L520 0" stroke="#fbbf24" stroke-width="3" marker-end="url(#arrow-link-gold)"/>
+                  <path d="M640 0 L680 0" stroke="#fbbf24" stroke-width="3" marker-end="url(#arrow-link-gold)"/>
+              </g>
+
+            </svg>
+            
+            <!-- 底部说明卡片 -->
+            <div class="w-full max-w-[600px] mt-[-20px] z-10 flex justify-center">
+                <!-- M阶规则说明 -->
+                <div class="w-full bg-slate-800/80 border border-green-500/30 p-6 rounded-xl backdrop-blur-sm">
+                    <h4 class="text-green-400 text-[24px] font-bold mb-4 text-center"><i class="fas fa-ruler-combined mr-2"></i>m 阶数量规则</h4>
+                    <ul class="text-slate-300 text-[20px] leading-relaxed space-y-2">
+                        <li class="flex justify-between border-b border-slate-700/50 pb-2">
+                            <span>内部节点子树数:</span> 
+                            <span class="font-mono text-white tracking-wider">[<strong>⌈m/2⌉</strong>, <strong>m</strong>]</span>
+                        </li>
+                        <li class="flex justify-between border-b border-slate-700/50 pb-2">
+                            <span>内部节点 Key 数:</span> 
+                            <span class="font-mono text-white tracking-wider"><strong>子树数 - 1</strong></span>
+                        </li>
+                        <li class="flex justify-between pt-1">
+                            <span>叶子节点 Key 数:</span> 
+                            <span class="font-mono text-white tracking-wider">[<strong>⌈m/2⌉-1</strong>, <strong>m-1</strong>]</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- P04: B+ 树 vs B 树对比 -->
+      <section class="slide" data-title="B+ vs B 对比">
+        <h2>B+ 树 vs B 树：变与不变</h2>
+        <div class="flex flex-col gap-2 h-full">
+          <!-- 上半部分：相同点 -->
+          <div class="card border-slate-600/50 bg-slate-800/30 flex-shrink-0">
+            <h3 class="text-slate-300 text-[32px] mb-4"><i class="fas fa-link mr-3"></i>相同点：继承核心基因</h3>
+            <div class="grid grid-cols-3 gap-6">
+                <div>
+                    <h4 class="text-[24px] text-white font-bold mb-2"><i class="fas fa-balance-scale text-slate-500 mr-2"></i>多路平衡</h4>
+                    <ul class="list-disc pl-5 space-y-1 text-slate-400 text-[20px]">
+                        <li><strong>定义不变</strong>：多子节点。</li>
+                        <li><strong>平衡性不变</strong>：叶子等深。</li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="text-[24px] text-white font-bold mb-2"><i class="fas fa-sort-numeric-down text-slate-500 mr-2"></i>节点有序</h4>
+                    <ul class="list-disc pl-5 space-y-1 text-slate-400 text-[20px]">
+                        <li><strong>逻辑不变</strong>：Key 有序。</li>
+                        <li>支持二分查找。</li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="text-[24px] text-white font-bold mb-2"><i class="fas fa-expand-arrows-alt text-slate-500 mr-2"></i>生长收缩</h4>
+                    <ul class="list-disc pl-5 space-y-1 text-slate-400 text-[20px]">
+                        <li><strong>生长</strong>：满分裂，向上长。</li>
+                        <li><strong>收缩</strong>：空合并/借位。</li>
+                    </ul>
+                </div>
+            </div>
+          </div>
+
+          <!-- 下半部分：不同点表格 -->
+          <div class="card !p-0 border-accent/50 bg-accent/5 flex-1 overflow-hidden flex flex-col">
+             <div class="p-4 bg-accent/10 border-b border-accent/30 flex-shrink-0">
+                <h3 class="text-accent text-[32px] mb-0"><i class="fas fa-table mr-3"></i>不同点：为数据库进化</h3>
+             </div>
+             
+             <div class="flex-1 overflow-auto">
+                 <table class="w-full text-left border-collapse h-full">
+                    <thead>
+                        <tr class="bg-slate-800/50">
+                            <th class="p-4 text-[22px] text-slate-300 font-bold border-b border-slate-600 w-[12%]">维度</th>
+                            <th class="p-4 text-[22px] text-red-400 font-bold border-b border-slate-600 w-[22%]">B 树 (Standard)</th>
+                            <th class="p-4 text-[22px] text-green-400 font-bold border-b border-slate-600 w-[22%]">B+ 树 (Plus)</th>
+                            <th class="p-4 text-[22px] text-accent font-bold border-b border-slate-600 w-[44%]">变化的深层意图</th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-[20px]">
+                        <tr class="border-b border-slate-700/50 hover:bg-white/5 transition-colors">
+                            <td class="p-4 text-white font-bold align-top">1. 节点存什么?</td>
+                            <td class="p-4 text-slate-400 align-top">
+                                <strong class="text-white block mb-1">Key + Data</strong>
+                                所有节点都存真实数据。
+                            </td>
+                            <td class="p-4 text-slate-400 align-top">
+                                <strong class="text-white block mb-1">分工明确</strong>
+                                非叶子: 仅 Key，叶子: Key + Data
+                            </td>
+                            <td class="p-4 text-slate-300 align-top">
+                                为了<strong class="text-accent">"瘦身"</strong>：非叶子不存数据，能存更多 Key，降低树高 (减少 I/O)。
+                            </td>
+                        </tr>
+                        <tr class="border-b border-slate-700/50 hover:bg-white/5 transition-colors">
+                            <td class="p-4 text-white font-bold align-top">2. 数据去哪找?</td>
+                            <td class="p-4 text-slate-400 align-top">
+                                <strong class="text-white block mb-1">分布在全树</strong>
+                                根、中间、叶子都可能有。
+                            </td>
+                            <td class="p-4 text-slate-400 align-top">
+                                <strong class="text-white block mb-1">全在底层</strong>
+                                必须去叶子找。
+                            </td>
+                            <td class="p-4 text-slate-300 align-top">
+                                为了<strong class="text-accent">"稳定"</strong>：查询复杂度固定，不会忽快忽慢。
+                            </td>
+                        </tr>
+                        <tr class="border-b border-slate-700/50 hover:bg-white/5 transition-colors">
+                            <td class="p-4 text-white font-bold align-top">3. Key 重复吗?</td>
+                            <td class="p-4 text-slate-400 align-top">
+                                <strong class="text-white block mb-1">不重复</strong>
+                                Key 在树中唯一。
+                            </td>
+                            <td class="p-4 text-slate-400 align-top">
+                                <strong class="text-white block mb-1">冗余存储</strong>
+                                父节点 Key 会再次出现在子节点。
+                            </td>
+                            <td class="p-4 text-slate-300 align-top">
+                                父节点只是"路标"，真正的"目的地"必须保留在叶子中。
+                            </td>
+                        </tr>
+                        <tr class="hover:bg-white/5 transition-colors">
+                            <td class="p-4 text-white font-bold align-top">4. 叶子怎么连?</td>
+                            <td class="p-4 text-slate-400 align-top">
+                                <strong class="text-white block mb-1">独立，无指针</strong>
+                            </td>
+                            <td class="p-4 text-slate-400 align-top">
+                                <strong class="text-white block mb-1">链表，指针串联</strong>
+                            </td>
+                            <td class="p-4 text-slate-300 align-top">
+                                为了<strong class="text-accent">"扫库"</strong>：范围查询不回溯，直接横向遍历。
+                            </td>
+                        </tr>
+                    </tbody>
+                 </table>
+             </div>
+          </div>
+        </div>
+      </section>
+
+      </section>
+
+      <!-- P05: B+ 树查找演示 -->
+      <section class="slide" data-title="查找演示">
+        <h2>B+ 树查找演示：Search(30)</h2>
+        <div class="grid grid-cols-3 gap-6 h-full">
+          <!-- 左侧：动画区域 -->
+          <div class="col-span-2 card p-0 relative overflow-hidden flex items-center justify-center bg-black/20">
+            <div class="absolute top-4 left-4 bg-slate-800/80 px-4 py-2 rounded-lg border border-slate-600 z-10">
+                <span class="text-slate-300 text-xl font-mono">3阶 B+ Tree</span>
+            </div>
+            <svg id="s-svg" width="900" height="500" viewBox="0 0 900 500" class="overflow-visible">
+              <defs>
+                <filter id="glow-search"><feDropShadow dx="0" dy="0" stdDeviation="5" flood-color="#fbbf24" flood-opacity="0.8"/></filter>
+                <marker id="arrow-search" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+                    <path d="M0,0 L0,6 L9,3 z" fill="#fbbf24" />
+                </marker>
+              </defs>
+
+              <!-- Tree Structure (3-Order) -->
+              <!-- Root: [ 40 ] -->
+              <g id="s-root" transform="translate(450, 50)">
+                <rect x="-60" y="-25" width="120" height="50" rx="6" fill="#1e3a8a" stroke="#3b82f6" stroke-width="2"/>
+                <text x="0" y="8" text-anchor="middle" fill="#fff" font-size="22" font-weight="bold">40</text>
+              </g>
+
+              <!-- L2 Nodes -->
+              <!-- L2-1: < 40 -->
+              <g id="s-l2-1" transform="translate(250, 150)">
+                <rect x="-60" y="-25" width="120" height="50" rx="6" fill="#1e3a8a" stroke="#3b82f6" stroke-width="2"/>
+                <text x="0" y="8" text-anchor="middle" fill="#fff" font-size="22" font-weight="bold">20</text>
+              </g>
+              <!-- L2-2: > 40 -->
+              <g id="s-l2-2" transform="translate(650, 150)">
+                <rect x="-80" y="-25" width="160" height="50" rx="6" fill="#1e3a8a" stroke="#3b82f6" stroke-width="2"/>
+                <text x="0" y="8" text-anchor="middle" fill="#fff" font-size="22" font-weight="bold">60 | 80</text>
+              </g>
+
+              <!-- Leaves -->
+              <g transform="translate(0, 280)">
+                  <!-- Leaf 1: < 20 -->
+                  <g id="s-leaf-1" transform="translate(150, 0)">
+                    <rect x="-55" y="-30" width="110" height="60" rx="6" fill="#064e3b" stroke="#10b981" stroke-width="2"/>
+                    <text x="0" y="5" text-anchor="middle" fill="#fff" font-size="18">5 | 10</text>
+                  </g>
+                  <!-- Leaf 2: 20-40 -->
+                  <g id="s-leaf-2" transform="translate(300, 0)">
+                    <rect x="-55" y="-30" width="110" height="60" rx="6" fill="#064e3b" stroke="#10b981" stroke-width="2"/>
+                    <text x="0" y="5" text-anchor="middle" fill="#fff" font-size="18">20 | 30</text>
+                  </g>
+                  <!-- Leaf 3: 40-60 -->
+                  <g id="s-leaf-3" transform="translate(450, 0)">
+                    <rect x="-55" y="-30" width="110" height="60" rx="6" fill="#064e3b" stroke="#10b981" stroke-width="2"/>
+                    <text x="0" y="5" text-anchor="middle" fill="#fff" font-size="18">40 | 50</text>
+                  </g>
+                  <!-- Leaf 4: 60-80 -->
+                  <g id="s-leaf-4" transform="translate(600, 0)">
+                    <rect x="-55" y="-30" width="110" height="60" rx="6" fill="#064e3b" stroke="#10b981" stroke-width="2"/>
+                    <text x="0" y="5" text-anchor="middle" fill="#fff" font-size="18">60 | 70</text>
+                  </g>
+                  <!-- Leaf 5: > 80 -->
+                  <g id="s-leaf-5" transform="translate(750, 0)">
+                    <rect x="-55" y="-30" width="110" height="60" rx="6" fill="#064e3b" stroke="#10b981" stroke-width="2"/>
+                    <text x="0" y="5" text-anchor="middle" fill="#fff" font-size="18">80 | 90</text>
+                  </g>
+              </g>
+
+              <!-- Edges (Static) -->
+              <path d="M400 75 L250 125 M500 75 L650 125" stroke="#3b82f6" stroke-width="2" opacity="0.4"/>
+              <path d="M210 175 L150 250 M290 175 L300 250" stroke="#3b82f6" stroke-width="2" opacity="0.4"/>
+              <path d="M570 175 L450 250 M630 175 L600 250 M690 175 L750 250" stroke="#3b82f6" stroke-width="2" opacity="0.4"/>
+
+              <!-- Dynamic Elements -->
+              <path id="s-path-arrow" d="" stroke="#fbbf24" stroke-width="4" fill="none" marker-end="url(#arrow-search)" opacity="0"/>
+              <rect id="s-highlight-box" x="0" y="0" width="0" height="0" rx="4" fill="none" stroke="#fbbf24" stroke-width="4" opacity="0" filter="url(#glow-search)"/>
+            </svg>
+          </div>
+
+          <!-- 右侧：控制与说明 -->
+          <div class="col-span-1 flex flex-col gap-6">
+            <div class="card p-6 border-blue-500/30 bg-blue-500/5">
+              <h3 class="text-blue-400 text-[28px] mb-4"><i class="fas fa-search mr-3"></i>查找逻辑</h3>
+              <ol class="list-decimal pl-6 space-y-2 text-slate-300 text-[22px]">
+                <li>从<strong>根节点</strong>出发</li>
+                <li>在内部节点中<strong>二分查找</strong>，找到对应的子节点指针</li>
+                <li>沿着指针下沉，直到<strong>叶子节点</strong></li>
+                <li>在叶子节点中顺序/二分查找目标 Data</li>
+              </ol>
+            </div>
+            
+            <div class="card p-6 border-slate-600/50 bg-slate-800/50 flex-1 flex flex-col">
+                <div class="flex justify-between items-center mb-4">
+                    <h4 class="text-white text-[24px] font-bold">演示控制</h4>
+                    <span class="bg-slate-700 px-3 py-1 rounded text-slate-300 font-mono">Key = 30</span>
+                </div>
+                <div class="flex gap-4 mb-6">
+                    <button id="btn-search-reset" class="btn-secondary flex-1"><i class="fas fa-undo mr-2"></i>重置</button>
+                    <button id="btn-search-next" class="btn-primary flex-1"><i class="fas fa-play mr-2"></i>下一步</button>
+                </div>
+                <div class="bg-black/30 rounded-xl p-4 flex-1 border border-slate-700/50 relative overflow-hidden">
+                    <div id="search-msg" class="text-accent text-[24px] font-bold leading-relaxed">准备就绪...</div>
+                    <div class="absolute bottom-4 right-4 text-slate-500 font-mono">I/O: <span id="io-count" class="text-white font-bold">0</span></div>
+                </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- P06: B+ 树范围查找演示 -->
+      <section class="slide" data-title="范围查找演示">
+        <h2>B+ 树范围查找演示：Range(30 ~ 60)</h2>
+        <div class="grid grid-cols-3 gap-6 h-full">
+          <!-- 左侧：动画区域 -->
+          <div class="col-span-2 card p-0 relative overflow-hidden flex items-center justify-center bg-black/20">
+            <div class="absolute top-4 left-4 bg-slate-800/80 px-4 py-2 rounded-lg border border-slate-600 z-10">
+                <span class="text-slate-300 text-xl font-mono">3阶 B+ Tree</span>
+            </div>
+            <svg id="r-svg" width="900" height="500" viewBox="0 0 900 500" class="overflow-visible">
+              <defs>
+                <filter id="glow-range"><feDropShadow dx="0" dy="0" stdDeviation="5" flood-color="#10b981" flood-opacity="0.8"/></filter>
+                <marker id="arrow-range" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+                    <path d="M0,0 L0,6 L9,3 z" fill="#10b981" />
+                </marker>
+                <marker id="arrow-link-gold-r" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                  <path d="M0,0 L6,3 L0,6" fill="#fbbf24"/>
+                </marker>
+              </defs>
+
+              <!-- Tree Structure (Same as Search Demo) -->
+              <use href="#s-root" />
+              <use href="#s-l2-1" />
+              <use href="#s-l2-2" />
+              <use href="#s-l2-3" />
+              
+              <!-- Tree Edges (Static) -->
+              <path d="M400 75 L250 125 M500 75 L650 125" stroke="#3b82f6" stroke-width="2" opacity="0.4"/>
+              <!-- L2-1 to Leaves: 210->80, 290->220 -->
+              <path d="M210 175 L80 250 M290 175 L220 250" stroke="#3b82f6" stroke-width="2" opacity="0.4"/>
+              <!-- L2-2 to Leaves: 590->380, 650->520, 710->680, 710->820 -->
+              <path d="M590 175 L380 250 M650 175 L520 250 M710 175 L680 250 M710 175 L820 250" stroke="#3b82f6" stroke-width="2" opacity="0.4"/>
+
+              <!-- Leaves (We'll manipulate these directly or use use if dynamic styling allows, simpler to duplicate for control) -->
+              <g transform="translate(0, 280)">
+                  <g id="r-leaf-1" transform="translate(80, 0)" opacity="0.4">
+                    <rect x="-50" y="-30" width="100" height="60" rx="6" fill="#064e3b" stroke="#10b981" stroke-width="2"/>
+                    <text x="0" y="5" text-anchor="middle" fill="#fff" font-size="18">5 | 10</text>
+                  </g>
+                  <g id="r-leaf-2" transform="translate(220, 0)" opacity="0.4">
+                    <rect x="-50" y="-30" width="100" height="60" rx="6" fill="#064e3b" stroke="#10b981" stroke-width="2"/>
+                    <text x="0" y="5" text-anchor="middle" fill="#fff" font-size="18">20 | 30</text>
+                  </g>
+                  <g id="r-leaf-3" transform="translate(380, 0)" opacity="0.4">
+                    <rect x="-50" y="-30" width="100" height="60" rx="6" fill="#064e3b" stroke="#10b981" stroke-width="2"/>
+                    <text x="0" y="5" text-anchor="middle" fill="#fff" font-size="18">40 | 50</text>
+                  </g>
+                  <g id="r-leaf-4" transform="translate(520, 0)" opacity="0.4">
+                    <rect x="-50" y="-30" width="100" height="60" rx="6" fill="#064e3b" stroke="#10b981" stroke-width="2"/>
+                    <text x="0" y="5" text-anchor="middle" fill="#fff" font-size="18">60 | 70</text>
+                  </g>
+                  <g id="r-leaf-5" transform="translate(680, 0)" opacity="0.4">
+                    <rect x="-50" y="-30" width="100" height="60" rx="6" fill="#064e3b" stroke="#10b981" stroke-width="2"/>
+                    <text x="0" y="5" text-anchor="middle" fill="#fff" font-size="18">80 | 85</text>
+                  </g>
+                  <g id="r-leaf-6" transform="translate(820, 0)" opacity="0.4">
+                    <rect x="-50" y="-30" width="100" height="60" rx="6" fill="#064e3b" stroke="#10b981" stroke-width="2"/>
+                    <text x="0" y="5" text-anchor="middle" fill="#fff" font-size="18">90 | 95</text>
+                  </g>
+              </g>
+
+              <!-- Leaf Links -->
+              <g stroke="#fbbf24" stroke-width="2" opacity="0.8">
+                <path d="M130 280 L170 280" marker-end="url(#arrow-link-gold-r)"/>
+                <path d="M270 280 L330 280" marker-end="url(#arrow-link-gold-r)"/>
+                <path d="M430 280 L470 280" marker-end="url(#arrow-link-gold-r)"/>
+                <path d="M570 280 L630 280" marker-end="url(#arrow-link-gold-r)"/>
+                <path d="M730 280 L770 280" marker-end="url(#arrow-link-gold-r)"/>
+              </g>
+
+              <!-- Dynamic Elements -->
+              <path id="r-path-arrow" d="" stroke="#10b981" stroke-width="4" fill="none" marker-end="url(#arrow-range)" opacity="0"/>
+              <rect id="r-highlight-box" x="0" y="0" width="0" height="0" rx="4" fill="none" stroke="#10b981" stroke-width="4" opacity="0" filter="url(#glow-range)"/>
+              
+              <!-- Result Collector -->
+              <g transform="translate(450, 420)">
+                 <rect x="-300" y="0" width="600" height="60" rx="8" fill="#0f172a" stroke="#334155"/>
+                 <text x="-280" y="38" fill="#94a3b8" font-size="20">结果集:</text>
+                 <text id="r-result-text" x="-200" y="38" fill="#fff" font-size="24" font-weight="bold"></text>
+              </g>
+            </svg>
+          </div>
+
+          <!-- 右侧：控制与说明 -->
+          <div class="col-span-1 flex flex-col gap-6">
+            <div class="card p-6 border-green-500/30 bg-green-500/5">
+              <h3 class="text-green-400 text-[28px] mb-4"><i class="fas fa-list-ol mr-3"></i>范围查询逻辑</h3>
+              <ol class="list-decimal pl-6 space-y-2 text-slate-300 text-[22px]">
+                <li><strong>定位起点</strong>：先 Search(30)，找到第一个 >= 30 的叶子节点。</li>
+                <li><strong>横向遍历</strong>：沿着链表指针向右移动。</li>
+                <li><strong>收集数据</strong>：依次读取数据，直到 Key > 60。</li>
+                <li><strong>结束</strong>：无需回溯到父节点。</li>
+              </ol>
+            </div>
+            
+            <div class="card p-6 border-slate-600/50 bg-slate-800/50 flex-1 flex flex-col">
+                <div class="flex justify-between items-center mb-4">
+                    <h4 class="text-white text-[24px] font-bold">演示控制</h4>
+                    <span class="bg-slate-700 px-3 py-1 rounded text-slate-300 font-mono">Range: [30, 60]</span>
+                </div>
+                <div class="flex gap-4 mb-6">
+                    <button id="btn-range-reset" class="btn-secondary flex-1"><i class="fas fa-undo mr-2"></i>重置</button>
+                    <button id="btn-range-next" class="btn-primary flex-1"><i class="fas fa-play mr-2"></i>下一步</button>
+                </div>
+                <div class="bg-black/30 rounded-xl p-4 flex-1 border border-slate-700/50 relative overflow-hidden">
+                    <div id="range-msg" class="text-accent text-[24px] font-bold leading-relaxed">准备就绪...</div>
+                </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- P07: B+ 树插入演示 -->
+      <section class="slide" data-title="插入演示">
+        <h2>B+ 树插入：分裂与生长</h2>
+        <div class="grid grid-cols-2 gap-10 h-full">
+          <!-- 左侧：理论 -->
+          <div class="flex flex-col gap-6">
+            <div class="card p-6 border-accent/50 bg-accent/5">
+              <h3 class="text-accent text-[32px] mb-4"><i class="fas fa-code-branch mr-3"></i>插入法则</h3>
+              <ul class="space-y-4 text-[26px] text-slate-300">
+                <li class="flex items-start">
+                  <span class="text-accent mr-3 font-bold">1.</span>
+                  <div>
+                    <strong>总是插入叶子</strong>
+                    <p class="text-slate-400 text-[22px] mt-1">从根节点向下寻找目标叶子节点。</p>
+                  </div>
+                </li>
+                <li class="flex items-start">
+                  <span class="text-accent mr-3 font-bold">2.</span>
+                  <div>
+                    <strong>满则分裂 (Split)</strong>
+                    <p class="text-slate-400 text-[22px] mt-1">若节点 Key 数量达到 m，则分裂为两个。</p>
+                  </div>
+                </li>
+              </ul>
+            </div>
+
+            <div class="card p-6 border-tertiary/30 bg-tertiary/5 flex-1">
+               <h3 class="text-tertiary text-[32px] mb-4"><i class="fas fa-cut mr-3"></i>分裂的差异</h3>
+               <div class="space-y-6">
+                 <div>
+                   <h4 class="text-white text-[24px] font-bold mb-2 border-l-4 border-green-500 pl-3">叶子节点分裂</h4>
+                   <p class="text-slate-300 text-[22px]">中间 Key <strong class="text-green-400">复制 (Copy)</strong> 到父节点。</p>
+                   <p class="text-slate-500 text-[18px] italic">因为所有数据必须保留在叶子层。</p>
+                 </div>
+                 <div>
+                   <h4 class="text-white text-[24px] font-bold mb-2 border-l-4 border-red-500 pl-3">内部节点分裂</h4>
+                   <p class="text-slate-300 text-[22px]">中间 Key <strong class="text-red-400">上移 (Push)</strong> 到父节点。</p>
+                   <p class="text-slate-500 text-[18px] italic">内部节点只做索引，上移后原节点不再保留。</p>
+                 </div>
+               </div>
+            </div>
+          </div>
+
+          <!-- 右侧：演示 -->
+          <div class="flex flex-col gap-4 h-full">
+            <div class="card p-0 relative shrink-0 bg-black/20 flex items-center justify-center overflow-hidden" style="height: 400px;">
+               <div class="absolute top-4 right-4 bg-slate-800/80 px-4 py-2 rounded-lg border border-slate-600 z-10">
+                  <span class="text-slate-300 text-xl font-mono">3阶 B+ Tree (Max=2)</span>
+               </div>
+               <svg id="i-svg" width="700" height="400" viewBox="0 0 700 400" class="overflow-visible">
+                 <defs>
+                   <marker id="arrow-insert" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+                       <path d="M0,0 L0,6 L9,3 z" fill="#0ea5e9" />
+                   </marker>
+                 </defs>
+                 
+                 <!-- Initial State: Root[5], L[1,2], R[5,6] -->
+                 <!-- Root -->
+                 <g id="i-root" transform="translate(350, 80)">
+                    <rect x="-40" y="-25" width="80" height="50" rx="6" fill="#1e3a8a" stroke="#3b82f6" stroke-width="2"/>
+                    <text id="i-root-text" x="0" y="8" text-anchor="middle" fill="#fff" font-size="22" font-weight="bold">5</text>
+                 </g>
+                 
+                 <!-- Leaves -->
+                 <g id="i-leaves" transform="translate(0, 280)">
+                    <!-- Leaf L -->
+                    <g id="i-leaf-l" transform="translate(200, 0)">
+                        <rect id="i-leaf-l-rect" x="-50" y="-30" width="100" height="60" rx="6" fill="#064e3b" stroke="#10b981" stroke-width="2"/>
+                        <text id="i-leaf-l-text" x="0" y="5" text-anchor="middle" fill="#fff" font-size="20">1 | 2</text>
+                    </g>
+                    <!-- Leaf R -->
+                    <g id="i-leaf-r" transform="translate(500, 0)">
+                        <rect x="-50" y="-30" width="100" height="60" rx="6" fill="#064e3b" stroke="#10b981" stroke-width="2"/>
+                        <text x="0" y="5" text-anchor="middle" fill="#fff" font-size="20">5 | 6</text>
+                    </g>
+                 </g>
+                 
+                 <!-- Edges -->
+                 <path id="i-edge-l" d="M310 80 L200 250" stroke="#3b82f6" stroke-width="2" opacity="0.4"/>
+                 <path id="i-edge-r" d="M390 80 L500 250" stroke="#3b82f6" stroke-width="2" opacity="0.4"/>
+                 <path id="i-edge-new" d="M350 105 L300 250" stroke="#3b82f6" stroke-width="2" opacity="0"/>
+
+                 <!-- New Node (Hidden initially) -->
+                 <g id="i-leaf-new" transform="translate(300, 280)" opacity="0">
+                    <rect x="-40" y="-30" width="80" height="60" rx="6" fill="#064e3b" stroke="#10b981" stroke-width="2"/>
+                    <text id="i-leaf-new-text" x="0" y="5" text-anchor="middle" fill="#fff" font-size="20">2 | 3</text>
+                 </g>
+
+                 <!-- Animations -->
+                 <text id="i-anim-key" x="0" y="0" fill="#fbbf24" font-size="24" font-weight="bold" opacity="0">3</text>
+               </svg>
+            </div>
+            
+            <div class="card p-4 border-slate-600/50 bg-slate-800/50 mt-auto">
+                <div class="flex justify-between items-center mb-4">
+                    <h4 class="text-white text-[24px] font-bold">演示：插入 Key = 3</h4>
+                </div>
+                <div id="insert-msg" class="text-accent text-[20px] font-bold h-[100px]">准备就绪...</div>
+                <div class="flex gap-4 mt-4">
+                    <button id="btn-insert-reset" class="btn-secondary flex-1"><i class="fas fa-undo mr-2"></i>重置</button>
+                    <button id="btn-insert-next" class="btn-primary flex-1"><i class="fas fa-play mr-2"></i>下一步</button>
+                </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- P08: B+ 树删除演示 -->
+      <section class="slide" data-title="删除演示">
+        <h2>B+ 树删除：借位与合并</h2>
+        <div class="grid grid-cols-2 gap-10 h-full">
+          <!-- Left: Theory -->
+          <div class="flex flex-col gap-3">
+            <div class="card p-6 border-warn/50 bg-warn/5">
+              <h3 class="text-warn text-[32px] mb-4"><i class="fas fa-trash-alt mr-3"></i>删除法则</h3>
+              <ul class="space-y-2 text-[26px] text-slate-300">
+                <li class="flex items-start">
+                  <span class="text-warn mr-3 font-bold">1.</span>
+                  <div>
+                    <strong>删除叶子数据</strong>
+                    <p class="text-slate-400 text-[22px]">直接删除目标 Key。</p>
+                  </div>
+                </li>
+                <li class="flex items-start">
+                  <span class="text-warn mr-3 font-bold">2.</span>
+                  <div>
+                    <strong>下溢 (Underflow)</strong>
+                    <p class="text-slate-400 text-[22px]">若 Key 数 < Min，需向兄弟借位或合并。</p>
+                  </div>
+                </li>
+                <li class="flex items-start">
+                  <span class="text-warn mr-3 font-bold">3.</span>
+                  <div>
+                    <strong>维护链表</strong>
+                    <p class="text-slate-400 text-[22px]">若节点被合并删除，需更新前驱节点的 Next 指针。</p>
+                  </div>
+                </li>
+              </ul>
+            </div>
+
+            <div class="card p-6 border-blue-500/30 bg-blue-500/5 flex-1">
+               <h3 class="text-blue-400 text-[32px] mb-4"><i class="fas fa-balance-scale mr-3"></i>处理策略</h3>
+               <div class="space-y-6">
+                 <div>
+                   <h4 class="text-white text-[24px] font-bold mb-2 border-l-4 border-green-500 pl-3">兄弟有钱：借位 (Borrow)</h4>
+                   <p class="text-slate-300 text-[22px]">从兄弟节点挪一个 Key 过来，并更新父节点索引。</p>
+                   <p class="text-slate-500 text-[18px] italic">代价小，维持树结构不变。</p>
+                 </div>
+                 <div>
+                   <h4 class="text-white text-[24px] font-bold mb-2 border-l-4 border-red-500 pl-3">兄弟没钱：合并 (Merge)</h4>
+                   <p class="text-slate-300 text-[22px]">与兄弟节点合并，删除父节点索引，<strong class="text-warn">更新链表指针</strong>。</p>
+                   <p class="text-slate-500 text-[18px] italic">可能触发父节点下溢 (连锁反应)。</p>
+                 </div>
+               </div>
+            </div>
+          </div>
+
+          <!-- Right: Demo -->
+          <div class="flex flex-col gap-3 h-full">
+            <div class="card p-0 relative shrink-0 bg-black/20 flex items-center justify-center overflow-hidden" style="height: 400px;">
+               <div class="absolute top-4 right-4 bg-slate-800/80 px-4 py-2 rounded-lg border border-slate-600 z-10">
+                  <span class="text-slate-300 text-xl font-mono">5阶 B+ Tree (Min=2)</span>
+               </div>
+               <svg id="d-svg" width="700" height="400" viewBox="0 0 700 400" class="overflow-visible">
+                 <defs>
+                   <marker id="arrow-delete" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+                       <path d="M0,0 L0,6 L9,3 z" fill="#ef4444" />
+                   </marker>
+                 </defs>
+                 
+                 <!-- Root -->
+                 <g id="d-root" transform="translate(350, 80)">
+                    <rect x="-40" y="-25" width="80" height="50" rx="6" fill="#1e3a8a" stroke="#3b82f6" stroke-width="2"/>
+                    <text id="d-root-text" x="0" y="8" text-anchor="middle" fill="#fff" font-size="22" font-weight="bold">20</text>
+                 </g>
+                 
+                 <!-- Leaves -->
+                 <g id="d-leaves" transform="translate(0, 280)">
+                    <!-- Leaf L -->
+                    <g id="d-leaf-l" transform="translate(200, 0)">
+                        <rect id="d-leaf-l-rect" x="-90" y="-30" width="180" height="60" rx="6" fill="#064e3b" stroke="#10b981" stroke-width="2"/>
+                        <text id="d-leaf-l-text" x="0" y="5" text-anchor="middle" fill="#fff" font-size="20">10 | 12 | 15</text>
+                    </g>
+                    <!-- Leaf R -->
+                    <g id="d-leaf-r" transform="translate(500, 0)">
+                        <rect id="d-leaf-r-rect" x="-60" y="-30" width="120" height="60" rx="6" fill="#064e3b" stroke="#10b981" stroke-width="2"/>
+                        <text id="d-leaf-r-text" x="0" y="5" text-anchor="middle" fill="#fff" font-size="20">20 | 25</text>
+                    </g>
+                 </g>
+                 
+                 <!-- Edges -->
+                 <path id="d-edge-l" d="M310 80 L200 250" stroke="#3b82f6" stroke-width="2" opacity="0.4"/>
+                 <path id="d-edge-r" d="M390 80 L500 250" stroke="#3b82f6" stroke-width="2" opacity="0.4"/>
+
+                 <!-- Animation Elements -->
+                 <text id="d-anim-key" x="0" y="0" fill="#fbbf24" font-size="24" font-weight="bold" opacity="0">15</text>
+               </svg>
+            </div>
+            
+            <div class="card p-4 border-slate-600/50 bg-slate-800/50 mt-auto relative bottom-20">
+                <div class="flex justify-between items-center mb-4">
+                    <h4 class="text-white text-[24px] font-bold">演示：删除 Key = 25</h4>
+                </div>
+                <div id="delete-msg" class="text-accent text-[20px] font-bold h-[100px]">准备就绪...</div>
+                <div class="flex gap-4 mt-4">
+                    <button id="btn-delete-reset" class="btn-secondary flex-1"><i class="fas fa-undo mr-2"></i>重置</button>
+                    <button id="btn-delete-next" class="btn-primary flex-1"><i class="fas fa-play mr-2"></i>下一步</button>
+                </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- P09: 总结 -->
+      <section class="slide" data-title="总结">
+        <h2>课程总结：B+ 树的工程智慧</h2>
+        <div class="grid grid-cols-3 gap-8 h-full items-center">
+            <!-- Card 1: Structure -->
+            <div class="card p-8 border-accent/50 bg-accent/5 h-[500px] flex flex-col justify-center">
+                <div class="text-accent text-[80px] mb-6 text-center"><i class="fas fa-sitemap"></i></div>
+                <h3 class="text-white text-[36px] font-bold mb-6 text-center">结构特征</h3>
+                <ul class="space-y-4 text-slate-300 text-[24px]">
+                    <li><i class="fas fa-check text-accent mr-2"></i><strong>胖矮树</strong>：层高低，I/O 少。</li>
+                    <li><i class="fas fa-check text-accent mr-2"></i><strong>索引分离</strong>：非叶子只存 Key。</li>
+                    <li><i class="fas fa-check text-accent mr-2"></i><strong>链表串联</strong>：叶子节点有序连接。</li>
+                </ul>
+            </div>
+
+            <!-- Card 2: Advantages -->
+            <div class="card p-8 border-green-500/50 bg-green-500/5 h-[500px] flex flex-col justify-center">
+                <div class="text-green-400 text-[80px] mb-6 text-center"><i class="fas fa-rocket"></i></div>
+                <h3 class="text-white text-[36px] font-bold mb-6 text-center">核心优势</h3>
+                <ul class="space-y-4 text-slate-300 text-[24px]">
+                    <li><i class="fas fa-check text-green-400 mr-2"></i><strong>查询稳定</strong>：路径长度一致。</li>
+                    <li><i class="fas fa-check text-green-400 mr-2"></i><strong>范围极快</strong>：直接扫链表。</li>
+                    <li><i class="fas fa-check text-green-400 mr-2"></i><strong>磁盘友好</strong>：节点对齐页大小。</li>
+                </ul>
+            </div>
+
+            <!-- Card 3: Applications -->
+            <div class="card p-8 border-tertiary/50 bg-tertiary/5 h-[500px] flex flex-col justify-center">
+                <div class="text-tertiary text-[80px] mb-6 text-center"><i class="fas fa-database"></i></div>
+                <h3 class="text-white text-[36px] font-bold mb-6 text-center">应用场景</h3>
+                <ul class="space-y-4 text-slate-300 text-[24px]">
+                    <li><i class="fas fa-check text-tertiary mr-2"></i><strong>关系型数据库</strong>：MySQL (InnoDB), PostgreSQL。</li>
+                    <li><i class="fas fa-check text-tertiary mr-2"></i><strong>文件系统</strong>：NTFS, ReiserFS, XFS。</li>
+                </ul>
+            </div>
+        </div>
+      </section>
+
+      <!-- Page Number -->
+      <div id="page-number" class="absolute bottom-6 right-8 text-slate-500 text-[24px] font-mono z-50"></div>
+    </div>
+
+    <script>
+      let currentSlide = 0;
+      const pageNumberEl = document.getElementById('page-number');
+      
+      // Search Demo Logic
+      const sSteps = [
+        {
+            text: '准备开始：查找 Key = 30',
+            io: 0,
+            action: () => {
+                resetS();
+            }
+        },
+        {
+            text: '1. 读取根节点 (Page 0)\n比较: 30 < 40',
+            io: 1,
+            action: () => {
+                highlightNode('s-root', 450, 50, 130, 60);
+            }
+        },
+        {
+            text: '2. 向左下沉\n目标在左子树',
+            io: 1,
+            action: () => {
+                showArrow(400, 75, 250, 125);
+            }
+        },
+        {
+            text: '3. 读取内部节点 (Page 1)\n比较: 30 >= 20',
+            io: 2,
+            action: () => {
+                highlightNode('s-l2-1', 250, 150, 130, 60);
+            }
+        },
+        {
+            text: '4. 向右下沉\n目标在右侧子节点',
+            io: 2,
+            action: () => {
+                showArrow(270, 175, 300, 250);
+            }
+        },
+        {
+            text: '5. 读取叶子节点 (Page 2)\n顺序查找: 20... 30 Found!',
+            io: 3,
+            action: () => {
+                highlightNode('s-leaf-2', 300, 280, 120, 70);
+            }
+        },
+        {
+            text: '查找成功！\n耗时: 3次 I/O',
+            io: 3,
+            action: () => {
+                const box = document.getElementById('s-highlight-box');
+                if(box) {
+                    box.setAttribute('stroke', '#10b981'); // Green
+                    box.setAttribute('filter', 'none'); 
+                }
+            }
+        }
+      ];
+
+      let sStep = 0;
+      
+      function initSDemo() {
+        const btnNext = document.getElementById('btn-search-next');
+        const btnReset = document.getElementById('btn-search-reset');
+        if(btnNext) {
+            btnNext.onclick = () => {
+                if(sStep < sSteps.length - 1) {
+                    sStep++;
+                    renderSStep();
+                }
+            };
+        }
+        if(btnReset) {
+            btnReset.onclick = () => {
+                sStep = 0;
+                renderSStep();
+            };
+        }
+        renderSStep();
+      }
+
+      function renderSStep() {
+        const step = sSteps[sStep];
+        if(!step) return;
+        
+        const msgEl = document.getElementById('search-msg');
+        const ioEl = document.getElementById('io-count');
+        if(msgEl) msgEl.innerText = step.text;
+        if(ioEl) ioEl.innerText = step.io;
+        
+        if(step.action) step.action();
+      }
+
+      function resetS() {
+        ['s-root', 's-l2-1', 's-l2-2', 's-l2-3', 's-leaf-1', 's-leaf-2', 's-leaf-3', 's-leaf-4', 's-leaf-5', 's-leaf-6'].forEach(id => {
+            const el = document.getElementById(id);
+            if(el) el.setAttribute('opacity', '0.4');
+        });
+        const arrow = document.getElementById('s-path-arrow');
+        if(arrow) arrow.setAttribute('opacity', '0');
+        const box = document.getElementById('s-highlight-box');
+        if(box) {
+            box.setAttribute('opacity', '0');
+            box.setAttribute('stroke', '#fbbf24');
+            box.setAttribute('filter', 'url(#glow-search)');
+        }
+      }
+
+      function highlightNode(id, x, y, w, h) {
+        const el = document.getElementById(id);
+        if(el) el.setAttribute('opacity', '1');
+        
+        const box = document.getElementById('s-highlight-box');
+        if(box) {
+            box.setAttribute('x', x - w/2);
+            box.setAttribute('y', y - h/2);
+            box.setAttribute('width', w);
+            box.setAttribute('height', h);
+            box.setAttribute('opacity', '1');
+        }
+        
+        // Hide arrow when highlighting node
+        const arrow = document.getElementById('s-path-arrow');
+        if(arrow) arrow.setAttribute('opacity', '0');
+      }
+
+      function showArrow(x1, y1, x2, y2) {
+        const arrow = document.getElementById('s-path-arrow');
+        if(arrow) {
+            arrow.setAttribute('d', `M${x1} ${y1} L${x2} ${y2}`);
+            arrow.setAttribute('opacity', '1');
+        }
+      }
+      
+      // Range Demo Logic
+      const rSteps = [
+        {
+            text: '准备开始：查找范围 [30, 60]',
+            action: () => {
+                resetR();
+            }
+        },
+        {
+            text: '1. 定位起点 (Search 30)\n找到叶子节点 Leaf-2',
+            action: () => {
+                highlightRNode('r-leaf-2', 220, 280, 100, 60);
+                updateResult('30');
+            }
+        },
+        {
+            text: '2. 节点内遍历\nLeaf-2: 20 < 30 (命中), 30 <= 60 (命中)',
+            action: () => {
+                // Highlight stays
+            }
+        },
+        {
+            text: '3. 顺着链表找下一个节点\nJump to Leaf-3',
+            action: () => {
+                showRArrow(270, 280, 330, 280);
+            }
+        },
+        {
+            text: '4. 读取 Leaf-3 (40 | 50)\n都在范围内，全部收集',
+            action: () => {
+                highlightRNode('r-leaf-3', 380, 280, 100, 60);
+                updateResult('30, 40, 50');
+            }
+        },
+        {
+            text: '5. 顺着链表找下一个节点\nJump to Leaf-4',
+            action: () => {
+                showRArrow(430, 280, 470, 280);
+            }
+        },
+        {
+            text: '6. 读取 Leaf-4 (60 | 70)\n60 <= 60 (命中), 70 > 60 (停止)',
+            action: () => {
+                highlightRNode('r-leaf-4', 520, 280, 100, 60);
+                updateResult('30, 40, 50, 60');
+            }
+        },
+        {
+            text: '7. 结束\n无需回溯，扫描完成！',
+            action: () => {
+                const box = document.getElementById('r-highlight-box');
+                if(box) {
+                    box.setAttribute('stroke', '#10b981'); 
+                    box.setAttribute('filter', 'none');
+                }
+            }
+        }
+      ];
+
+      let rStep = 0;
+
+      function initRDemo() {
+        const btnNext = document.getElementById('btn-range-next');
+        const btnReset = document.getElementById('btn-range-reset');
+        if(btnNext) {
+            btnNext.onclick = () => {
+                if(rStep < rSteps.length - 1) {
+                    rStep++;
+                    renderRStep();
+                }
+            };
+        }
+        if(btnReset) {
+            btnReset.onclick = () => {
+                rStep = 0;
+                renderRStep();
+            };
+        }
+        // renderRStep(); // Wait for user
+      }
+
+      function renderRStep() {
+        const step = rSteps[rStep];
+        if(!step) return;
+        
+        const msgEl = document.getElementById('range-msg');
+        if(msgEl) msgEl.innerText = step.text;
+        
+        if(step.action) step.action();
+      }
+
+      function resetR() {
+        ['r-leaf-1', 'r-leaf-2', 'r-leaf-3', 'r-leaf-4', 'r-leaf-5', 'r-leaf-6'].forEach(id => {
+            const el = document.getElementById(id);
+            if(el) el.setAttribute('opacity', '0.4');
+        });
+        const arrow = document.getElementById('r-path-arrow');
+        if(arrow) arrow.setAttribute('opacity', '0');
+        const box = document.getElementById('r-highlight-box');
+        if(box) {
+            box.setAttribute('opacity', '0');
+            box.setAttribute('stroke', '#10b981');
+            box.setAttribute('filter', 'url(#glow-range)');
+        }
+        updateResult('');
+      }
+
+      function highlightRNode(id, x, y, w, h) {
+        const el = document.getElementById(id);
+        if(el) el.setAttribute('opacity', '1');
+        
+        const box = document.getElementById('r-highlight-box');
+        if(box) {
+            box.setAttribute('x', x - w/2);
+            box.setAttribute('y', y - h/2);
+            box.setAttribute('width', w);
+            box.setAttribute('height', h);
+            box.setAttribute('opacity', '1');
+        }
+        
+        const arrow = document.getElementById('r-path-arrow');
+        if(arrow) arrow.setAttribute('opacity', '0');
+      }
+
+      function showRArrow(x1, y1, x2, y2) {
+        const arrow = document.getElementById('r-path-arrow');
+        if(arrow) {
+            arrow.setAttribute('d', `M${x1} ${y1} L${x2} ${y2}`);
+            arrow.setAttribute('opacity', '1');
+        }
+      }
+
+      function updateResult(text) {
+        const el = document.getElementById('r-result-text');
+        if(el) el.textContent = text;
+      }
+
+      // Insertion Demo Logic
+      const iSteps = [
+        {
+            text: '准备开始：插入 Key = 3',
+            action: () => {
+                resetI();
+            }
+        },
+        {
+            text: '1. 查找目标叶子\n3 < 5, 目标在左子树 (Leaf L)',
+            action: () => {
+                const leafL = document.getElementById('i-leaf-l-rect');
+                if(leafL) {
+                    leafL.setAttribute('stroke', '#fbbf24'); // Highlight yellow
+                    leafL.setAttribute('stroke-width', '4');
+                }
+            }
+        },
+        {
+            text: '2. 尝试插入\nLeaf L [1, 2] + [3] -> [1, 2, 3] (Overflow!)',
+            action: () => {
+                // Show 3 entering
+                const animKey = document.getElementById('i-anim-key');
+                if(animKey) {
+                    animKey.setAttribute('x', '220');
+                    animKey.setAttribute('y', '250');
+                    animKey.setAttribute('opacity', '1');
+                    // Animate move into leaf
+                    animKey.innerHTML = '<animate attributeName="y" from="250" to="275" dur="0.5s" fill="freeze" />';
+                }
+            }
+        },
+        {
+            text: '3. 节点分裂 (Split)\n中间 Key = 2',
+            action: () => {
+                // Hide original L text
+                const leafLText = document.getElementById('i-leaf-l-text');
+                if(leafLText) leafLText.setAttribute('opacity', '0');
+                
+                // Show split visual: L becomes [1], New becomes [2, 3]
+                const leafLRect = document.getElementById('i-leaf-l-rect');
+                if(leafLRect) {
+                    leafLRect.setAttribute('width', '60');
+                    leafLRect.setAttribute('x', '-30'); // Center at 200 -> 170..230
+                    // Actually translate is 200. Rect x=-50 w=100 -> 150..250.
+                    // New: x=-40 w=80 -> 160..240.
+                    // Let's just change text for simplicity first
+                }
+                
+                // Visual trick: 
+                // 1. Change L text to "1"
+                if(leafLText) {
+                    leafLText.textContent = "1";
+                    leafLText.setAttribute('opacity', '1');
+                }
+                
+                // 2. Show New Node [2, 3]
+                const newLeaf = document.getElementById('i-leaf-new');
+                if(newLeaf) newLeaf.setAttribute('opacity', '1');
+                
+                // 3. Highlight split
+                const leafL = document.getElementById('i-leaf-l-rect');
+                if(leafL) leafL.setAttribute('stroke', '#ef4444'); // Red for split
+                const newLeafRect = newLeaf.querySelector('rect');
+                if(newLeafRect) newLeafRect.setAttribute('stroke', '#ef4444');
+                
+                // Hide anim key
+                const animKey = document.getElementById('i-anim-key');
+                if(animKey) animKey.setAttribute('opacity', '0');
+            }
+        },
+        {
+            text: '4. 中间 Key 上提 (Copy Up)\nKey 2 复制到父节点',
+            action: () => {
+                // Animate 2 moving up
+                const animKey = document.getElementById('i-anim-key');
+                if(animKey) {
+                    animKey.textContent = "2";
+                    animKey.setAttribute('x', '300'); // From new leaf center
+                    animKey.setAttribute('y', '270');
+                    animKey.setAttribute('opacity', '1');
+                    animKey.innerHTML = '<animate attributeName="y" from="270" to="80" dur="0.8s" fill="freeze" /><animate attributeName="x" from="300" to="350" dur="0.8s" fill="freeze" />';
+                }
+            }
+        },
+        {
+            text: '5. 更新父节点\nRoot: [ 2 | 5 ]',
+            action: () => {
+                 // Update Root
+                 const rootText = document.getElementById('i-root-text');
+                 if(rootText) rootText.textContent = "2 | 5";
+                 
+                 // Hide flying key
+                 const animKey = document.getElementById('i-anim-key');
+                 if(animKey) animKey.setAttribute('opacity', '0');
+                 
+                 // Reset colors
+                 const leafL = document.getElementById('i-leaf-l-rect');
+                 if(leafL) leafL.setAttribute('stroke', '#10b981');
+                 const newLeaf = document.getElementById('i-leaf-new');
+                 const newLeafRect = newLeaf.querySelector('rect');
+                 if(newLeafRect) newLeafRect.setAttribute('stroke', '#10b981');
+                 
+                 // Add edge to new leaf
+                 const edgeNew = document.getElementById('i-edge-new');
+                 if(edgeNew) edgeNew.setAttribute('opacity', '0.4');
+            }
+        },
+        {
+            text: '插入完成！\n树保持平衡',
+            action: () => {
+                const box = document.getElementById('i-root');
+                if(box) {
+                    const rect = box.querySelector('rect');
+                    if(rect) {
+                        rect.setAttribute('stroke', '#10b981');
+                        rect.setAttribute('stroke-width', '4');
+                    }
+                }
+            }
+        }
+      ];
+
+      let iStep = 0;
+
+      function initIDemo() {
+        const btnNext = document.getElementById('btn-insert-next');
+        const btnReset = document.getElementById('btn-insert-reset');
+        if(btnNext) {
+            btnNext.onclick = () => {
+                if(iStep < iSteps.length - 1) {
+                    iStep++;
+                    renderIStep();
+                }
+            };
+        }
+        if(btnReset) {
+            btnReset.onclick = () => {
+                iStep = 0;
+                renderIStep();
+            };
+        }
+      }
+
+      function renderIStep() {
+        const step = iSteps[iStep];
+        if(!step) return;
+        
+        const msgEl = document.getElementById('insert-msg');
+        if(msgEl) msgEl.innerText = step.text;
+        
+        if(step.action) step.action();
+      }
+
+      function resetI() {
+        // Reset Root
+        const rootText = document.getElementById('i-root-text');
+        if(rootText) rootText.textContent = "5";
+        const rootRect = document.querySelector('#i-root rect');
+        if(rootRect) {
+            rootRect.setAttribute('stroke', '#3b82f6');
+            rootRect.setAttribute('stroke-width', '2');
+        }
+
+        // Reset Leaf L
+        const leafLText = document.getElementById('i-leaf-l-text');
+        if(leafLText) {
+            leafLText.textContent = "1 | 2";
+            leafLText.setAttribute('opacity', '1');
+        }
+        const leafLRect = document.getElementById('i-leaf-l-rect');
+        if(leafLRect) {
+            leafLRect.setAttribute('stroke', '#10b981');
+            leafLRect.setAttribute('stroke-width', '2');
+            leafLRect.setAttribute('width', '100');
+            leafLRect.setAttribute('x', '-50');
+        }
+
+        // Hide New Leaf
+        const newLeaf = document.getElementById('i-leaf-new');
+        if(newLeaf) newLeaf.setAttribute('opacity', '0');
+        
+        // Hide New Edge
+        const edgeNew = document.getElementById('i-edge-new');
+        if(edgeNew) edgeNew.setAttribute('opacity', '0');
+        
+        // Hide Anim Key
+        const animKey = document.getElementById('i-anim-key');
+        if(animKey) {
+            animKey.setAttribute('opacity', '0');
+            animKey.innerHTML = '';
+        }
+      }
+
+      // Deletion Demo Logic
+      const dSteps = [
+        {
+            text: '准备开始：删除 Key = 25',
+            action: () => {
+                resetD();
+            }
+        },
+        {
+            text: '1. 找到 Key = 25 (Leaf R)',
+            action: () => {
+                const leafR = document.getElementById('d-leaf-r-rect');
+                if(leafR) {
+                    leafR.setAttribute('stroke', '#ef4444');
+                    leafR.setAttribute('stroke-width', '4');
+                }
+            }
+        },
+        {
+            text: '2. 删除 25 -> Leaf R 剩 [20] (Underflow!)',
+            action: () => {
+                const leafRText = document.getElementById('d-leaf-r-text');
+                if(leafRText) leafRText.textContent = "20"; 
+                const leafR = document.getElementById('d-leaf-r-rect');
+                if(leafR) leafR.setAttribute('stroke-dasharray', '5,5'); // Dotted line
+            }
+        },
+        {
+            text: '3. 检查兄弟 Leaf L\n有 3 个 Key，借一个还剩 2 (>= Min)，够借！',
+            action: () => {
+                const leafL = document.getElementById('d-leaf-l-rect');
+                if(leafL) {
+                    leafL.setAttribute('stroke', '#fbbf24'); // Highlight neighbor
+                    leafL.setAttribute('stroke-width', '4');
+                }
+            }
+        },
+        {
+            text: '4. 借位 (Borrow)\n从 L 移动最大值 15 到 R',
+            action: () => {
+                // Update L
+                const leafLText = document.getElementById('d-leaf-l-text');
+                if(leafLText) leafLText.textContent = "10 | 12";
+                
+                // Animate 15 flying
+                const animKey = document.getElementById('d-anim-key');
+                if(animKey) {
+                    animKey.setAttribute('x', '260'); 
+                    animKey.setAttribute('y', '285');
+                    animKey.setAttribute('opacity', '1');
+                    // Fly to R
+                    animKey.innerHTML = '<animate attributeName="x" from="260" to="460" dur="0.8s" fill="freeze" />';
+                }
+            }
+        },
+        {
+            text: '5. 更新节点与父索引\nR 变成 [15 | 20], Root 索引更新为 15',
+            action: () => {
+                // Update R
+                const leafRText = document.getElementById('d-leaf-r-text');
+                if(leafRText) leafRText.textContent = "15 | 20";
+                const leafR = document.getElementById('d-leaf-r-rect');
+                if(leafR) {
+                    leafR.setAttribute('stroke', '#10b981');
+                    leafR.setAttribute('stroke-dasharray', 'none');
+                }
+                
+                // Update Root
+                const rootText = document.getElementById('d-root-text');
+                if(rootText) rootText.textContent = "15";
+                
+                // Hide anim
+                const animKey = document.getElementById('d-anim-key');
+                if(animKey) animKey.setAttribute('opacity', '0');
+                
+                // Reset L color
+                const leafL = document.getElementById('d-leaf-l-rect');
+                if(leafL) leafL.setAttribute('stroke', '#10b981');
+            }
+        },
+        {
+            text: '删除完成！\n通过借位维持了平衡 (Min=2)',
+            action: () => {
+                // Final state
+            }
+        }
+      ];
+
+      let dStep = 0;
+
+      function initDDemo() {
+        const btnNext = document.getElementById('btn-delete-next');
+        const btnReset = document.getElementById('btn-delete-reset');
+        if(btnNext) {
+            btnNext.onclick = () => {
+                if(dStep < dSteps.length - 1) {
+                    dStep++;
+                    renderDStep();
+                }
+            };
+        }
+        if(btnReset) {
+            btnReset.onclick = () => {
+                dStep = 0;
+                renderDStep();
+            };
+        }
+      }
+
+      function renderDStep() {
+        const step = dSteps[dStep];
+        if(!step) return;
+        
+        const msgEl = document.getElementById('delete-msg');
+        if(msgEl) msgEl.innerText = step.text;
+        
+        if(step.action) step.action();
+      }
+
+      function resetD() {
+        // Reset Root
+        const rootText = document.getElementById('d-root-text');
+        if(rootText) rootText.textContent = "20";
+        
+        // Reset Leaf L
+        const leafLText = document.getElementById('d-leaf-l-text');
+        if(leafLText) leafLText.textContent = "10 | 12 | 15";
+        const leafL = document.getElementById('d-leaf-l-rect');
+        if(leafL) {
+            leafL.setAttribute('stroke', '#10b981');
+            leafL.setAttribute('stroke-width', '2');
+        }
+        
+        // Reset Leaf R
+        const leafRText = document.getElementById('d-leaf-r-text');
+        if(leafRText) leafRText.textContent = "20 | 25";
+        const leafR = document.getElementById('d-leaf-r-rect');
+        if(leafR) {
+            leafR.setAttribute('stroke', '#10b981');
+            leafR.setAttribute('stroke-width', '2');
+            leafR.setAttribute('stroke-dasharray', 'none');
+        }
+        
+        // Hide Anim
+        const animKey = document.getElementById('d-anim-key');
+        if(animKey) {
+            animKey.setAttribute('opacity', '0');
+            animKey.innerHTML = '';
+        }
+      }
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.has('page')) {
+        const page = parseInt(urlParams.get('page'));
+        if (!isNaN(page) && page > 0) currentSlide = page - 1;
+      }
+
+      function updateSlide() {
+        const slides = document.querySelectorAll('.slide');
+        if (currentSlide >= slides.length) currentSlide = slides.length - 1;
+        if (currentSlide < 0) currentSlide = 0;
+        
+        slides.forEach((slide, index) => {
+          slide.classList.remove('active');
+          if (index === currentSlide) slide.classList.add('active');
+        });
+        
+        if(pageNumberEl) pageNumberEl.textContent = `${currentSlide + 1} / ${slides.length}`;
+
+        try {
+          const url = new URL(window.location.href);
+          url.searchParams.set('page', currentSlide + 1);
+          window.history.replaceState(null, '', url.href);
+        } catch (e) {}
+      }
+      
+      function nextSlide() { 
+        if (currentSlide < document.querySelectorAll('.slide').length - 1) { 
+            currentSlide++; 
+            updateSlide(); 
+        } 
+      }
+      
+      function prevSlide() { 
+        if (currentSlide > 0) { 
+            currentSlide--; 
+            updateSlide(); 
+        } 
+      }
+      
+      function resizeApp() {
+        const app = document.getElementById('app');
+        const scale = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+        app.style.transform = `scale(${scale})`;
+      }
+      
+      window.addEventListener('resize', resizeApp);
+      window.addEventListener('load', () => { 
+        resizeApp(); 
+        updateSlide(); 
+        initSDemo();
+        initRDemo();
+        initIDemo();
+        initDDemo();
+      });
+      document.addEventListener('keydown', (e) => {
+        if (['ArrowRight', ' ', 'Enter'].includes(e.key)) nextSlide();
+        else if (e.key === 'ArrowLeft') prevSlide();
+      });
+    </script>
+  </body>
+</html>
