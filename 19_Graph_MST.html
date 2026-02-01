@@ -1,0 +1,1165 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>19 最小生成树：Prim与Kruskal</title>
+    <script src="https://unpkg.com/@tailwindcss/browser@4"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+    <style type="text/tailwindcss">
+      @theme {
+        --color-bg-dark: #030712;
+        --color-text-main: #f1f5f9;
+        --color-prim: #8b5cf6; /* Violet for Prim */
+        --color-kruskal: #06b6d4; /* Cyan for Kruskal */
+        --color-warn: #f59e0b;
+        --color-success: #22c55e;
+        --color-danger: #ef4444;
+        --color-code-bg: #1e293b;
+      }
+      @layer base {
+        body { @apply bg-black text-text-main font-sans overflow-hidden flex justify-center items-center h-screen; }
+      }
+      @layer utilities {
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes pulse-edge {
+            0% { stroke-width: 4; opacity: 0.6; }
+            50% { stroke-width: 8; opacity: 1; }
+            100% { stroke-width: 4; opacity: 0.6; }
+        }
+        .slide-container { @apply relative w-[1920px] h-[1080px] bg-bg-dark overflow-hidden shadow-2xl; }
+        .slide { @apply absolute inset-0 hidden flex-col p-14 opacity-0 transition-opacity duration-400 ease-in-out; }
+        .slide.active { @apply flex opacity-100; }
+        .bg-decoration { @apply absolute inset-0 z-0 pointer-events-none; background-image: radial-gradient(circle at 15% 15%, rgba(139,92,246,0.08) 0%, transparent 30%), radial-gradient(circle at 85% 85%, rgba(6,182,212,0.08) 0%, transparent 30%); }
+        .grid-overlay { @apply absolute inset-0 z-0; background-size: 60px 60px; background-image: linear-gradient(to right, rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.02) 1px, transparent 1px); }
+        
+        h1 { @apply text-[100px] font-extrabold leading-tight mb-8; background: linear-gradient(135deg, #fff 0%, var(--color-kruskal) 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+        h2 { @apply text-[64px] mb-8 text-white inline-block pb-4 border-b-4 border-white/20; }
+        h3 { @apply text-[42px] mb-6 text-kruskal; }
+        p { @apply text-[32px] mb-4 text-slate-200 leading-relaxed; }
+        .slide-content li { @apply text-[32px] mb-4 text-slate-200; }
+        strong { @apply text-white font-bold; }
+        
+        .card { @apply bg-white/5 border border-white/10 rounded-3xl p-8 mb-6 backdrop-blur-sm shadow-lg; }
+        .code-block { @apply font-mono bg-code-bg p-6 rounded-2xl border border-slate-700 text-[22px] leading-relaxed text-slate-200 overflow-auto whitespace-pre; }
+        
+        /* Syntax Highlighting */
+        .code-kw { @apply text-[#c678dd]; }
+        .code-type { @apply text-[#e5c07b]; }
+        .code-cm { @apply text-[#94a3b8] italic; }
+        .code-num { @apply text-[#d19a66]; }
+        .code-str { @apply text-[#98c379]; }
+        .code-fn { @apply text-[#61afef]; }
+
+        .btn-primary { @apply px-6 py-3 bg-prim/20 border border-prim/50 rounded-xl text-prim font-bold text-[24px] cursor-pointer transition-all hover:bg-prim/30 hover:scale-105 active:scale-95; }
+        .btn-secondary { @apply px-6 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-slate-200 font-bold text-[24px] cursor-pointer transition-all hover:bg-slate-600/50; }
+        
+        /* Custom Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar { width: 10px; height: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #1e293b; border-radius: 5px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; border-radius: 5px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app" class="slide-container">
+      <div class="bg-decoration"></div>
+      <div class="grid-overlay"></div>
+
+      <!-- P01: 封面 -->
+      <section class="slide active justify-center items-center text-center" data-title="封面">
+        <div class="flex flex-col items-center z-10 relative -mt-20">
+          <div class="flex gap-16 mb-12">
+             <!-- Network Icon -->
+             <div class="w-40 h-40 relative">
+                 <div class="absolute inset-0 border-4 border-prim/30 rounded-full animate-[spin_10s_linear_infinite]"></div>
+                 <div class="absolute inset-4 border-4 border-kruskal/30 rounded-full animate-[spin_15s_linear_infinite_reverse]"></div>
+                 <div class="absolute inset-0 flex items-center justify-center">
+                     <i class="fas fa-project-diagram text-7xl text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.5)]"></i>
+                 </div>
+             </div>
+          </div>
+
+          <div class="bg-slate-800/50 px-8 py-3 rounded-full border border-slate-600 mb-8 backdrop-blur-md">
+            <span class="text-slate-300 text-2xl font-mono tracking-[0.2em]">GRAPH ALGORITHMS</span>
+          </div>
+          
+          <h1>数据结构与算法</h1>
+          <p class="text-[56px] text-slate-300 mt-4">最小生成树 (MST)</p>
+          <div class="mt-12 flex gap-12 text-[32px] text-slate-400 font-mono">
+            <span class="flex items-center"><span class="text-prim font-bold mr-2">Prim</span> 算法</span>
+            <span class="text-slate-600">|</span>
+            <span class="flex items-center"><span class="text-kruskal font-bold mr-2">Kruskal</span> 算法</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- P02: 核心问题 -->
+      <section class="slide" data-title="核心问题">
+        <h2>什么是最小生成树？</h2>
+        <div class="grid grid-cols-2 gap-16 flex-1 min-h-0 items-center">
+            <div class="flex flex-col gap-8">
+                <div class="card border-l-8 border-warn">
+                    <h3 class="text-warn text-[40px] mb-4"><i class="fas fa-map-marked-alt mr-4"></i>修路问题</h3>
+                    <p class="text-[32px] text-white leading-relaxed">
+                        假设有 <span class="font-mono text-warn">n</span> 个城市，需要在它们之间铺设光缆。
+                        已知任意两个城市间的铺设成本。
+                        <br/>
+                        <strong class="text-warn">目标：</strong>如何选择线路，使得所有城市<strong class="text-white">相互连通</strong>，且<strong class="text-white">总成本最低</strong>？
+                    </p>
+                </div>
+                <div class="card bg-slate-800/30">
+                    <h3 class="text-slate-200 text-[32px] mb-6">定义：MST</h3>
+                    <ul class="space-y-6 text-[28px] text-slate-300">
+                        <li><i class="fas fa-check text-green-500 mr-3"></i> <strong>生成树</strong>：包含图中所有顶点，且没有环的子图（V个顶点，V-1条边）。</li>
+                        <li><i class="fas fa-check text-green-500 mr-3"></i> <strong>最小</strong>：边的权值之和最小。</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <!-- Visual Metaphor -->
+            <div class="flex flex-col items-center justify-center relative h-full">
+                <svg width="800" height="650" viewBox="0 0 800 650" class="overflow-visible">
+                    <!-- Complete Graph (Faint Background) -->
+                    <g opacity="0.15" stroke="#fff" stroke-width="2" stroke-dasharray="8,8">
+                        <!-- Outer Cycle -->
+                        <line x1="200" y1="150" x2="600" y2="150" /> <!-- 1-2 -->
+                        <line x1="600" y1="150" x2="550" y2="500" /> <!-- 2-5 -->
+                        <line x1="550" y1="500" x2="250" y2="500" /> <!-- 5-4 -->
+                        <line x1="250" y1="500" x2="200" y2="150" /> <!-- 4-1 -->
+                        
+                        <!-- Inner Connections -->
+                        <line x1="200" y1="150" x2="400" y2="300" /> <!-- 1-3 -->
+                        <line x1="600" y1="150" x2="400" y2="300" /> <!-- 2-3 -->
+                        <line x1="250" y1="500" x2="400" y2="300" /> <!-- 4-3 -->
+                        <line x1="550" y1="500" x2="400" y2="300" /> <!-- 5-3 -->
+                        
+                        <!-- Cross -->
+                        <line x1="200" y1="150" x2="550" y2="500" /> <!-- 1-5 -->
+                        <line x1="600" y1="150" x2="250" y2="500" /> <!-- 2-4 -->
+                    </g>
+
+                    <!-- MST (Highlight - Tree Structure) -->
+                    <g stroke="#22c55e" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" fill="none">
+                        <!-- 3 is the "hub" -->
+                        <path d="M200,150 L400,300" /> <!-- 1-3 -->
+                        <path d="M600,150 L400,300" /> <!-- 2-3 -->
+                        <path d="M250,500 L400,300" /> <!-- 4-3 -->
+                        <path d="M550,500 L250,500" /> <!-- 5-4 (Branching from 4) -->
+                    </g>
+                    
+                    <!-- Nodes -->
+                    <!-- 1 --> <circle cx="200" cy="150" r="25" fill="#030712" stroke="#fff" stroke-width="3"/>
+                    <!-- 2 --> <circle cx="600" cy="150" r="25" fill="#030712" stroke="#fff" stroke-width="3"/>
+                    <!-- 3 --> <circle cx="400" cy="300" r="30" fill="#030712" stroke="#22c55e" stroke-width="4"/>
+                    <!-- 4 --> <circle cx="250" cy="500" r="25" fill="#030712" stroke="#fff" stroke-width="3"/>
+                    <!-- 5 --> <circle cx="550" cy="500" r="25" fill="#030712" stroke="#fff" stroke-width="3"/>
+                    
+                    <text x="400" y="600" text-anchor="middle" fill="#22c55e" font-size="32" font-weight="bold">
+                        V=5, E=4 (无环, 连通)
+                    </text>
+                </svg>
+            </div>
+        </div>
+      </section>
+
+      <!-- P03: Prim 概念 -->
+      <section class="slide" data-title="Prim概念">
+        <h2>Prim 算法：加点法</h2>
+        <div class="grid grid-cols-2 gap-12 flex-1 min-h-0">
+            <div class="flex flex-col">
+                <div class="card border-l-8 border-prim">
+                    <h3 class="text-prim text-[36px] mb-4">核心思想</h3>
+                    <p class="text-[28px] text-slate-200 leading-relaxed">
+                        从任意一个顶点出发，将其视为“已生成的树”。
+                        <br/>
+                        每次从<strong class="text-white">“树外”</strong>的节点中，挑选一个距离<strong class="text-white">“树”</strong>最近的节点，加入到树中。
+                    </p>
+                    <div class="mt-4 p-4 bg-black/30 rounded-xl">
+                        <p class="text-[24px] text-slate-400 m-0">
+                            像霉菌吞噬食物一样，不断向外扩张。
+                        </p>
+                    </div>
+                </div>
+                <div class="card bg-slate-800/30 mt-4">
+                    <h3 class="text-white text-[30px] mb-4">关键数据结构</h3>
+                    <ul class="space-y-4 text-[26px] text-slate-300">
+                        <li><span class="font-mono text-prim">adjvex[i]</span>：记录节点 i 依附在树上的哪个节点（即父节点）。</li>
+                        <li><span class="font-mono text-prim">lowcost[i]</span>：记录节点 i 到<strong class="text-white">当前生成树集合</strong>的最小距离。</li>
+                        <li class="pl-8 text-slate-400 text-[22px]">若 <span class="font-mono">lowcost[i] == 0</span>，表示节点 i 已在树中。</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="flex items-center justify-center">
+                <!-- Prim Concept Viz -->
+                <svg width="700" height="600" viewBox="0 0 700 600" class="overflow-visible">
+                    <defs>
+                        <radialGradient id="grad-prim" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
+                            <stop offset="0%" style="stop-color:#8b5cf6;stop-opacity:0.3" />
+                            <stop offset="100%" style="stop-color:#8b5cf6;stop-opacity:0" />
+                        </radialGradient>
+                        <marker id="arrow-success" markerWidth="3" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+                            <path d="M0,0 L0,6 L9,3 z" fill="#22c55e" />
+                        </marker>
+                    </defs>
+                    
+                    <!-- The "Cloud" / Tree -->
+                    <circle cx="280" cy="300" r="200" fill="url(#grad-prim)" />
+                    <path d="M280,300 m-140,0 a140,140 0 1,0 280,0 a140,140 0 1,0 -280,0" fill="none" stroke="#8b5cf6" stroke-width="2" stroke-dasharray="8,8" />
+                    
+                    <!-- Edges (Draw first to be behind nodes) -->
+                    <line x1="200" y1="240" x2="340" y2="260" stroke="#8b5cf6" stroke-width="4" />
+                    <line x1="340" y1="260" x2="280" y2="380" stroke="#8b5cf6" stroke-width="4" />
+                    
+                    <!-- Edges to Candidate 1 -->
+                    <line x1="340" y1="260" x2="550" y2="300" stroke="#fff" stroke-width="2" stroke-dasharray="8,8" />
+                    <text x="445" y="270" fill="#fff" font-size="24">5</text>
+                    
+                    <line x1="280" y1="380" x2="550" y2="300" stroke="#fff" stroke-width="2" stroke-dasharray="8,8" />
+                    <text x="430" y="360" fill="#fff" font-size="24">8</text>
+
+                    <!-- Edges to Candidate 2 (New) -->
+                    <line x1="280" y1="380" x2="480" y2="500" stroke="#fff" stroke-width="2" stroke-dasharray="8,8" />
+                    <text x="395" y="480" fill="#fff" font-size="24">6</text>
+
+                    <!-- Nodes in Tree -->
+                    <circle cx="200" cy="240" r="25" fill="#030712" stroke="#8b5cf6" stroke-width="4" />
+                    <circle cx="340" cy="260" r="25" fill="#030712" stroke="#8b5cf6" stroke-width="4" />
+                    <circle cx="280" cy="380" r="25" fill="#030712" stroke="#8b5cf6" stroke-width="4" />
+
+                    <!-- Candidate Node 1 -->
+                    <circle cx="550" cy="300" r="25" fill="#334155" stroke="#fff" stroke-width="3" />
+                    <text x="550" y="350" text-anchor="middle" fill="#fff" font-size="24">A</text>
+
+                    <!-- Candidate Node 2 -->
+                    <circle cx="480" cy="500" r="25" fill="#334155" stroke="#fff" stroke-width="3" />
+                    <text x="480" y="550" text-anchor="middle" fill="#fff" font-size="24">B</text>
+                    
+                    <!-- Selection Arrow -->
+                    <text x="460" y="210" fill="#22c55e" font-size="28">Select Min(5)</text>
+                </svg>
+            </div>
+        </div>
+      </section>
+
+      <!-- P04: Prim 演示 -->
+      <section class="slide" data-title="Prim演示">
+        <h2>Prim 算法演示</h2>
+        <div class="flex gap-8 flex-1 min-h-0 w-full">
+            <!-- Left: Graph -->
+            <div class="w-3/5 bg-slate-900/50 rounded-3xl border border-slate-700 relative flex items-center justify-center">
+                <svg id="prim-svg" width="100%" height="100%" viewBox="0 0 800 600" class="overflow-visible">
+                    <g id="prim-edges"></g>
+                    <g id="prim-nodes"></g>
+                </svg>
+                <div class="absolute top-4 left-4 text-slate-400 font-mono">Graph G</div>
+            </div>
+
+            <!-- Right: State -->
+            <div class="w-2/5 flex flex-col gap-6">
+                <!-- Lowcost Table -->
+                <div class="flex-1 bg-slate-800/30 rounded-2xl border border-slate-700 p-6 flex flex-col">
+                    <h3 class="text-white text-[24px] mb-4 border-b border-slate-600 pb-2">
+                        <i class="fas fa-table mr-2 text-prim"></i>lowcost 数组
+                    </h3>
+                    <div class="flex-1 overflow-y-auto custom-scrollbar">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="text-slate-400 text-lg border-b border-slate-600">
+                                    <th class="p-2">Node</th>
+                                    <th class="p-2">Cost (Dist to Tree)</th>
+                                    <th class="p-2">Parent</th>
+                                </tr>
+                            </thead>
+                            <tbody id="prim-table-body" class="text-xl font-mono">
+                                <!-- Rows injected here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div id="prim-status" class="text-prim text-[24px] font-mono h-16 leading-tight">Ready...</div>
+                <!-- Controls -->
+                <div class="flex gap-4">
+                    <button onclick="prevPrimStep()" class="btn-secondary flex-1"><i class="fas fa-step-backward mr-2"></i>上一步</button>
+                    <button onclick="resetPrimStep()" class="btn-secondary w-16"><i class="fas fa-undo"></i></button>
+                    <button onclick="nextPrimStep()" class="btn-primary flex-1">下一步<i class="fas fa-step-forward ml-2"></i></button>
+                </div>
+            </div>
+        </div>
+      </section>
+
+      <!-- P05: Prim 代码 -->
+      <section class="slide" data-title="Prim代码">
+        <h2>Prim 代码实现 </h2>
+        <div class="grid grid-cols-2 gap-8 flex-1 min-h-0">
+            <div class="code-block h-full custom-scrollbar text-[18px]"><span class="code-type">void</span> <span class="code-fn">MiniSpanTree_Prim</span>(<span class="code-type">MGraph</span> G) {
+    <span class="code-type">int</span> min, i, j, k;
+    <span class="code-type">int</span> adjvex[MAXV];  <span class="code-cm">// 保存相关顶点下标（构建MST）</span>
+    <span class="code-type">int</span> lowcost[MAXV]; <span class="code-cm">// 保存相关顶点间边的权值</span>
+    
+    <span class="code-cm">// 1. 初始化：从顶点0开始构建</span>
+    lowcost[0] = 0;    <span class="code-cm">// lowcost[i]=0 表示 i 已加入MST</span>
+    adjvex[0] = 0;
+    <span class="code-kw">for</span>(i = 1; i < G.numV; i++) {
+        lowcost[i] = G.arc[0][i]; <span class="code-cm">// 将与0相连的边权值存入</span>
+        adjvex[i] = 0;
+    }
+
+    <span class="code-cm">// 2. 循环 n-1 次，找剩余的 n-1 个顶点</span>
+    <span class="code-kw">for</span>(i = 1; i < G.numV; i++) {
+        min = INF;
+        j = 1; k = 0;
+        
+        <span class="code-cm">// 寻找离当前MST最近的顶点 k</span>
+        <span class="code-kw">while</span>(j < G.numV) {
+            <span class="code-kw">if</span>(lowcost[j] != 0 && lowcost[j] < min) {
+                min = lowcost[j];
+                k = j; <span class="code-cm">// k 记录最小值的下标</span>
+            }
+            j++;
+        }
+        
+        <span class="code-fn">printf</span>(<span class="code-str">"(%d, %d) "</span>, adjvex[k], k); <span class="code-cm">// 打印当前最小边</span>
+        lowcost[k] = 0; <span class="code-cm">// 将 k 加入MST（标记为0）</span>
+        
+        <span class="code-cm">// 3. 更新 lowcost 数组（更新邻居距离）</span>
+        <span class="code-kw">for</span>(j = 1; j < G.numV; j++) {
+            <span class="code-kw">if</span>(lowcost[j] != 0 && G.arc[k][j] < lowcost[j]) {
+                lowcost[j] = G.arc[k][j]; <span class="code-cm">// 发现通过 k 到 j 更近</span>
+                adjvex[j] = k;            <span class="code-cm">// 更新 j 的父节点为 k</span>
+            }
+        }
+    }
+}</div>
+            <div class="flex flex-col gap-6">
+                <div class="card border-l-8 border-prim">
+                    <h3 class="text-white text-[32px] mb-4">复杂度分析</h3>
+                    <ul class="space-y-4 text-[26px] text-slate-300">
+                        <li><strong class="text-prim">时间复杂度</strong>：<span class="font-mono text-warn">O(V²)</span>。</li>
+                        <li>双重循环：外层循环 V 次，内层查找最小值 + 更新数组也是 V 次。</li>
+                        <li><strong class="text-white">适用场景</strong>：<strong class="text-prim">稠密图</strong>（边数非常多时），因为其复杂度与边数无关。</li>
+                    </ul>
+                </div>
+                <div class="card bg-slate-800/30">
+                    <h3 class="text-white text-[32px] mb-4">关键逻辑</h3>
+                    <p class="text-[26px] text-slate-200">
+                        核心在于 <span class="font-mono text-prim">lowcost[j] = 0</span> 这一句，它标记了节点 j 已经“入伙”。
+                        <br/>
+                        每次新节点入伙后，都要用它去“更新”周围邻居到组织的距离。
+                    </p>
+                </div>
+            </div>
+        </div>
+      </section>
+
+      <!-- P06: Kruskal 概念 -->
+      <section class="slide" data-title="Kruskal概念">
+        <h2>Kruskal 算法：加边法</h2>
+        <div class="grid grid-cols-2 gap-12 flex-1 min-h-0">
+            <div class="flex flex-col">
+                <div class="card border-l-8 border-kruskal">
+                    <h3 class="text-kruskal text-[36px] mb-4">核心思想</h3>
+                    <p class="text-[28px] text-slate-200 leading-relaxed">
+                        不属于任何一个点，而是着眼于<strong class="text-white">边</strong>。
+                        <br/>
+                        将所有边按权值<strong class="text-white">从小到大排序</strong>，依次尝试加入。
+                        <br/>
+                        如果加入某条边会<strong class="text-danger">形成环</strong>，则丢弃；否则保留。
+                    </p>
+                </div>
+                <div class="card bg-slate-800/30 mt-4">
+                    <h3 class="text-white text-[30px] mb-4">关键技术：并查集</h3>
+                    <ul class="space-y-4 text-[26px] text-slate-300">
+                        <li><strong class="text-kruskal">判环</strong>：如何快速判断两个点是否已经连通？</li>
+                        <li><span class="font-mono text-white">Find(x)</span>：查找 x 所属集合的根节点。</li>
+                        <li><span class="font-mono text-white">Union(x, y)</span>：合并两个集合。</li>
+                        <li>若 <span class="font-mono">Find(u) == Find(v)</span>，说明 u, v 已连通，加边必成环 -> <span class="text-danger">Skip</span>。</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="flex items-center justify-center">
+                <!-- Kruskal Concept Viz -->
+                <svg width="700" height="600" viewBox="0 0 700 600" class="overflow-visible">
+                    <!-- Edge Attempt (Draw First so it's behind nodes) -->
+                    <line x1="250" y1="200" x2="450" y2="450" stroke="#fff" stroke-width="6" stroke-dasharray="12,12" />
+                    <text x="360" y="320" fill="#fff" font-size="32" font-weight="bold">?</text>
+
+                    <!-- Forest -->
+                    <g id="kruskal-forest">
+                        <!-- Set A -->
+                        <ellipse cx="210" cy="200" rx="110" ry="80" fill="rgba(6,182,212,0.1)" stroke="#06b6d4" stroke-width="2" stroke-dasharray="8,8"/>
+                        <line x1="170" y1="200" x2="250" y2="200" stroke="#06b6d4" stroke-width="4"/>
+                        <circle cx="170" cy="200" r="25" fill="#030712" stroke="#06b6d4" stroke-width="4" />
+                        <circle cx="250" cy="200" r="25" fill="#030712" stroke="#06b6d4" stroke-width="4" />
+
+                        <!-- Set B -->
+                        <ellipse cx="490" cy="450" rx="110" ry="80" fill="rgba(236,72,153,0.1)" stroke="#ec4899" stroke-width="2" stroke-dasharray="8,8"/>
+                        <line x1="450" y1="450" x2="530" y2="450" stroke="#ec4899" stroke-width="4"/>
+                        <circle cx="450" cy="450" r="25" fill="#030712" stroke="#ec4899" stroke-width="4" />
+                        <circle cx="530" cy="450" r="25" fill="#030712" stroke="#ec4899" stroke-width="4" />
+                    </g>
+                    
+                    <!-- Logic -->
+                    <g transform="translate(480, 100)">
+                        <text x="0" y="0" fill="#fff" font-size="28">Find(u) = <tspan fill="#06b6d4">Blue</tspan></text>
+                        <text x="0" y="40" fill="#fff" font-size="28">Find(v) = <tspan fill="#ec4899">Pink</tspan></text>
+                        <text x="0" y="90" fill="#22c55e" font-size="28" font-weight="bold">Different -> Union!</text>
+                    </g>
+                </svg>
+            </div>
+        </div>
+      </section>
+
+      <!-- P07: Kruskal 演示 -->
+      <section class="slide" data-title="Kruskal演示">
+        <h2>Kruskal 算法演示</h2>
+        <div class="flex gap-8 flex-1 min-h-0 w-full">
+            <!-- Left: Graph -->
+            <div class="w-3/5 bg-slate-900/50 rounded-3xl border border-slate-700 relative flex items-center justify-center">
+                <svg id="kruskal-svg" width="100%" height="100%" viewBox="0 0 800 600" class="overflow-visible">
+                    <g id="kruskal-edges"></g>
+                    <g id="kruskal-nodes"></g>
+                </svg>
+                <div class="absolute top-4 left-4 text-slate-400 font-mono">Graph G</div>
+            </div>
+
+            <!-- Right: State -->
+            <div class="w-2/5 flex flex-col gap-6">
+                <!-- Edge List -->
+                <div class="flex-1 bg-slate-800/30 rounded-2xl border border-slate-700 p-6 flex flex-col">
+                    <h3 class="text-white text-[24px] mb-4 border-b border-slate-600 pb-2">
+                        <i class="fas fa-list-ol mr-2 text-kruskal"></i>排序边集 (Sorted Edges)
+                    </h3>
+                    <div class="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar pr-2">
+                        <div id="kruskal-edge-list" class="flex flex-col gap-2 p-2">
+                            <!-- Edge items injected here -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Union Find Status (Removed unused container) -->
+                
+                <div id="kruskal-status" class="text-kruskal text-[24px] font-mono h-16 leading-tight">Ready...</div>
+
+                <!-- Controls -->
+                <div class="flex gap-4">
+                    <button onclick="prevKruskalStep()" class="btn-secondary flex-1"><i class="fas fa-step-backward mr-2"></i>上一步</button>
+                    <button onclick="resetKruskalStep()" class="btn-secondary w-16"><i class="fas fa-undo"></i></button>
+                    <button onclick="nextKruskalStep()" class="btn-primary flex-1">下一步<i class="fas fa-step-forward ml-2"></i></button>
+                </div>
+            </div>
+        </div>
+      </section>
+
+      <!-- P08: Kruskal 代码 -->
+      <section class="slide" data-title="Kruskal代码">
+        <h2>Kruskal 代码实现 </h2>
+        <div class="grid grid-cols-2 gap-8 flex-1 min-h-0">
+            <div class="code-block h-full custom-scrollbar text-[18px]"><span class="code-kw">typedef struct</span> {
+    <span class="code-type">int</span> begin, end, weight;
+} <span class="code-type">Edge</span>;
+
+<span class="code-cm">// 查找集合根节点</span>
+<span class="code-type">int</span> <span class="code-fn">Find</span>(<span class="code-type">int</span> *parent, <span class="code-type">int</span> f) {
+    <span class="code-kw">while</span>(parent[f] > 0) f = parent[f];
+    <span class="code-kw">return</span> f;
+}
+
+<span class="code-type">void</span> <span class="code-fn">MiniSpanTree_Kruskal</span>(<span class="code-type">MGraph</span> G) {
+    <span class="code-type">int</span> i, n, m;
+    <span class="code-type">Edge</span> edges[MAXE]; <span class="code-cm">// 边集数组</span>
+    <span class="code-type">int</span> parent[MAXV]; <span class="code-cm">// 并查集数组（判断环）</span>
+
+    <span class="code-fn">sort</span>(edges); <span class="code-cm">// 1. 核心：将边按权值从小到大排序</span>
+
+    <span class="code-kw">for</span>(i = 0; i < G.numV; i++) parent[i] = 0; <span class="code-cm">// 初始化并查集</span>
+
+    <span class="code-kw">for</span>(i = 0; i < G.numE; i++) {
+        n = <span class="code-fn">Find</span>(parent, edges[i].begin); <span class="code-cm">// 查找起点所属集合</span>
+        m = <span class="code-fn">Find</span>(parent, edges[i].end);   <span class="code-cm">// 查找终点所属集合</span>
+        
+        <span class="code-cm">// 2. 若不属于同一集合（说明无环）</span>
+        <span class="code-kw">if</span>(n != m) {
+            parent[n] = m; <span class="code-cm">// 合并两个集合</span>
+            <span class="code-fn">printf</span>(<span class="code-str">"(%d, %d) "</span>, edges[i].begin, edges[i].end);
+        }
+    }
+}</div>
+            <div class="flex flex-col gap-6">
+                <div class="card border-l-8 border-kruskal">
+                    <h3 class="text-white text-[32px] mb-4">复杂度分析</h3>
+                    <ul class="space-y-4 text-[26px] text-slate-300">
+                        <li><strong class="text-kruskal">时间复杂度</strong>：<span class="font-mono text-warn">O(E log E)</span>。</li>
+                        <li>主要耗时在<strong class="text-white">排序</strong>上。并查集的操作接近 O(1)。</li>
+                        <li><strong class="text-white">适用场景</strong>：<strong class="text-kruskal">稀疏图</strong>（边数较少时），因为只与边数 E 有关。</li>
+                    </ul>
+                </div>
+                <div class="card bg-slate-800/30">
+                    <h3 class="text-white text-[32px] mb-4">实现细节</h3>
+                    <p class="text-[26px] text-slate-200">
+                        <span class="font-mono text-kruskal">parent[]</span> 数组初始化为 0。
+                        <br/>
+                        <span class="font-mono">Find</span> 函数通过不断向上找父节点直到为 0 来找到根。
+                        <br/>
+                        路径压缩（Path Compression）可进一步优化查找效率。
+                    </p>
+                </div>
+            </div>
+        </div>
+      </section>
+
+      <!-- P09: 对比与小结 -->
+      <section class="slide" data-title="对比与小结">
+        <h2>Prim vs Kruskal</h2>
+        <div class="flex flex-col items-center justify-center flex-1 min-h-0 w-full">
+            <div class="w-full max-w-[1600px] overflow-hidden rounded-3xl border border-slate-700 shadow-2xl mb-8">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-800 text-white text-[32px]">
+                            <th class="p-6 border-b border-slate-600">维度</th>
+                            <th class="p-6 border-b border-slate-600 text-prim">Prim 算法</th>
+                            <th class="p-6 border-b border-slate-600 text-kruskal">Kruskal 算法</th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-[28px] text-slate-200 bg-slate-900/50">
+                        <tr class="hover:bg-slate-800/50 transition-colors">
+                            <td class="p-6 border-b border-slate-700 font-bold text-white">核心策略</td>
+                            <td class="p-6 border-b border-slate-700">加点法 (Growing Tree)</td>
+                            <td class="p-6 border-b border-slate-700">加边法 (Forest Merger)</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition-colors">
+                            <td class="p-6 border-b border-slate-700 font-bold text-white">时间复杂度</td>
+                            <td class="p-6 border-b border-slate-700"><span class="font-mono">O(V²)</span> (普通) / <span class="font-mono">O(E log V)</span> (堆优化)</td>
+                            <td class="p-6 border-b border-slate-700"><span class="font-mono">O(E log E)</span> (排序)</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition-colors">
+                            <td class="p-6 border-b border-slate-700 font-bold text-white">适用场景</td>
+                            <td class="p-6 border-b border-slate-700"><strong class="text-prim">稠密图</strong> (边多)</td>
+                            <td class="p-6 border-b border-slate-700"><strong class="text-kruskal">稀疏图</strong> (边少)</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition-colors">
+                            <td class="p-6 font-bold text-white">数据结构</td>
+                            <td class="p-6">lowcost 数组</td>
+                            <td class="p-6">并查集 (Union-Find)</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="bg-slate-800/50 border border-slate-600 px-12 py-6 rounded-2xl text-center">
+                <p class="text-[32px] text-slate-300">
+                    <i class="fas fa-lightbulb text-yellow-500 mr-3"></i> 
+                    两者都是<strong class="text-white">贪心算法 (Greedy)</strong> 的经典应用，都基于<strong class="text-white">切分定理</strong>。
+                </p>
+            </div>
+        </div>
+      </section>
+
+      <!-- Page Number -->
+      <div id="page-number" class="absolute bottom-6 right-8 text-slate-400 text-[24px] font-mono z-50"></div>
+    </div>
+
+    <script>
+      // --- SLIDESHOW LOGIC ---
+      let currentSlide = 0;
+      const pageNumberEl = document.getElementById('page-number');
+      
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.has('page')) {
+        const page = parseInt(urlParams.get('page'));
+        if (!isNaN(page) && page > 0) currentSlide = page - 1;
+      }
+
+      function updateSlide() {
+        const slides = document.querySelectorAll('.slide');
+        if (currentSlide >= slides.length) currentSlide = slides.length - 1;
+        if (currentSlide < 0) currentSlide = 0;
+        
+        slides.forEach((slide, index) => {
+          slide.classList.remove('active');
+          if (index === currentSlide) {
+            slide.classList.add('active');
+            const title = slide.getAttribute('data-title');
+            if (title === 'Prim演示' && document.getElementById('prim-nodes').children.length === 0) {
+                initPrimDemo();
+            } else if (title === 'Kruskal演示' && document.getElementById('kruskal-nodes').children.length === 0) {
+                initKruskalDemo();
+            }
+          }
+        });
+        
+        if(pageNumberEl) pageNumberEl.textContent = `${currentSlide + 1} / ${slides.length}`;
+
+        try {
+          const url = new URL(window.location.href);
+          url.searchParams.set('page', currentSlide + 1);
+          window.history.replaceState(null, '', url.href);
+        } catch (e) {}
+      }
+      
+      function nextSlide() { 
+        if (currentSlide < document.querySelectorAll('.slide').length - 1) { 
+            currentSlide++; 
+            updateSlide(); 
+        } 
+      }
+      
+      function prevSlide() { 
+        if (currentSlide > 0) { 
+            currentSlide--; 
+            updateSlide(); 
+        } 
+      }
+      
+      function resizeApp() {
+        const app = document.getElementById('app');
+        const scale = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+        app.style.transform = `scale(${scale})`;
+      }
+      
+      window.addEventListener('resize', resizeApp);
+      window.addEventListener('load', () => { 
+        resizeApp(); 
+        updateSlide(); 
+      });
+      document.addEventListener('keydown', (e) => {
+        if (['ArrowRight', ' ', 'Enter'].includes(e.key)) nextSlide();
+        else if (e.key === 'ArrowLeft') prevSlide();
+      });
+
+      // --- GRAPH DATA (Shared) ---
+      const graphNodes = [
+          { id: 'A', x: 200, y: 100 },
+          { id: 'B', x: 600, y: 100 },
+          { id: 'C', x: 400, y: 250 },
+          { id: 'D', x: 150, y: 400 },
+          { id: 'E', x: 650, y: 400 },
+          { id: 'F', x: 400, y: 500 }
+      ];
+      // Weighted Edges
+      const graphEdges = [
+          { u: 'A', v: 'B', w: 6 },
+          { u: 'A', v: 'C', w: 1 },
+          { u: 'A', v: 'D', w: 5 },
+          { u: 'B', v: 'C', w: 5 },
+          { u: 'B', v: 'E', w: 3 },
+          { u: 'C', v: 'D', w: 5 },
+          { u: 'C', v: 'E', w: 6 },
+          { u: 'C', v: 'F', w: 4 },
+          { u: 'D', v: 'F', w: 2 },
+          { u: 'E', v: 'F', w: 6 }
+      ];
+
+      // --- PRIM ALGORITHM LOGIC ---
+      let primSteps = [];
+      let primCurrentStep = -1;
+      const INF = 999;
+
+      function generatePrimSteps() {
+          primSteps = [];
+          const n = graphNodes.length;
+          const visited = new Array(n).fill(false);
+          const lowcost = new Array(n).fill(INF);
+          const adjvex = new Array(n).fill(-1); // Parent
+          
+          // Map ID to Index
+          const idToIndex = {};
+          graphNodes.forEach((node, i) => idToIndex[node.id] = i);
+          
+          // Adj Matrix
+          const G = Array.from({length: n}, () => Array(n).fill(INF));
+          graphEdges.forEach(e => {
+              const u = idToIndex[e.u];
+              const v = idToIndex[e.v];
+              G[u][v] = G[v][u] = e.w;
+          });
+
+          // Start from Node 0 (A)
+          let startNode = 0;
+          visited[startNode] = true;
+          
+          primSteps.push({
+              type: 'init',
+              visited: [...visited],
+              lowcost: [...lowcost],
+              adjvex: [...adjvex],
+              desc: "初始化：从节点 A 开始"
+          });
+
+          // Init lowcost
+          for(let i=0; i<n; i++) {
+              if (i !== startNode) {
+                  lowcost[i] = G[startNode][i];
+                  adjvex[i] = startNode;
+              } else {
+                  lowcost[i] = 0;
+              }
+          }
+
+          primSteps.push({
+              type: 'update',
+              visited: [...visited],
+              lowcost: [...lowcost],
+              adjvex: [...adjvex],
+              desc: "更新 A 的邻居距离"
+          });
+
+          for(let i=1; i<n; i++) {
+              let min = INF;
+              let k = -1;
+              
+              // Find min
+              for(let j=0; j<n; j++) {
+                  if (!visited[j] && lowcost[j] < min) {
+                      min = lowcost[j];
+                      k = j;
+                  }
+              }
+
+              if (k !== -1) {
+                  visited[k] = true;
+                  lowcost[k] = 0; // Mark as in tree
+                  
+                  primSteps.push({
+                      type: 'select',
+                      nodeIdx: k,
+                      visited: [...visited],
+                      lowcost: [...lowcost],
+                      adjvex: [...adjvex],
+                      desc: `选择最近节点 ${graphNodes[k].id} (距离 ${min})`
+                  });
+
+                  // Update neighbors
+                  let updated = false;
+                  for(let j=0; j<n; j++) {
+                      if (!visited[j] && G[k][j] < lowcost[j]) {
+                          lowcost[j] = G[k][j];
+                          adjvex[j] = k;
+                          updated = true;
+                      }
+                  }
+                  
+                  if(updated) {
+                      primSteps.push({
+                          type: 'update',
+                          visited: [...visited],
+                          lowcost: [...lowcost],
+                          adjvex: [...adjvex],
+                          desc: `更新 ${graphNodes[k].id} 的邻居距离`
+                      });
+                  }
+              }
+          }
+          primSteps.push({ type: 'finish', desc: "最小生成树构建完成" });
+      }
+
+      function initPrimDemo() {
+          generatePrimSteps();
+          const svgEdges = document.getElementById('prim-edges');
+          const svgNodes = document.getElementById('prim-nodes');
+          
+          svgEdges.innerHTML = '';
+          svgNodes.innerHTML = '';
+
+          // Draw Edges (Background)
+          graphEdges.forEach((e, idx) => {
+              const u = graphNodes.find(n => n.id === e.u);
+              const v = graphNodes.find(n => n.id === e.v);
+              const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+              line.setAttribute('x1', u.x); line.setAttribute('y1', u.y);
+              line.setAttribute('x2', v.x); line.setAttribute('y2', v.y);
+              line.setAttribute('stroke', '#334155');
+              line.setAttribute('stroke-width', '2');
+              line.id = `prim-edge-${e.u}-${e.v}`;
+              svgEdges.appendChild(line);
+              
+              // Weight Label
+              const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+              text.setAttribute('x', (u.x + v.x)/2);
+              text.setAttribute('y', (u.y + v.y)/2);
+              text.setAttribute('fill', '#94a3b8');
+              text.setAttribute('stroke', '#0f172a');
+              text.setAttribute('stroke-width', '8');
+              text.setAttribute('paint-order', 'stroke');
+              text.setAttribute('text-anchor', 'middle');
+              text.setAttribute('dominant-baseline', 'middle');
+              text.setAttribute('font-size', '26');
+              text.setAttribute('font-weight', 'bold');
+              text.textContent = e.w;
+              svgEdges.appendChild(text);
+          });
+
+          // Draw Nodes
+          graphNodes.forEach((n, i) => {
+              const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+              g.id = `prim-node-${i}`;
+              g.innerHTML = `
+                  <circle r="25" cx="${n.x}" cy="${n.y}" fill="#1e293b" stroke="#334155" stroke-width="3" />
+                  <text x="${n.x}" y="${n.y+8}" text-anchor="middle" fill="#94a3b8" font-size="20" font-weight="bold">${n.id}</text>
+              `;
+              svgNodes.appendChild(g);
+          });
+          
+          resetPrimStep();
+      }
+
+      function updatePrimVisuals() {
+          const status = document.getElementById('prim-status');
+          const tableBody = document.getElementById('prim-table-body');
+          
+          if (primCurrentStep < 0) {
+              status.textContent = "Ready...";
+              tableBody.innerHTML = '';
+              // Reset styles
+              document.querySelectorAll('#prim-nodes circle').forEach(c => {
+                  c.setAttribute('fill', '#1e293b'); c.setAttribute('stroke', '#334155');
+              });
+              document.querySelectorAll('#prim-nodes text').forEach(t => t.setAttribute('fill', '#94a3b8'));
+              document.querySelectorAll('[id^="prim-edge-"]').forEach(l => {
+                  l.setAttribute('stroke', '#334155'); l.setAttribute('stroke-width', '2');
+              });
+              return;
+          }
+
+          const step = primSteps[primCurrentStep];
+          status.textContent = step.desc;
+
+          // 1. Update Table
+          if (step.lowcost) {
+              tableBody.innerHTML = '';
+              graphNodes.forEach((node, i) => {
+                  const tr = document.createElement('tr');
+                  const isVisited = step.visited[i];
+                  const cost = step.lowcost[i];
+                  const parent = step.adjvex[i] !== -1 ? graphNodes[step.adjvex[i]].id : '-';
+                  
+                  tr.className = isVisited ? 'text-prim font-bold bg-prim/10' : 'text-slate-400';
+                  tr.innerHTML = `
+                      <td class="p-2">${node.id}</td>
+                      <td class="p-2">${cost === 0 ? 'In Tree' : (cost === INF ? '∞' : cost)}</td>
+                      <td class="p-2">${parent}</td>
+                  `;
+                  tableBody.appendChild(tr);
+              });
+          }
+
+          // 2. Update Graph
+          // Nodes
+          if (step.visited) {
+              step.visited.forEach((v, i) => {
+                  const g = document.getElementById(`prim-node-${i}`);
+                  const circle = g.querySelector('circle');
+                  const text = g.querySelector('text');
+                  if (v) {
+                      circle.setAttribute('fill', '#4c1d95');
+                      circle.setAttribute('stroke', '#8b5cf6');
+                      text.setAttribute('fill', '#fff');
+                  } else {
+                      circle.setAttribute('fill', '#1e293b');
+                      circle.setAttribute('stroke', '#334155');
+                      text.setAttribute('fill', '#94a3b8');
+                  }
+              });
+          }
+          
+          // Edges (MST)
+          document.querySelectorAll('[id^="prim-edge-"]').forEach(l => {
+              l.setAttribute('stroke', '#334155'); l.setAttribute('stroke-width', '2');
+          });
+          
+          if (step.adjvex) {
+              step.adjvex.forEach((p, i) => {
+                  if (p !== -1 && step.visited[i]) {
+                      // Find edge
+                      const uId = graphNodes[p].id;
+                      const vId = graphNodes[i].id;
+                      let line = document.getElementById(`prim-edge-${uId}-${vId}`);
+                      if (!line) line = document.getElementById(`prim-edge-${vId}-${uId}`);
+                      
+                      if (line) {
+                          line.setAttribute('stroke', '#8b5cf6');
+                          line.setAttribute('stroke-width', '4');
+                      }
+                  }
+              });
+          }
+      }
+
+      function nextPrimStep() {
+          if (primCurrentStep < primSteps.length - 1) {
+              primCurrentStep++;
+              updatePrimVisuals();
+          }
+      }
+      function prevPrimStep() {
+          if (primCurrentStep > -1) {
+              primCurrentStep--;
+              updatePrimVisuals();
+          }
+      }
+      function resetPrimStep() {
+          primCurrentStep = -1;
+          updatePrimVisuals();
+      }
+
+      // --- KRUSKAL ALGORITHM LOGIC ---
+      let kruskalSteps = [];
+      let kruskalCurrentStep = -1;
+      
+      // Colors for sets
+      const setColors = ['#ef4444', '#f97316', '#f59e0b', '#84cc16', '#06b6d4', '#8b5cf6'];
+
+      function generateKruskalSteps() {
+          kruskalSteps = [];
+          
+          // 1. Sort Edges
+          const sortedEdges = [...graphEdges].sort((a, b) => a.w - b.w);
+          
+          // Init Sets (each node is its own set)
+          const n = graphNodes.length;
+          const parent = Array.from({length: n}, (_, i) => i);
+          
+          // Helper Find
+          const find = (i) => {
+              while(parent[i] !== i) i = parent[i];
+              return i;
+          };
+          
+          // Map ID to Index
+          const idToIndex = {};
+          graphNodes.forEach((node, i) => idToIndex[node.id] = i);
+
+          kruskalSteps.push({
+              type: 'init',
+              edges: sortedEdges,
+              parent: [...parent],
+              currentEdgeIdx: -1,
+              desc: "初始化：边按权重排序，每个点独立成集"
+          });
+
+          let edgesCount = 0;
+          for(let i=0; i<sortedEdges.length; i++) {
+              if (edgesCount >= n - 1) break;
+
+              const edge = sortedEdges[i];
+              const uIdx = idToIndex[edge.u];
+              const vIdx = idToIndex[edge.v];
+              
+              const rootU = find(uIdx);
+              const rootV = find(vIdx);
+              
+              kruskalSteps.push({
+                  type: 'check',
+                  edges: sortedEdges,
+                  parent: [...parent], // Snapshot before union
+                  currentEdgeIdx: i,
+                  status: 'checking',
+                  desc: `检查边 (${edge.u}, ${edge.v}) w=${edge.w}`
+              });
+
+              if (rootU !== rootV) {
+                  // Union
+                  parent[rootU] = rootV;
+                  edgesCount++;
+                  
+                  kruskalSteps.push({
+                      type: 'union',
+                      edges: sortedEdges,
+                      parent: [...parent], // Snapshot after union
+                      currentEdgeIdx: i,
+                      status: 'accepted',
+                      desc: `两点属于不同集合 -> 合并！`
+                  });
+              } else {
+                   kruskalSteps.push({
+                      type: 'reject',
+                      edges: sortedEdges,
+                      parent: [...parent],
+                      currentEdgeIdx: i,
+                      status: 'rejected',
+                      desc: `两点已连通 (同色) -> 丢弃 (成环)`
+                  });
+              }
+          }
+          kruskalSteps.push({ type: 'finish', desc: "最小生成树构建完成" });
+      }
+
+      function initKruskalDemo() {
+          generateKruskalSteps();
+          const svgEdges = document.getElementById('kruskal-edges');
+          const svgNodes = document.getElementById('kruskal-nodes');
+          const edgeList = document.getElementById('kruskal-edge-list');
+          
+          svgEdges.innerHTML = '';
+          svgNodes.innerHTML = '';
+          edgeList.innerHTML = '';
+
+          // Draw Edges (Background)
+          graphEdges.forEach((e) => {
+              const u = graphNodes.find(n => n.id === e.u);
+              const v = graphNodes.find(n => n.id === e.v);
+              const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+              line.setAttribute('x1', u.x); line.setAttribute('y1', u.y);
+              line.setAttribute('x2', v.x); line.setAttribute('y2', v.y);
+              line.setAttribute('stroke', '#334155');
+              line.setAttribute('stroke-width', '2');
+              line.id = `kruskal-edge-${e.u}-${e.v}`;
+              svgEdges.appendChild(line);
+
+              // Weight Label
+              const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+              text.setAttribute('x', (u.x + v.x)/2);
+              text.setAttribute('y', (u.y + v.y)/2);
+              text.setAttribute('fill', '#94a3b8');
+              text.setAttribute('stroke', '#0f172a');
+              text.setAttribute('stroke-width', '8');
+              text.setAttribute('paint-order', 'stroke');
+              text.setAttribute('text-anchor', 'middle');
+              text.setAttribute('dominant-baseline', 'middle');
+              text.setAttribute('font-size', '26');
+              text.setAttribute('font-weight', 'bold');
+              text.textContent = e.w;
+              svgEdges.appendChild(text);
+          });
+
+          // Draw Nodes
+          graphNodes.forEach((n, i) => {
+              const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+              g.id = `kruskal-node-${i}`;
+              g.innerHTML = `
+                  <circle r="25" cx="${n.x}" cy="${n.y}" fill="#1e293b" stroke="#334155" stroke-width="3" />
+                  <text x="${n.x}" y="${n.y+8}" text-anchor="middle" fill="#94a3b8" font-size="20" font-weight="bold">${n.id}</text>
+              `;
+              svgNodes.appendChild(g);
+          });
+          
+          resetKruskalStep();
+      }
+
+      function updateKruskalVisuals() {
+          const status = document.getElementById('kruskal-status');
+          const edgeList = document.getElementById('kruskal-edge-list');
+          
+          if (kruskalCurrentStep < 0) {
+              status.textContent = "Ready...";
+              edgeList.innerHTML = '';
+              return;
+          }
+
+          const step = kruskalSteps[kruskalCurrentStep];
+          status.textContent = step.desc;
+
+          // 1. Update Edge List UI
+          if (step.edges && edgeList.children.length === 0) {
+              step.edges.forEach((e, idx) => {
+                  const div = document.createElement('div');
+                  div.id = `k-edge-item-${idx}`;
+                  div.className = 'p-2 rounded bg-slate-800 border border-slate-700 text-slate-400 font-mono text-xl flex justify-between';
+                  div.innerHTML = `<span>(${e.u},${e.v})</span> <span>${e.w}</span>`;
+                  edgeList.appendChild(div);
+              });
+          }
+          
+          // Highlight current edge in list
+          if (step.currentEdgeIdx !== undefined && step.currentEdgeIdx !== -1) {
+              document.querySelectorAll('[id^="k-edge-item-"]').forEach(el => el.className = 'p-2 rounded bg-slate-800 border border-slate-700 text-slate-400 font-mono text-xl flex justify-between opacity-50');
+              const activeItem = document.getElementById(`k-edge-item-${step.currentEdgeIdx}`);
+              if (activeItem) {
+                  activeItem.classList.remove('opacity-50');
+                  if (step.status === 'checking') activeItem.className = 'p-2 rounded bg-yellow-500/20 border border-yellow-500 text-yellow-500 font-bold font-mono text-xl flex justify-between';
+                  else if (step.status === 'accepted') activeItem.className = 'p-2 rounded bg-green-500/20 border border-green-500 text-green-500 font-bold font-mono text-xl flex justify-between';
+                  else if (step.status === 'rejected') activeItem.className = 'p-2 rounded bg-red-500/10 border border-red-500 text-red-500 line-through font-mono text-xl flex justify-between';
+              }
+          }
+
+          // 2. Update Graph Visuals (Sets & Edges)
+          // Helper to find root
+          const find = (i, p) => {
+              while(p[i] !== i) i = p[i];
+              return i;
+          };
+
+          if (step.parent) {
+              // Color Nodes based on Set
+              graphNodes.forEach((n, i) => {
+                  const root = find(i, step.parent);
+                  const color = setColors[root % setColors.length];
+                  
+                  const g = document.getElementById(`kruskal-node-${i}`);
+                  const circle = g.querySelector('circle');
+                  const text = g.querySelector('text');
+                  
+                  circle.setAttribute('stroke', color);
+                  circle.setAttribute('fill', '#1e293b'); // Opaque to hide underlying lines
+                  text.setAttribute('fill', '#fff');
+              });
+          }
+
+          // Color Edges
+          // Reset all
+           document.querySelectorAll('[id^="kruskal-edge-"]').forEach(l => {
+              l.setAttribute('stroke', '#334155'); l.setAttribute('stroke-width', '2');
+          });
+
+          // Highlight Accepted Edges so far
+          // We need to look at history or re-calculate accepted edges based on current step index
+          // Simpler: iterate up to current step in steps array
+          for(let k=0; k<=kruskalCurrentStep; k++) {
+              const s = kruskalSteps[k];
+              if (s.type === 'union' && s.currentEdgeIdx !== undefined) {
+                  const e = s.edges[s.currentEdgeIdx];
+                  let line = document.getElementById(`kruskal-edge-${e.u}-${e.v}`);
+                  if (!line) line = document.getElementById(`kruskal-edge-${e.v}-${e.u}`);
+                  if (line) {
+                      line.setAttribute('stroke', '#06b6d4');
+                      line.setAttribute('stroke-width', '4');
+                  }
+              }
+          }
+
+          // Highlight Current Checking Edge
+          if (step.currentEdgeIdx !== undefined && step.currentEdgeIdx !== -1) {
+               const e = step.edges[step.currentEdgeIdx];
+               let line = document.getElementById(`kruskal-edge-${e.u}-${e.v}`);
+               if (!line) line = document.getElementById(`kruskal-edge-${e.v}-${e.u}`);
+               
+               if (line) {
+                   if (step.status === 'checking') {
+                       line.setAttribute('stroke', '#f59e0b'); // Yellow
+                       line.setAttribute('stroke-width', '5');
+                       line.style.opacity = '1';
+                   } else if (step.status === 'rejected') {
+                       line.setAttribute('stroke', '#ef4444'); // Red
+                       line.setAttribute('stroke-width', '2');
+                       line.setAttribute('stroke-dasharray', '5,5');
+                       line.style.opacity = '0.3';
+                   }
+               }
+          }
+      }
+
+      function nextKruskalStep() {
+          if (kruskalCurrentStep < kruskalSteps.length - 1) {
+              kruskalCurrentStep++;
+              updateKruskalVisuals();
+          }
+      }
+      function prevKruskalStep() {
+          if (kruskalCurrentStep > -1) {
+              kruskalCurrentStep--;
+              updateKruskalVisuals();
+          }
+      }
+      function resetKruskalStep() {
+          kruskalCurrentStep = -1;
+          updateKruskalVisuals();
+      }
+
+    </script>
+  </body>
+</html>

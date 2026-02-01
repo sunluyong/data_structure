@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>20 图的应用：Dijkstra 最短路径</title>
+    <script src="https://unpkg.com/@tailwindcss/browser@4"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+    <style type="text/tailwindcss">
+      @theme {
+        --color-bg-dark: #030712;
+        --color-text-main: #f1f5f9;
+        --color-dijkstra: #f59e0b; /* Amber */
+        --color-floyd: #ec4899; /* Pink */
+        --color-success: #22c55e;
+        --color-info: #06b6d4;
+        --color-code-bg: #1e293b;
+      }
+      @layer base {
+        body { @apply bg-black text-text-main font-sans overflow-hidden flex justify-center items-center h-screen; }
+      }
+      @layer utilities {
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes highlight-cell {
+            0% { background-color: rgba(245, 158, 11, 0.5); transform: scale(1); }
+            50% { background-color: rgba(245, 158, 11, 0.8); transform: scale(1.1); }
+            100% { background-color: rgba(245, 158, 11, 0.2); transform: scale(1); }
+        }
+        .slide-container { @apply relative w-[1920px] h-[1080px] bg-bg-dark overflow-hidden shadow-2xl; }
+        .slide { @apply absolute inset-0 hidden flex-col p-14 opacity-0 transition-opacity duration-400 ease-in-out; }
+        .slide.active { @apply flex opacity-100; }
+        .bg-decoration { @apply absolute inset-0 z-0 pointer-events-none; background-image: radial-gradient(circle at 10% 10%, rgba(245,158,11,0.08) 0%, transparent 30%), radial-gradient(circle at 90% 90%, rgba(236,72,153,0.08) 0%, transparent 30%); }
+        .grid-overlay { @apply absolute inset-0 z-0; background-size: 60px 60px; background-image: linear-gradient(to right, rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.02) 1px, transparent 1px); }
+        
+        h1 { @apply text-[100px] font-extrabold leading-tight mb-8; background: linear-gradient(135deg, #fff 0%, var(--color-dijkstra) 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+        h2 { @apply text-[64px] mb-8 text-white inline-block pb-4 border-b-4 border-white/20; }
+        h3 { @apply text-[42px] mb-6 text-dijkstra; }
+        p { @apply text-[32px] mb-4 text-slate-200 leading-relaxed; }
+        .slide-content li { @apply text-[32px] mb-4 text-slate-200; }
+        strong { @apply text-white font-bold; }
+        
+        .card { @apply bg-white/5 border border-white/10 rounded-3xl p-8 mb-6 backdrop-blur-sm shadow-lg; }
+        .code-block { @apply font-mono bg-code-bg p-6 rounded-2xl border border-slate-700 text-[22px] leading-relaxed text-slate-200 overflow-auto whitespace-pre; }
+        
+        /* Syntax Highlighting */
+        .code-kw { @apply text-[#c678dd]; }
+        .code-type { @apply text-[#e5c07b]; }
+        .code-cm { @apply text-[#94a3b8] italic; }
+        .code-num { @apply text-[#d19a66]; }
+        .code-str { @apply text-[#98c379]; }
+        .code-fn { @apply text-[#61afef]; }
+
+        .btn-primary { @apply px-6 py-3 bg-dijkstra/20 border border-dijkstra/50 rounded-xl text-dijkstra font-bold text-[24px] cursor-pointer transition-all hover:bg-dijkstra/30 hover:scale-105 active:scale-95; }
+        .btn-secondary { @apply px-6 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-slate-200 font-bold text-[24px] cursor-pointer transition-all hover:bg-slate-600/50; }
+        
+        /* Custom Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar { width: 10px; height: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #1e293b; border-radius: 5px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; border-radius: 5px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app" class="slide-container">
+      <div class="bg-decoration"></div>
+      <div class="grid-overlay"></div>
+
+      <!-- P01: 封面 -->
+      <section class="slide active justify-center items-center text-center" data-title="封面">
+        <div class="flex flex-col items-center z-10 relative -mt-20">
+          <div class="flex gap-16 mb-12">
+             <!-- Icon -->
+             <div class="w-40 h-40 relative flex items-center justify-center">
+                 <i class="fas fa-route text-8xl text-dijkstra drop-shadow-[0_0_25px_rgba(245,158,11,0.5)] animate-pulse"></i>
+                 <div class="absolute -right-12 -bottom-4 bg-slate-800 px-4 py-2 rounded-lg border border-slate-600 text-xl text-white">min(dist)</div>
+             </div>
+          </div>
+
+          <div class="bg-slate-800/50 px-8 py-3 rounded-full border border-slate-600 mb-8 backdrop-blur-md">
+            <span class="text-slate-300 text-2xl font-mono tracking-[0.2em]">GRAPH ALGORITHMS</span>
+          </div>
+          
+          <h1>数据结构与算法</h1>
+          <p class="text-[56px] text-slate-300 mt-4">Dijkstra 最短路径算法</p>
+        </div>
+      </section>
+
+      <!-- P02: 核心问题 -->
+      <section class="slide" data-title="核心问题">
+        <h2>最短路径问题</h2>
+        <div class="grid grid-cols-2 gap-16 flex-1 min-h-0 items-center">
+            <div class="flex flex-col gap-8">
+                <div class="card border-l-8 border-dijkstra">
+                    <h3 class="text-dijkstra text-[40px] mb-4">定义</h3>
+                    <p class="text-[32px] text-white leading-relaxed">
+                        在带权图中，寻找从<strong class="text-dijkstra">起点 (Source)</strong> 到<strong class="text-floyd">终点 (Destination)</strong> 的路径，使得路径上所有边的<strong class="text-white">权值之和最小</strong>。
+                    </p>
+                </div>
+                <div class="card bg-slate-800/30">
+                    <h3 class="text-slate-200 text-[32px] mb-6">Dijkstra 适用场景</h3>
+                    <ul class="space-y-6 text-[28px] text-slate-300">
+                        <li>
+                            <strong class="text-white block mb-2">单源最短路径 (One-to-All)</strong>
+                            求图中<strong>某一顶点</strong>到其他所有顶点的最短路径
+                        </li>
+                        <li>
+                            <strong class="text-white block mb-2">限制条件</strong>
+                            <span class="text-red-400"><i class="fas fa-times-circle mr-2"></i>不适用于包含负权边的图</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="flex flex-col items-center justify-center relative h-full gap-8">
+                <!-- Weighted Graph Visualization -->
+                <div class="bg-slate-900/50 p-8 rounded-3xl border border-slate-700 w-full flex items-center justify-center relative overflow-hidden">
+                    <svg width="600" height="400" viewBox="0 0 600 400" class="w-full h-full overflow-visible">
+                        <defs>
+                            <marker id="arrow-head" markerWidth="12" markerHeight="12" refX="42" refY="3.5" orient="auto" markerUnits="userSpaceOnUse">
+                                <polygon points="0 0, 10 3.5, 0 7" fill="#64748b" />
+                            </marker>
+                             <marker id="arrow-head-highlight" markerWidth="12" markerHeight="12" refX="42" refY="3.5" orient="auto" markerUnits="userSpaceOnUse">
+                                <polygon points="0 0, 10 3.5, 0 7" fill="#f59e0b" />
+                            </marker>
+                        </defs>
+                
+                        <!-- Edges -->
+                        <!-- Path 1 (Top): S -> A -> E (Longer: 5+6=11) -->
+                        <line x1="100" y1="200" x2="300" y2="80" stroke="#64748b" stroke-width="2" marker-end="url(#arrow-head)" />
+                        <text x="190" y="130" fill="#94a3b8" font-size="24">5</text>
+                        <line x1="300" y1="80" x2="500" y2="200" stroke="#64748b" stroke-width="2" marker-end="url(#arrow-head)" />
+                        <text x="410" y="130" fill="#94a3b8" font-size="24">6</text>
+                
+                        <!-- Path 2 (Middle): S -> D -> E (Shortest: 2+2=4) -->
+                        <line x1="100" y1="200" x2="300" y2="200" stroke="#f59e0b" stroke-width="2" marker-end="url(#arrow-head-highlight)" />
+                        <text x="200" y="180" fill="#f59e0b" font-weight="bold" font-size="28">2</text>
+                        <line x1="300" y1="200" x2="500" y2="200" stroke="#f59e0b" stroke-width="2" marker-end="url(#arrow-head-highlight)" />
+                        <text x="400" y="180" fill="#f59e0b" font-weight="bold" font-size="28">2</text>
+                
+                        <!-- Path 3 (Bottom): S -> C -> E (Longer: 4+5=9) -->
+                        <line x1="100" y1="200" x2="300" y2="320" stroke="#64748b" stroke-width="2" marker-end="url(#arrow-head)" />
+                        <text x="190" y="280" fill="#94a3b8" font-size="24">4</text>
+                        <line x1="300" y1="320" x2="500" y2="200" stroke="#64748b" stroke-width="2" marker-end="url(#arrow-head)" />
+                        <text x="410" y="280" fill="#94a3b8" font-size="24">5</text>
+                
+                        <!-- Nodes -->
+                        <!-- S -->
+                        <circle cx="100" cy="200" r="30" fill="#0f172a" stroke="#22c55e" stroke-width="4" />
+                        <text x="100" y="210" text-anchor="middle" fill="white" font-weight="bold" font-size="24">S</text>
+                        <text x="100" y="255" text-anchor="middle" fill="#22c55e" font-size="20">起点</text>
+                        
+                        <!-- A -->
+                        <circle cx="300" cy="80" r="30" fill="#0f172a" stroke="#64748b" stroke-width="3" />
+                        <text x="300" y="90" text-anchor="middle" fill="#94a3b8" font-size="20">A</text>
+                
+                        <!-- D (was B) -->
+                        <circle cx="300" cy="200" r="30" fill="#0f172a" stroke="#f59e0b" stroke-width="4" />
+                        <text x="300" y="210" text-anchor="middle" fill="#f59e0b" font-weight="bold" font-size="20">D</text>
+                
+                        <!-- C -->
+                        <circle cx="300" cy="320" r="30" fill="#0f172a" stroke="#64748b" stroke-width="3" />
+                        <text x="300" y="330" text-anchor="middle" fill="#94a3b8" font-size="20">C</text>
+                
+                        <!-- E -->
+                        <circle cx="500" cy="200" r="30" fill="#0f172a" stroke="#ec4899" stroke-width="4" />
+                        <text x="500" y="210" text-anchor="middle" fill="white" font-weight="bold" font-size="24">E</text>
+                        <text x="500" y="255" text-anchor="middle" fill="#ec4899" font-size="20">终点</text>
+                
+                        <!-- Labels -->
+                        <rect x="150" y="370" width="300" height="40" rx="20" fill="#f59e0b20" stroke="#f59e0b" />
+                        <text x="300" y="398" text-anchor="middle" fill="#f59e0b" font-size="18" font-weight="bold">最短路径: S -> D -> E (Cost: 4)</text>
+                    </svg>
+                </div>
+            </div>
+        </div>
+      </section>
+
+      <!-- P03: Dijkstra 概念 -->
+      <section class="slide" data-title="Dijkstra概念">
+        <h2>Dijkstra 核心思想</h2>
+        <div class="flex flex-col gap-12 flex-1 min-h-0 justify-center max-w-6xl mx-auto w-full">
+            <div class="flex flex-col gap-8">
+                <div class="card border-l-8 border-dijkstra">
+                    <h3 class="text-dijkstra text-[40px] mb-6">由近及远，层层刷新</h3>
+                    <ul class="space-y-6 text-[28px] text-slate-300">
+                        <li class="flex items-start">
+                            <span class="bg-dijkstra/20 text-dijkstra rounded-full w-10 h-10 flex items-center justify-center mr-4 mt-1 font-bold">1</span>
+                            <span>
+                                <strong class="text-white block mb-1">选最近</strong>
+                                每次都在还没确定的点里，挑一个离起点最近的，直接把它的最短路“锁死”。
+                            </span>
+                        </li>
+                        <li class="flex items-start">
+                            <span class="bg-floyd/20 text-floyd rounded-full w-10 h-10 flex items-center justify-center mr-4 mt-1 font-bold">2</span>
+                            <span>
+                                <strong class="text-white block mb-1">做跳板</strong>
+                                利用这个刚“锁死”的点作为中转站，去问问它的邻居们：“从我这走，会不会比你们原来的路更近？”
+                            </span>
+                        </li>
+                    </ul>
+                </div>
+                
+                <div class="bg-slate-800/50 p-6 rounded-2xl border border-slate-600 text-center">
+                    <p class="text-[32px] text-dijkstra font-bold m-0 leading-normal text-left">
+                        <i class="fas fa-bullseye mr-3"></i>Dijkstra 算法就是 从起点开始，像水波纹一样向外扩散，每次锁定一个离波纹中心最近的点，利用这个点作为新的波源，去触达更远的地方，直到覆盖全图。
+                    </p>
+                </div>
+            </div>
+        </div>
+      </section>
+
+      <!-- P04: Dijkstra 演示 -->
+      <section class="slide" data-title="Dijkstra演示">
+        <h2>Dijkstra 算法演示</h2>
+        <div class="flex gap-4 flex-1 min-h-0 w-full">
+            <!-- Left: Graph -->
+            <div class="w-[45%] bg-slate-900/50 rounded-3xl border border-slate-700 relative flex items-center justify-center">
+                <svg id="dijkstra-svg" width="100%" height="100%" viewBox="0 0 800 600" class="overflow-visible">
+                    <g id="dijkstra-edges"></g>
+                    <g id="dijkstra-nodes"></g>
+                </svg>
+                <div class="absolute top-4 left-4 text-slate-400 font-mono">Source: 0</div>
+            </div>
+
+            <!-- Right: State (Table) -->
+            <div class="w-[55%] flex flex-col gap-4">
+                <!-- Table Container -->
+                <div class="flex-1 bg-slate-800/30 rounded-2xl border border-slate-700 p-4 flex flex-col overflow-hidden">
+                    <h3 class="text-white text-[24px] mb-2 border-b border-slate-600 pb-2 flex justify-between">
+                        <span><i class="fas fa-table mr-2 text-dijkstra"></i>迭代过程表</span>
+                        <span class="text-sm text-slate-400 font-normal self-end">每次选距离S最近的点，然后更新</span>
+                    </h3>
+                    
+                    <div class="flex-1 overflow-auto custom-scrollbar relative">
+                         <table class="w-full text-center border-collapse text-lg">
+                            <thead class="sticky top-0 bg-slate-900 z-10">
+                                <tr id="dijkstra-header-row" class="text-slate-400 border-b border-slate-600 text-[24px]">
+                                    <th class="p-4 border-r border-slate-700 w-[15%]">节点</th>
+                                    <th class="p-4 border-r border-slate-700 w-[15%]">标记</th>
+                                    <th class="p-4 border-r border-slate-700 w-[35%]">距离 (dist)</th>
+                                    <th class="p-4 border-slate-700 w-[35%]">前面点 (pre)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dijkstra-table-body" class="font-mono text-slate-200 text-[24px]">
+                                <!-- Rows injected dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="dijkstra-status" class="text-dijkstra text-[22px] font-mono h-12 leading-tight flex items-center">Ready...</div>
+                
+                <!-- Controls -->
+                <div class="flex gap-4">
+                    <button onclick="prevDijkstraStep()" class="btn-secondary flex-1"><i class="fas fa-step-backward mr-2"></i>上一步</button>
+                    <button onclick="resetDijkstraStep()" class="btn-secondary w-16"><i class="fas fa-undo"></i></button>
+                    <button onclick="nextDijkstraStep()" class="btn-primary flex-1">下一步<i class="fas fa-step-forward ml-2"></i></button>
+                </div>
+            </div>
+        </div>
+      </section>
+
+      <!-- P05: Dijkstra 代码 -->
+      <section class="slide" data-title="Dijkstra代码">
+        <h2>Dijkstra 代码实现</h2>
+        <div class="grid grid-cols-2 gap-8 flex-1 min-h-0">
+            <div class="code-block h-full custom-scrollbar text-[18px]"><span class="code-type">void</span> <span class="code-fn">dijkstra</span>(<span class="code-type">MGraph</span> G, <span class="code-type">int</span> v0, <span class="code-type">int</span> pre[], <span class="code-type">int</span> dist[]) {
+    <span class="code-cm">// 循环变量及最小值临时变量</span>
+    <span class="code-type">int</span> i, j, u, min;
+    <span class="code-cm">// 标记数组，visited[i]=1表示已确定</span>
+    <span class="code-type">int</span> visited[MAXV];
+    
+    <span class="code-cm">// 1. 初始化所有节点状态</span>
+    <span class="code-kw">for</span>(i = 0; i < G.numVertexes; i++) {
+        <span class="code-cm">// 初始所有节点均未被访问</span>
+        visited[i] = 0;
+        <span class="code-cm">// 将到所有节点的距离初始化为无穷大</span>
+        dist[i] = INF;
+        <span class="code-cm">// 初始化前驱节点为 -1 (无前驱)</span>
+        pre[i] = -1;
+    }
+    <span class="code-cm">// 起点到自身的距离为 0</span>
+    dist[v0] = 0;
+    
+    <span class="code-cm">// 2. 主循环：每次确定一个节点的最短路径</span>
+    <span class="code-kw">for</span>(i = 0; i < G.numVertexes; i++) {
+        <span class="code-cm">// 初始化当前最小距离为无穷大</span>
+        min = INF;
+        <span class="code-cm">// 初始化最近节点索引为无效值</span>
+        u = -1;
+        
+        <span class="code-cm">// 2.1 贪心选择：在未标记节点中寻找距离最近的节点 u</span>
+        <span class="code-kw">for</span>(j = 0; j < G.numVertexes; j++) {
+            <span class="code-cm">// 如果节点 j 未被标记 且 距离小于当前最小值</span>
+            <span class="code-kw">if</span>(!visited[j] && dist[j] < min) {
+                <span class="code-cm">// 更新最小值</span>
+                min = dist[j];
+                <span class="code-cm">// 记录该节点索引</span>
+                u = j;
+            }
+        }
+        
+        <span class="code-cm">// 如果找不到可达节点，跳出循环</span>
+        <span class="code-kw">if</span>(u == -1) <span class="code-kw">break</span>;
+        <span class="code-cm">// 将找到的最近节点 u 标记为已确定</span>
+        visited[u] = 1;
+        
+        <span class="code-cm">// 2.2 松弛操作：更新节点 u 的所有邻居 j</span>
+        <span class="code-kw">for</span>(j = 0; j < G.numVertexes; j++) {
+            <span class="code-cm">// 如果节点 j 未被标记 且 u 到 j 之间有边相连</span>
+            <span class="code-kw">if</span>(!visited[j] && G.arc[u][j] < INF) {
+                <span class="code-cm">// 核心判断：经过 u 到达 j 的距离是否比原来更短？</span>
+                <span class="code-kw">if</span>(dist[u] + G.arc[u][j] < dist[j]) {
+                    <span class="code-cm">// 更新 j 的最短距离</span>
+                    dist[j] = dist[u] + G.arc[u][j];
+                    <span class="code-cm">// 更新 j 的前驱节点为 u</span>
+                    pre[j] = u;
+                }
+            }
+        }
+    }
+}</div>
+            <div class="flex flex-col gap-6">
+                <div class="card bg-slate-800/30">
+                    <h3 class="text-white text-[32px] mb-4">关键数组</h3>
+                    <ul class="space-y-4 text-[26px] text-slate-300">
+                        <li><span class="font-mono text-dijkstra">dist[i]</span>：源点到顶点 i 的当前最短距离。</li>
+                        <li><span class="font-mono text-info">pre[i]</span>：记录顶点 i 在最短路径上的前驱节点（用于还原路径）。</li>
+                        <li><span class="font-mono text-slate-400">visited[i]</span>：标记顶点 i 的最短路径是否已确定。</li>
+                    </ul>
+                </div>
+                <div class="card border-l-8 border-dijkstra">
+                    <h3 class="text-white text-[32px] mb-4">复杂度分析</h3>
+                    <ul class="space-y-4 text-[26px] text-slate-300">
+                        <li><strong class="text-dijkstra">时间复杂度</strong>：<span class="font-mono text-warn">O(V²)</span>。</li>
+                        <li>若使用优先队列优化（堆优化），可降至 <span class="font-mono text-green-400">O(E log V)</span>。</li>
+                    </ul>
+                </div>
+                <div class="card bg-slate-800/30">
+                    <h3 class="text-white text-[32px] mb-4">注意事项</h3>
+                    <p class="text-[26px] text-slate-200">
+                        <i class="fas fa-exclamation-triangle text-yellow-500 mr-2"></i>
+                        Dijkstra 算法<strong class="text-red-400">不适用</strong>于包含<strong class="text-red-400">负权边</strong>的图。
+                        <br/>
+                        如果有负权边，需要使用 Bellman-Ford 算法。
+                    </p>
+                </div>
+            </div>
+        </div>
+      </section>
+
+
+      <!-- P06: 贪心思想解读 -->
+      <section class="slide" data-title="贪心思想">
+        <h2>贪心策略深度解读</h2>
+        <div class="grid grid-cols-2 gap-16 flex-1 min-h-0 items-center">
+            <div class="flex flex-col gap-10">
+                <div class="card border-l-8 border-dijkstra">
+                    <h3 class="text-dijkstra text-[40px] mb-6"><i class="fas fa-brain mr-4"></i>什么是“贪心”？</h3>
+                    <p class="text-[32px] text-slate-200 leading-relaxed mb-6">
+                        总是做出在<strong class="text-white">当前看来</strong>最好的选择。<br/>
+                        不考虑长远的整体规划，而是通过<strong class="text-dijkstra">每一步的局部最优</strong>，试图达成全局最优。
+                    </p>
+                </div>
+                
+                <div class="card bg-slate-800/30">
+                    <h3 class="text-white text-[32px] mb-6">Dijkstra 的“贪心时刻”</h3>
+                    <ul class="space-y-6 text-[28px] text-slate-300">
+                        <li class="flex items-start">
+                            <span class="bg-dijkstra text-black font-bold rounded-full w-8 h-8 flex items-center justify-center mr-4 mt-1 shrink-0">1</span>
+                            <div>
+                                <strong class="text-white">选最近</strong>：在所有未确定的节点中，选离起点最近的那个。
+                            </div>
+                        </li>
+                        <li class="flex items-start">
+                            <span class="bg-dijkstra text-black font-bold rounded-full w-8 h-8 flex items-center justify-center mr-4 mt-1 shrink-0">2</span>
+                            <div>
+                                <strong class="text-white">不回头</strong>：一旦选定，就认为“这就是最短路了”，标记为已确定，不再更改。
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="flex flex-col items-center justify-center h-full relative">
+                 <!-- 贪心逻辑可视化 -->
+                 <div class="bg-slate-900/50 p-6 rounded-3xl border border-slate-700 w-full h-[550px] flex flex-col items-center justify-center relative overflow-hidden">
+                    <h3 class="absolute top-6 left-8 text-slate-400 text-[24px]">为什么“只看眼前”是正确的？</h3>
+                    
+                    <svg width="600" height="420" viewBox="0 0 600 420" class="overflow-visible mt-4">
+                        <defs>
+                            <!-- refX=10 ensures the tip of the arrow (at x=10) touches the end coordinate -->
+                            <marker id="arrow-greedy" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+                                <polygon points="0 0, 10 3.5, 0 7" fill="#64748b" />
+                            </marker>
+                            <marker id="arrow-greedy-highlight" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+                                <polygon points="0 0, 10 3.5, 0 7" fill="#f59e0b" />
+                            </marker>
+                        </defs>
+
+                        <!-- Logic Text Block (Top) -->
+                        <foreignObject x="20" y="30" width="560" height="110">
+                             <div xmlns="http://www.w3.org/1999/xhtml" class="text-slate-200 text-[22px] bg-slate-800/40 p-4 rounded-xl border border-slate-600/50 backdrop-blur-sm">
+                                既然 <strong>U</strong> 是当前最近的 (dist[U] < dist[V])，<br/>
+                                那么 <span class="text-dijkstra font-bold">dist[V] + weight</span> 必然大于 <span class="text-dijkstra font-bold">dist[U]</span>。
+                             </div>
+                        </foreignObject>
+
+                        <!-- Graph Elements (Bottom) -->
+                        <g transform="translate(0, 40)">
+                            <!-- Edges (Draw first to be behind nodes) -->
+                            
+                            <!-- S -> U (Direct) -->
+                            <!-- S(80,180) r=30 -> U(500,180) r=40 -->
+                            <!-- Start: 80+30=110. End: 500-40=460 -->
+                            <line x1="110" y1="180" x2="460" y2="180" stroke="#f59e0b" stroke-width="4" marker-end="url(#arrow-greedy-highlight)" />
+                            <text x="290" y="160" text-anchor="middle" fill="#f59e0b" font-size="20" font-weight="bold" stroke="#030712" stroke-width="8" paint-order="stroke">dist[U] (min)</text>
+    
+                            <!-- S -> V (Indirect Start) -->
+                            <!-- S(80,180) r=30 -> V(290,360) r=30 -->
+                            <path d="M 103 199 Q 160 310 267 341" fill="none" stroke="#64748b" stroke-width="2" stroke-dasharray="6,6" marker-end="url(#arrow-greedy)" />
+                            <text x="140" y="310" text-anchor="end" fill="#64748b" font-size="18" stroke="#030712" stroke-width="8" paint-order="stroke">dist[V] > dist[U]</text>
+                            
+                            <!-- V -> U (Indirect End) -->
+                            <!-- V(290,360) r=30 -> U(500,180) r=40 -->
+                            <!-- Start on V edge (top-right): 290+21=311, 360-21=339 -->
+                            <!-- End on U edge (bottom-left): 500-25=475, 180+31=211 -->
+                            <path d="M 311 359 Q 400 320 475 211" fill="none" stroke="#64748b" stroke-width="2" marker-end="url(#arrow-greedy)" stroke-dasharray="6,6"/>
+                            <text x="420" y="310" text-anchor="start" fill="#64748b" font-size="18" stroke="#030712" stroke-width="8" paint-order="stroke">weight ≥ 0</text>
+
+                            <!-- Nodes -->
+                            <!-- S -->
+                            <circle cx="80" cy="180" r="30" fill="#0f172a" stroke="#22c55e" stroke-width="4"/>
+                            <text x="80" y="190" text-anchor="middle" fill="white" font-weight="bold" font-size="20">S</text>
+    
+                            <!-- U (Target) -->
+                            <circle cx="500" cy="180" r="40" fill="#0f172a" stroke="#f59e0b" stroke-width="4"/>
+                            <text x="500" y="175" text-anchor="middle" fill="white" font-weight="bold" font-size="24">U</text>
+                            <text x="500" y="205" text-anchor="middle" fill="#f59e0b" font-size="16">当前最近</text>
+    
+                            <!-- V (Other) -->
+                            <circle cx="290" cy="360" r="30" fill="#0f172a" stroke="#64748b" stroke-width="3" stroke-dasharray="4 2"/>
+                            <text x="290" y="370" text-anchor="middle" fill="#94a3b8" font-size="20">V</text>
+                            <text x="290" y="415" text-anchor="middle" fill="#64748b" font-size="16">更远的点</text>
+                        </g>
+                    </svg>
+                 </div>
+            </div>
+        </div>
+      </section>
+
+      <!-- Page Number -->
+      <div id="page-number" class="absolute bottom-6 right-8 text-slate-400 text-[24px] font-mono z-50"></div>
+    </div>
+
+    <script>
+      // --- SLIDESHOW SYSTEM ---
+      let currentSlide = 0;
+      const pageNumberEl = document.getElementById('page-number');
+      
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.has('page')) {
+        const page = parseInt(urlParams.get('page'));
+        if (!isNaN(page) && page > 0) currentSlide = page - 1;
+      }
+
+      function updateSlide() {
+        const slides = document.querySelectorAll('.slide');
+        if (currentSlide >= slides.length) currentSlide = slides.length - 1;
+        if (currentSlide < 0) currentSlide = 0;
+        
+        slides.forEach((slide, index) => {
+          slide.classList.remove('active');
+          if (index === currentSlide) {
+            slide.classList.add('active');
+            const title = slide.getAttribute('data-title');
+            
+            // Lazy Init
+            if (title === 'Dijkstra演示' && document.getElementById('dijkstra-nodes').children.length === 0) {
+                initDijkstraDemo();
+            }
+          }
+        });
+        
+        if(pageNumberEl) pageNumberEl.textContent = `${currentSlide + 1} / ${slides.length}`;
+        try {
+          const url = new URL(window.location.href);
+          url.searchParams.set('page', currentSlide + 1);
+          window.history.replaceState(null, '', url.href);
+        } catch (e) {}
+      }
+      
+      function nextSlide() { 
+        if (currentSlide < document.querySelectorAll('.slide').length - 1) { 
+            currentSlide++; 
+            updateSlide(); 
+        } 
+      }
+      
+      function prevSlide() { 
+        if (currentSlide > 0) { 
+            currentSlide--; 
+            updateSlide(); 
+        } 
+      }
+      
+      function resizeApp() {
+        const app = document.getElementById('app');
+        const scale = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+        app.style.transform = `scale(${scale})`;
+      }
+      
+      window.addEventListener('resize', resizeApp);
+      window.addEventListener('load', () => { resizeApp(); updateSlide(); });
+      document.addEventListener('keydown', (e) => {
+        if (['ArrowRight', ' ', 'Enter'].includes(e.key)) nextSlide();
+        else if (e.key === 'ArrowLeft') prevSlide();
+      });
+
+      // --- SHARED CONSTANTS ---
+      const INF = 99;
+
+      // --- DIJKSTRA DEMO ---
+      // Graph Data from User Image
+      const dNodes = [
+          {id: '0', x: 50, y: 300},
+          {id: '1', x: 200, y: 150},
+          {id: '7', x: 200, y: 450},
+          {id: '2', x: 400, y: 150},
+          {id: '8', x: 400, y: 300},
+          {id: '6', x: 400, y: 450},
+          {id: '3', x: 600, y: 150},
+          {id: '5', x: 600, y: 450},
+          {id: '4', x: 750, y: 300}
+      ];
+      // Edges based on visual analysis of the image
+      const dEdges = [
+          {u: '0', v: '1', w: 4},
+          {u: '0', v: '7', w: 8},
+          {u: '1', v: '7', w: 11},
+          {u: '1', v: '2', w: 8},
+          {u: '7', v: '8', w: 7},
+          {u: '7', v: '6', w: 1},
+          {u: '6', v: '8', w: 6},
+          {u: '6', v: '5', w: 2},
+          {u: '2', v: '8', w: 2},
+          {u: '2', v: '5', w: 4},
+          {u: '2', v: '3', w: 7},
+          {u: '3', v: '5', w: 14},
+          {u: '3', v: '4', w: 9},
+          {u: '5', v: '4', w: 10}
+      ];
+      
+      let dSteps = [];
+      let dCurrentStep = -1;
+
+      function generateDijkstraSteps() {
+          dSteps = [];
+          const n = dNodes.length;
+          const dist = new Array(n).fill(INF);
+          const path = new Array(n).fill(-1); // -1 means None/Start
+          const visited = new Array(n).fill(false);
+          
+          // Init
+          dist[0] = 0;
+          path[0] = 0; // Self as prev for start
+          
+          // Helper to snapshot state
+          const snapshot = (desc, activeU = -1, activeV = -1, type = 'step') => {
+              return {
+                  type: type,
+                  desc: desc,
+                  dist: [...dist],
+                  path: [...path],
+                  visited: [...visited],
+                  activeU: activeU,
+                  activeV: activeV
+              };
+          };
+
+          dSteps.push(snapshot('初始化：出发点 0 距离设为 0，其他为 ∞', -1, -1, 'init'));
+
+          for (let i = 0; i < n; i++) {
+              // 1. Select Min Unvisited
+              let u = -1;
+              let minVal = INF;
+              for (let j = 0; j < n; j++) {
+                  if (!visited[j] && dist[j] < minVal) {
+                      minVal = dist[j];
+                      u = j;
+                  }
+              }
+
+              if (u === -1) break; // Should not happen if graph is connected
+
+              // Mark
+              visited[u] = true;
+              dSteps.push(snapshot(`选择距离最近的未标记节点 ${dNodes[u].id} (dist=${minVal})，标记为已确定`, u, -1, 'select'));
+
+              // 2. Relax Neighbors
+              // Find neighbors of u
+              const neighbors = [];
+              dEdges.forEach(e => {
+                  if (e.u === dNodes[u].id) neighbors.push({vIdx: dNodes.findIndex(n=>n.id===e.v), w: e.w});
+                  else if (e.v === dNodes[u].id) neighbors.push({vIdx: dNodes.findIndex(n=>n.id===e.u), w: e.w});
+              });
+
+              for (let neighbor of neighbors) {
+                  const v = neighbor.vIdx;
+                  const w = neighbor.w;
+                  if (!visited[v]) {
+                      const newDist = dist[u] + w;
+                      let updateDesc = `检查邻居 ${dNodes[v].id}：${dist[u]} + ${w} = ${newDist}`;
+                      if (newDist < dist[v]) {
+                          const oldDistVal = dist[v] === INF ? '∞' : dist[v];
+                          dist[v] = newDist;
+                          path[v] = u;
+                          updateDesc += ` < ${oldDistVal}，更新距离和前驱`;
+                          dSteps.push(snapshot(updateDesc, u, v, 'relax'));
+                      } else {
+                          // Optional: show check even if no update? 
+                          // The user image implies we just update. Let's skip non-updates to keep it clean, or show briefly.
+                          // dSteps.push(snapshot(updateDesc + ` >= ${dist[v]}，不更新`, u, v, 'check'));
+                      }
+                  }
+              }
+          }
+          dSteps.push(snapshot('所有节点标记完成，最短路径计算结束', -1, -1, 'finish'));
+
+          // Backtrack Path
+          const targetIdx = dNodes.findIndex(n => n.id === '4');
+          if (targetIdx !== -1) {
+              let curr = targetIdx;
+              const pathNodes = [curr];
+              const pathEdges = [];
+              let pathStr = dNodes[curr].id;
+              
+              while (curr !== 0) { // 0 is source index
+                  const prev = path[curr];
+                  if (prev === -1) break; // Should not happen if connected
+                  
+                  pathEdges.push({u: dNodes[prev].id, v: dNodes[curr].id});
+                  pathNodes.push(prev);
+                  pathStr = dNodes[prev].id + ' -> ' + pathStr;
+                  curr = prev;
+              }
+              
+              dSteps.push({
+                  ...snapshot(`最终最短路径: ${pathStr}`, -1, -1, 'show_path'),
+                  pathNodes: pathNodes,
+                  pathEdges: pathEdges
+              });
+          }
+      }
+
+      function initDijkstraDemo() {
+          generateDijkstraSteps();
+          const svgEdges = document.getElementById('dijkstra-edges');
+          const svgNodes = document.getElementById('dijkstra-nodes');
+          
+          svgEdges.innerHTML = '';
+          svgNodes.innerHTML = '';
+          
+          // Defs
+          const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+          defs.innerHTML = `<marker id="arrow-d" markerWidth="10" markerHeight="10" refX="28" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#334155" /></marker>`;
+          svgEdges.appendChild(defs);
+
+          // Edges
+          dEdges.forEach(e => {
+              const u = dNodes.find(n => n.id === e.u);
+              const v = dNodes.find(n => n.id === e.v);
+              // Draw undirected lines for graph structure, but logic is directed? 
+              // Dijkstra works on directed or undirected. Image implies undirected (lines, no arrows).
+              // But standard Dijkstra usually directed. Let's assume undirected for this "map" style.
+              // I will use lines without arrows for the base graph.
+              
+              const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+              line.setAttribute('x1', u.x); line.setAttribute('y1', u.y);
+              line.setAttribute('x2', v.x); line.setAttribute('y2', v.y);
+              line.setAttribute('stroke', '#334155');
+              line.setAttribute('stroke-width', '2');
+              line.id = `d-edge-${dNodes.indexOf(u)}-${dNodes.indexOf(v)}`; // Use indices for ID to match logic
+              // Actually, logic uses ID string in some places, but indices in others. 
+              // Let's stick to indices for IDs to be safe: d-edge-uIdx-vIdx
+              // But dEdges uses string IDs.
+              // Let's use string IDs for simplicity: d-edge-0-1
+              line.id = `d-edge-${u.id}-${v.id}`;
+              svgEdges.appendChild(line);
+              
+              // Weight
+              const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+              text.setAttribute('x', (u.x + v.x)/2);
+              text.setAttribute('y', (u.y + v.y)/2 - 5);
+              text.setAttribute('fill', '#94a3b8');
+              text.setAttribute('font-size', '18');
+              text.setAttribute('text-anchor', 'middle');
+              text.textContent = e.w;
+              svgEdges.appendChild(text);
+          });
+
+          // Nodes
+          dNodes.forEach((n, i) => {
+              const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+              g.id = `d-node-${i}`;
+              g.innerHTML = `
+                  <circle r="20" cx="${n.x}" cy="${n.y}" fill="#1e293b" stroke="#334155" stroke-width="3" />
+                  <text x="${n.x}" y="${n.y+7}" text-anchor="middle" fill="#94a3b8" font-size="20" font-weight="bold">${n.id}</text>
+              `;
+              svgNodes.appendChild(g);
+          });
+          
+          // Init Table Structure (Rows)
+          const tbody = document.getElementById('dijkstra-table-body');
+          tbody.innerHTML = '';
+          dNodes.forEach((n, i) => {
+              const tr = document.createElement('tr');
+              tr.id = `d-row-${i}`;
+              tr.className = 'border-b border-slate-700 hover:bg-slate-800/30 transition-colors';
+              // Init cells
+              tr.innerHTML = `
+                  <td class="p-4 border-r border-slate-700 font-bold text-white">${n.id}</td>
+                  <td class="p-4 border-r border-slate-700 text-slate-500"><i class="fas fa-check opacity-0"></i></td>
+                  <td class="p-4 border-r border-slate-700 font-mono text-slate-400">∞</td>
+                  <td class="p-4 border-slate-700 font-mono text-slate-400">-</td>
+              `;
+              tbody.appendChild(tr);
+          });
+          
+          resetDijkstraStep();
+      }
+
+      function updateDijkstraVisuals() {
+          const status = document.getElementById('dijkstra-status');
+          
+          if(dCurrentStep < 0) {
+              status.textContent = "Ready...";
+              // Reset visuals
+              dNodes.forEach((n, i) => {
+                  const row = document.getElementById(`d-row-${i}`);
+                  if(row) {
+                      row.children[1].innerHTML = '<i class="fas fa-check opacity-0"></i>';
+                      row.children[2].textContent = i === 0 ? '0' : '∞';
+                      row.children[2].className = 'p-4 border-r border-slate-700 font-mono ' + (i===0?'text-white':'text-slate-400');
+                      row.children[3].textContent = i === 0 ? '0' : '-';
+                      row.className = 'border-b border-slate-700 hover:bg-slate-800/30 transition-colors';
+                  }
+                  
+                  const g = document.getElementById(`d-node-${i}`);
+                  if(g) {
+                      g.querySelector('circle').setAttribute('stroke', '#334155');
+                      g.querySelector('circle').setAttribute('fill', '#1e293b');
+                      g.querySelector('text').setAttribute('fill', '#94a3b8');
+                  }
+              });
+               document.querySelectorAll('line').forEach(l => {
+                  l.setAttribute('stroke', '#334155'); l.setAttribute('stroke-width', '2');
+              });
+              return;
+          }
+          
+          const step = dSteps[dCurrentStep];
+          status.textContent = step.desc;
+          
+          // Update Table & Graph Nodes
+          step.dist.forEach((d, i) => {
+              const row = document.getElementById(`d-row-${i}`);
+              const g = document.getElementById(`d-node-${i}`);
+              const circle = g.querySelector('circle');
+              const text = g.querySelector('text');
+              
+              // 1. Update Dist & Path
+              const distStr = d === INF ? '∞' : d;
+              const pathStr = step.path[i] === -1 ? '-' : dNodes[step.path[i]].id;
+              
+              // Highlight changes if this is a relax step and this node is v
+              if (step.type === 'relax' && step.activeV === i) {
+                  row.children[2].innerHTML = `<span class="text-dijkstra font-bold animate-pulse">${distStr}</span>`;
+                  row.children[3].innerHTML = `<span class="text-dijkstra font-bold animate-pulse">${pathStr}</span>`;
+              } else {
+                  row.children[2].textContent = distStr;
+                  row.children[3].textContent = pathStr;
+              }
+              
+              // 2. Update Marked Status
+              if (step.visited[i]) {
+                  row.children[1].innerHTML = '<i class="fas fa-check text-green-500"></i>';
+                  row.className = 'border-b border-slate-700 bg-slate-800/50'; // Dim visited rows
+                  
+                  circle.setAttribute('stroke', '#22c55e');
+                  circle.setAttribute('fill', '#064e3b');
+                  text.setAttribute('fill', '#fff');
+              } else {
+                  row.children[1].innerHTML = '<i class="fas fa-check opacity-0"></i>';
+                  row.className = 'border-b border-slate-700 hover:bg-slate-800/30';
+                  
+                  circle.setAttribute('stroke', '#334155');
+                  circle.setAttribute('fill', '#1e293b');
+                  text.setAttribute('fill', '#94a3b8');
+              }
+              
+              // 3. Highlight Active Node (u)
+              if (i === step.activeU) {
+                  circle.setAttribute('stroke', '#f59e0b');
+                  circle.setAttribute('stroke-width', '4');
+                  circle.setAttribute('fill', '#451a03');
+                  text.setAttribute('fill', '#fff');
+                  row.classList.add('bg-dijkstra/10');
+              }
+          });
+          
+          // Update Edges
+          document.querySelectorAll('line').forEach(l => {
+             l.setAttribute('stroke', '#334155');
+             l.setAttribute('stroke-width', '2');
+          });
+          
+          if (step.activeU !== -1 && step.activeV !== -1) {
+              // Find edge
+              const uId = dNodes[step.activeU].id;
+              const vId = dNodes[step.activeV].id;
+              let line = document.getElementById(`d-edge-${uId}-${vId}`);
+              if (!line) line = document.getElementById(`d-edge-${vId}-${uId}`);
+              
+              if (line) {
+                  line.setAttribute('stroke', '#f59e0b');
+                  line.setAttribute('stroke-width', '4');
+              }
+          }
+
+          // Highlight Final Path
+          if (step.type === 'show_path') {
+              if (step.pathEdges) {
+                  step.pathEdges.forEach(e => {
+                      let line = document.getElementById(`d-edge-${e.u}-${e.v}`);
+                      if (!line) line = document.getElementById(`d-edge-${e.v}-${e.u}`);
+                      if (line) {
+                          line.setAttribute('stroke', '#ec4899'); // Pink/Magenta for final path
+                          line.setAttribute('stroke-width', '5');
+                          line.classList.add('animate-pulse');
+                      }
+                  });
+              }
+              if (step.pathNodes) {
+                  step.pathNodes.forEach(i => {
+                       const g = document.getElementById(`d-node-${i}`);
+                       if(g) {
+                           g.querySelector('circle').setAttribute('stroke', '#ec4899');
+                           g.querySelector('circle').setAttribute('fill', '#831843');
+                           g.querySelector('text').setAttribute('fill', '#fff');
+                       }
+                  });
+              }
+          }
+      }
+      function nextDijkstraStep() {
+          if(dCurrentStep < dSteps.length - 1) {
+              dCurrentStep++;
+              updateDijkstraVisuals();
+          }
+      }
+      function prevDijkstraStep() {
+          if(dCurrentStep > -1) {
+              dCurrentStep--;
+              updateDijkstraVisuals();
+          }
+      }
+      function resetDijkstraStep() {
+          dCurrentStep = -1;
+          updateDijkstraVisuals();
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,1142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>18 图的遍历：DFS与BFS</title>
+    <script src="https://unpkg.com/@tailwindcss/browser@4"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+    <style type="text/tailwindcss">
+      @theme {
+        --color-bg-dark: #030712;
+        --color-text-main: #f1f5f9;
+        --color-accent: #8b5cf6; /* Violet - DFS Color */
+        --color-secondary: #06b6d4; /* Cyan - BFS Color */
+        --color-tertiary: #ec4899; /* Pink */
+        --color-warn: #f59e0b;
+        --color-code-bg: #1e293b;
+      }
+      @layer base {
+        body { @apply bg-black text-text-main font-sans overflow-hidden flex justify-center items-center h-screen; }
+      }
+      @layer utilities {
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 0.5; }
+            100% { transform: scale(2); opacity: 0; }
+        }
+        .slide-container { @apply relative w-[1920px] h-[1080px] bg-bg-dark overflow-hidden shadow-2xl; }
+        .slide { @apply absolute inset-0 hidden flex-col p-14 opacity-0 transition-opacity duration-400 ease-in-out; }
+        .slide.active { @apply flex opacity-100; }
+        .bg-decoration { @apply absolute inset-0 z-0 pointer-events-none; background-image: radial-gradient(circle at 15% 15%, rgba(139,92,246,0.08) 0%, transparent 30%), radial-gradient(circle at 85% 85%, rgba(6,182,212,0.08) 0%, transparent 30%); }
+        .grid-overlay { @apply absolute inset-0 z-0; background-size: 60px 60px; background-image: linear-gradient(to right, rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.02) 1px, transparent 1px); }
+        
+        h1 { @apply text-[100px] font-extrabold leading-tight mb-8; background: linear-gradient(135deg, #fff 0%, var(--color-secondary) 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+        h2 { @apply text-[64px] mb-8 text-white inline-block pb-4 border-b-4 border-white/20; }
+        h3 { @apply text-[42px] mb-6 text-secondary; }
+        p { @apply text-[32px] mb-4 text-slate-200 leading-relaxed; }
+        .slide-content li { @apply text-[32px] mb-4 text-slate-200; }
+        strong { @apply text-white font-bold; }
+        
+        .card { @apply bg-white/5 border border-white/10 rounded-3xl p-8 mb-6 backdrop-blur-sm shadow-lg; }
+        .code-block { @apply font-mono bg-code-bg p-6 rounded-2xl border border-slate-700 text-[22px] leading-relaxed text-slate-200 overflow-auto whitespace-pre; }
+        
+        /* Syntax Highlighting */
+        .code-kw { @apply text-[#c678dd]; }
+        .code-type { @apply text-[#e5c07b]; }
+        .code-cm { @apply text-[#94a3b8] italic; }
+        .code-num { @apply text-[#d19a66]; }
+        .code-str { @apply text-[#98c379]; }
+        .code-fn { @apply text-[#61afef]; }
+
+        .btn-primary { @apply px-6 py-3 bg-accent/20 border border-accent/50 rounded-xl text-accent font-bold text-[24px] cursor-pointer transition-all hover:bg-accent/30 hover:scale-105 active:scale-95; }
+        .btn-secondary { @apply px-6 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-slate-200 font-bold text-[24px] cursor-pointer transition-all hover:bg-slate-600/50; }
+        
+        .node-circle { @apply transition-all duration-500 ease-in-out; }
+        .edge-line { @apply transition-all duration-500 ease-in-out; }
+        
+        /* Custom Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar { width: 10px; height: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #1e293b; border-radius: 5px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; border-radius: 5px; }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Global Defs for SVG Arrows -->
+    <svg width="0" height="0" style="position:absolute">
+        <defs>
+            <marker id="arrow-default" markerWidth="10" markerHeight="10" refX="22" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L9,3 z" fill="#475569" />
+            </marker>
+            <marker id="arrow-active" markerWidth="10" markerHeight="10" refX="22" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L9,3 z" fill="#8b5cf6" />
+            </marker>
+        </defs>
+    </svg>
+
+    <div id="app" class="slide-container">
+      <div class="bg-decoration"></div>
+      <div class="grid-overlay"></div>
+
+      <!-- P01: 封面 -->
+      <section class="slide active justify-center items-center text-center" data-title="封面">
+        <div class="flex flex-col items-center z-10 relative -mt-20">
+          <div class="flex gap-16 mb-12">
+             <!-- DFS Icon -->
+             <div class="flex flex-col items-center group">
+                <div class="w-32 h-32 rounded-full border-4 border-accent flex items-center justify-center bg-accent/10 relative overflow-hidden">
+                    <i class="fas fa-layer-group text-6xl text-accent group-hover:scale-110 transition-transform"></i>
+                    <div class="absolute inset-0 border-4 border-accent rounded-full animate-ping opacity-20"></div>
+                </div>
+                <span class="mt-4 text-accent text-2xl font-bold font-mono">DFS</span>
+             </div>
+             <!-- BFS Icon -->
+             <div class="flex flex-col items-center group">
+                <div class="w-32 h-32 rounded-full border-4 border-secondary flex items-center justify-center bg-secondary/10 relative overflow-hidden">
+                    <i class="fas fa-wifi text-6xl text-secondary group-hover:scale-110 transition-transform"></i>
+                    <div class="absolute inset-0 border-4 border-secondary rounded-full animate-[pulse_2s_infinite] opacity-20"></div>
+                </div>
+                <span class="mt-4 text-secondary text-2xl font-bold font-mono">BFS</span>
+             </div>
+          </div>
+
+          <div class="bg-slate-800/50 px-8 py-3 rounded-full border border-slate-600 mb-8 backdrop-blur-md">
+            <span class="text-slate-300 text-2xl font-mono tracking-[0.2em]">ALGORITHM & DATA STRUCTURE</span>
+          </div>
+          
+          <h1>数据结构与算法</h1>
+          <p class="text-[56px] text-slate-300 mt-4">图的遍历</p>
+          <div class="mt-12 flex gap-8 text-[28px] text-slate-400">
+            <span class="flex items-center"><i class="fas fa-circle text-accent text-xs mr-3"></i>深度优先搜索</span>
+            <span class="flex items-center"><i class="fas fa-circle text-secondary text-xs mr-3"></i>广度优先搜索</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- P02: 遍历概念 -->
+      <section class="slide" data-title="遍历概念">
+        <h2>什么是图的遍历？</h2>
+        <div class="grid grid-cols-2 gap-16 flex-1 min-h-0 items-center">
+            <div class="flex flex-col gap-8">
+                <div class="card border-l-8 border-tertiary">
+                    <h3 class="text-tertiary text-[40px] mb-4">定义</h3>
+                    <p class="text-[32px] text-white leading-relaxed">
+                        从图中某一顶点出发，按照某种搜索方法，对图中<strong class="text-tertiary">所有顶点访问一次且仅一次</strong>。
+                    </p>
+                </div>
+                <div class="card bg-slate-800/30">
+                    <h3 class="text-slate-200 text-[32px] mb-6">核心难点</h3>
+                    <ul class="space-y-6">
+                        <li class="flex items-center text-[28px]">
+                            <i class="fas fa-route w-12 text-center text-accent"></i>
+                            <span class="text-slate-200">图可能有回路（环），如何避免兜圈子？</span>
+                        </li>
+                        <li class="flex items-center text-[28px]">
+                            <i class="fas fa-project-diagram w-12 text-center text-secondary"></i>
+                            <span class="text-slate-200">图可能不连通，如何访问孤立点？</span>
+                        </li>
+                    </ul>
+                    <div class="mt-6 p-4 bg-black/30 rounded-xl border border-slate-600">
+                        <p class="text-[26px] text-slate-300 m-0">
+                            <i class="fas fa-key text-yellow-500 mr-2"></i> 解决方案：设置 <span class="font-mono text-yellow-400">visited[N]</span> 数组记录访问状态。
+                        </p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Visual Metaphor -->
+            <div class="flex flex-col gap-8">
+                <div class="bg-slate-900/50 p-8 rounded-3xl border border-slate-700 flex items-center gap-6">
+                    <div class="w-24 h-24 bg-accent/20 rounded-full flex items-center justify-center text-4xl text-accent border-2 border-accent">
+                        <i class="fas fa-dungeon"></i>
+                    </div>
+                    <div>
+                        <h4 class="text-accent text-3xl font-bold mb-2">DFS 深度优先</h4>
+                        <p class="text-2xl text-slate-400">像走迷宫：一条路走到黑，撞墙就回头。</p>
+                    </div>
+                </div>
+                
+                <div class="bg-slate-900/50 p-8 rounded-3xl border border-slate-700 flex items-center gap-6">
+                    <div class="w-24 h-24 bg-secondary/20 rounded-full flex items-center justify-center text-4xl text-secondary border-2 border-secondary">
+                        <i class="fas fa-wifi"></i>
+                    </div>
+                    <div>
+                        <h4 class="text-secondary text-3xl font-bold mb-2">BFS 广度优先</h4>
+                        <p class="text-2xl text-slate-400">像水波扩散：由近及远，层层推进。</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+      </section>
+
+      <!-- P03: DFS 概念 -->
+      <section class="slide" data-title="DFS概念">
+        <h2>深度优先搜索 (DFS)</h2>
+        <div class="grid grid-cols-2 gap-12 flex-1 min-h-0">
+            <div class="flex flex-col">
+                <div class="card border-l-8 border-accent">
+                    <h3 class="text-accent text-[36px] mb-4">算法思想</h3>
+                    <ol class="list-decimal list-inside space-y-4 text-[28px] text-slate-200">
+                        <li>访问起始点 <span class="font-mono text-accent">v</span>。</li>
+                        <li>若 <span class="font-mono text-accent">v</span> 有未被访问的邻接点 <span class="font-mono text-accent">w</span>，则从 <span class="font-mono text-accent">w</span> 出发继续深度遍历。</li>
+                        <li>若所有邻接点都被访问过，则<strong class="text-accent">回退 (Backtrack)</strong> 到前一个顶点。</li>
+                        <li>重复上述过程，直到所有通达节点都被访问。</li>
+                    </ol>
+                </div>
+                <div class="card bg-slate-800/30 mt-4">
+                    <h3 class="text-white text-[30px] mb-4">实现机制</h3>
+                    <div class="flex items-center gap-6">
+                        <div class="text-[60px] text-accent"><i class="fas fa-layer-group"></i></div>
+                        <div>
+                            <p class="text-[28px] text-white font-bold">栈 (Stack)</p>
+                            <p class="text-[24px] text-slate-400">后进先出 (LIFO)。通常使用<strong class="text-white">递归</strong>隐式使用系统栈。</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex items-center justify-center relative">
+                <!-- Simple Tree/Maze Visualization -->
+                <svg width="600" height="500" viewBox="0 0 600 500" class="overflow-visible">
+                    <!-- Path lines -->
+                    <path d="M300,50 L200,150" stroke="#334155" stroke-width="4" />
+                    <path d="M300,50 L400,150" stroke="#334155" stroke-width="4" />
+                    <path d="M200,150 L150,250" stroke="#334155" stroke-width="4" />
+                    <path d="M200,150 L250,250" stroke="#334155" stroke-width="4" />
+                    <path d="M150,250 L120,350" stroke="#334155" stroke-width="4" />
+                    
+                    <!-- Nodes -->
+                    <g transform="translate(300,50)"><circle r="25" fill="#8b5cf6" /><text dy="8" dx="-8" fill="white" font-size="20">1</text></g>
+                    <g transform="translate(200,150)"><circle r="25" fill="#8b5cf6" /><text dy="8" dx="-8" fill="white" font-size="20">2</text></g>
+                    <g transform="translate(150,250)"><circle r="25" fill="#8b5cf6" /><text dy="8" dx="-8" fill="white" font-size="20">3</text></g>
+                    <g transform="translate(120,350)"><circle r="25" fill="#8b5cf6" /><text dy="8" dx="-8" fill="white" font-size="20">4</text></g>
+                    
+                    <!-- Arrow indicating depth -->
+                    <path d="M340,50 Q450,200 160,350" fill="none" stroke="#ec4899" stroke-width="3" stroke-dasharray="10,10" marker-end="url(#arrow-active)" />
+                    <text x="380" y="200" fill="#ec4899" font-size="24">优先深入</text>
+                </svg>
+            </div>
+        </div>
+      </section>
+
+      <!-- P04: DFS 演示 -->
+      <section class="slide" data-title="DFS演示">
+        <h2>DFS 算法演示</h2>
+        <div class="flex gap-8 flex-1 min-h-0 w-full">
+            <!-- Left: Graph -->
+            <div class="w-3/5 bg-slate-900/50 rounded-3xl border border-slate-700 relative flex items-center justify-center">
+                <svg id="dfs-svg" width="100%" height="100%" viewBox="0 0 800 600" class="overflow-visible">
+                    <g id="dfs-edges"></g>
+                    <g id="dfs-nodes"></g>
+                </svg>
+                <div class="absolute top-4 left-4 text-slate-400 font-mono">Graph G</div>
+            </div>
+
+            <!-- Right: State -->
+            <div class="w-2/5 flex flex-col gap-6">
+                <!-- Stack Viz -->
+                <div class="flex-1 bg-slate-800/30 rounded-2xl border border-slate-700 p-6 flex flex-col">
+                    <h3 class="text-white text-[24px] mb-4 border-b border-slate-600 pb-2"><i class="fas fa-layer-group mr-2 text-accent"></i>递归栈 (Recursion Stack)</h3>
+                    <div id="dfs-stack" class="flex-1 flex flex-col-reverse gap-2 overflow-hidden items-center justify-start py-2">
+                        <!-- Stack items injected here -->
+                    </div>
+                </div>
+
+                <!-- Visited Array -->
+                <div class="h-32 bg-slate-800/30 rounded-2xl border border-slate-700 p-6">
+                    <h3 class="text-white text-[24px] mb-2">Visited 数组</h3>
+                    <div id="dfs-visited" class="flex gap-2">
+                        <!-- Visited cells injected here -->
+                    </div>
+                </div>
+                <div id="dfs-status" class="text-accent text-[24px] font-mono h-8">Ready to start...</div>
+                <!-- Controls -->
+                <div class="flex gap-4">
+                    <button onclick="prevDFSStep()" class="btn-secondary flex-1"><i class="fas fa-step-backward mr-2"></i>上一步</button>
+                    <button onclick="resetDFSStep()" class="btn-secondary w-16"><i class="fas fa-undo"></i></button>
+                    <button onclick="nextDFSStep()" class="btn-primary flex-1">下一步<i class="fas fa-step-forward ml-2"></i></button>
+                </div>
+            </div>
+        </div>
+      </section>
+
+      <!-- P05: DFS 代码 -->
+      <section class="slide" data-title="DFS代码">
+        <h2>DFS 代码实现 (C语言)</h2>
+        <div class="grid grid-cols-2 gap-8 flex-1 min-h-0">
+            <div class="code-block h-full custom-scrollbar text-[20px]"><span class="code-kw">int</span> visited[MAX_V]; <span class="code-cm">// 访问标记数组</span>
+
+<span class="code-cm">// 邻接矩阵的DFS递归算法</span>
+<span class="code-type">void</span> <span class="code-fn">DFS</span>(<span class="code-type">MGraph</span> G, <span class="code-type">int</span> i) {
+    <span class="code-type">int</span> j;
+    
+    <span class="code-cm">// 1. 访问当前节点并标记</span>
+    visited[i] = <span class="code-num">1</span>;
+    <span class="code-fn">printf</span>(<span class="code-str">"%c "</span>, G.vexs[i]);
+    
+    <span class="code-cm">// 2. 遍历所有邻接点</span>
+    <span class="code-kw">for</span>(j = <span class="code-num">0</span>; j < G.numVertexes; j++) {
+        <span class="code-cm">// 若有边且未被访问</span>
+        <span class="code-kw">if</span>(G.arc[i][j] == <span class="code-num">1</span> && !visited[j]) {
+            <span class="code-fn">DFS</span>(G, j); <span class="code-cm">// 递归调用</span>
+        }
+    }
+}
+
+<span class="code-cm">// 遍历整个图（处理非连通图）</span>
+<span class="code-type">void</span> <span class="code-fn">DFSTraverse</span>(<span class="code-type">MGraph</span> G) {
+    <span class="code-type">int</span> i;
+    <span class="code-kw">for</span>(i = <span class="code-num">0</span>; i < G.numVertexes; i++)
+        visited[i] = <span class="code-num">0</span>; <span class="code-cm">// 初始化</span>
+        
+    <span class="code-kw">for</span>(i = <span class="code-num">0</span>; i < G.numVertexes; i++)
+        <span class="code-kw">if</span>(!visited[i])
+            <span class="code-fn">DFS</span>(G, i); <span class="code-cm">// 对未访问的顶点调用DFS</span>
+}</div>
+            <div class="flex flex-col gap-6">
+                <div class="card border-l-8 border-accent">
+                    <h3 class="text-white text-[32px] mb-4">代码解析</h3>
+                    <ul class="space-y-4 text-[26px] text-slate-300">
+                        <li><strong class="text-accent">递归基</strong>：隐式包含在循环条件中（无未访问邻居时函数结束，自动回溯）。</li>
+                        <li><strong class="text-accent">visited[]</strong>：至关重要，防止在环路中死循环。</li>
+                        <li><strong class="text-accent">非连通图</strong>：<span class="font-mono">DFSTraverse</span> 循环确保所有连通分量都被访问。</li>
+                    </ul>
+                </div>
+                <div class="card bg-slate-800/30">
+                    <h3 class="text-white text-[32px] mb-4">复杂度分析</h3>
+                    <ul class="space-y-4 text-[26px] text-slate-300">
+                        <li><strong>邻接矩阵</strong>：<span class="font-mono text-warn">O(V²)</span> —— 每次都要遍历一行找邻居。</li>
+                        <li><strong>邻接表</strong>：<span class="font-mono text-green-400">O(V + E)</span> —— 只遍历实际存在的边。</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+      </section>
+
+      <!-- P06: BFS 概念 -->
+      <section class="slide" data-title="BFS概念">
+        <h2>广度优先搜索 (BFS)</h2>
+        <div class="grid grid-cols-2 gap-12 flex-1 min-h-0">
+            <div class="flex flex-col">
+                <div class="card border-l-8 border-secondary">
+                    <h3 class="text-secondary text-[36px] mb-4">算法思想</h3>
+                    <ol class="list-decimal list-inside space-y-4 text-[28px] text-slate-200">
+                        <li>访问起始点 <span class="font-mono text-secondary">v</span>。</li>
+                        <li>依次访问 <span class="font-mono text-secondary">v</span> 的<strong class="text-white">所有</strong>未被访问的邻接点 <span class="font-mono text-secondary">w1, w2...</span>。</li>
+                        <li>再依次访问 <span class="font-mono text-secondary">w1, w2...</span> 的所有邻接点。</li>
+                        <li>像波纹一样一层层向外扩展。</li>
+                    </ol>
+                </div>
+                <div class="card bg-slate-800/30 mt-4">
+                    <h3 class="text-white text-[30px] mb-4">实现机制</h3>
+                    <div class="flex items-center gap-6">
+                        <div class="text-[60px] text-secondary"><i class="fas fa-layer-group rotate-90"></i></div>
+                        <div>
+                            <p class="text-[28px] text-white font-bold">队列 (Queue)</p>
+                            <p class="text-[24px] text-slate-400">先进先出 (FIFO)。保证先被访问节点的邻居先得到访问。</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex flex-col items-center justify-center relative w-full h-full">
+                <!-- Maze Visualization -->
+                <div id="maze-grid" class="grid grid-cols-10 gap-1 p-2 bg-slate-900 rounded-lg border border-slate-700 shadow-2xl">
+                    <!-- JS will populate this -->
+                </div>
+                <div class="mt-4 text-slate-400 text-xl font-mono" id="maze-status">BFS Maze Solver</div>
+            </div>
+        </div>
+      </section>
+
+      <!-- P07: BFS 演示 -->
+      <section class="slide" data-title="BFS演示">
+        <h2>BFS 算法演示</h2>
+        <div class="flex gap-8 flex-1 min-h-0 w-full">
+            <!-- Left: Graph -->
+            <div class="w-3/5 bg-slate-900/50 rounded-3xl border border-slate-700 relative flex items-center justify-center">
+                <svg id="bfs-svg" width="100%" height="100%" viewBox="0 0 800 600" class="overflow-visible">
+                    <g id="bfs-edges"></g>
+                    <g id="bfs-nodes"></g>
+                </svg>
+                <div class="absolute top-4 left-4 text-slate-400 font-mono">Graph G</div>
+            </div>
+
+            <!-- Right: State -->
+            <div class="w-2/5 flex flex-col gap-6">
+                <!-- Queue Viz -->
+                <div class="flex-1 bg-slate-800/30 rounded-2xl border border-slate-700 p-6 flex flex-col">
+                    <h3 class="text-white text-[24px] mb-4 border-b border-slate-600 pb-2"><i class="fas fa-bars mr-2 text-secondary"></i>辅助队列 (Queue)</h3>
+                    <div class="flex-1 flex items-center justify-start overflow-x-auto px-2 bg-black/20 rounded-lg relative">
+                        <div class="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-slate-800/30 to-transparent pointer-events-none"></div>
+                        <div id="bfs-queue" class="flex gap-2 min-w-full px-4">
+                            <!-- Queue items injected here -->
+                        </div>
+                        <div class="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-slate-800/30 to-transparent pointer-events-none"></div>
+                    </div>
+                    <div class="flex justify-between text-slate-500 text-sm mt-2 font-mono">
+                        <span>Head (Out)</span>
+                        <span>Rear (In)</span>
+                    </div>
+                </div>
+
+                <!-- Visited Array -->
+                <div class="h-32 bg-slate-800/30 rounded-2xl border border-slate-700 p-6">
+                    <h3 class="text-white text-[24px] mb-2">Visited 数组</h3>
+                    <div id="bfs-visited" class="flex gap-2">
+                        <!-- Visited cells injected here -->
+                    </div>
+                </div>
+
+                <!-- Controls -->
+                <div class="flex gap-4">
+                    <button onclick="prevBFSStep()" class="btn-secondary flex-1"><i class="fas fa-step-backward mr-2"></i>上一步</button>
+                    <button onclick="resetBFSStep()" class="btn-secondary w-16"><i class="fas fa-undo"></i></button>
+                    <button onclick="nextBFSStep()" class="btn-primary flex-1">下一步<i class="fas fa-step-forward ml-2"></i></button>
+                </div>
+                <div id="bfs-status" class="text-secondary text-[24px] font-mono h-8">Ready to start...</div>
+            </div>
+        </div>
+      </section>
+
+      <!-- P08: BFS 代码 -->
+      <section class="slide" data-title="BFS代码">
+        <h2>BFS 代码实现 (C语言)</h2>
+        <div class="grid grid-cols-2 gap-8 flex-1 min-h-0">
+            <div class="code-block h-full custom-scrollbar text-[20px]"><span class="code-type">void</span> <span class="code-fn">BFSTraverse</span>(<span class="code-type">MGraph</span> G) {
+    <span class="code-type">int</span> i, j;
+    <span class="code-type">Queue</span> Q;
+    
+    <span class="code-kw">for</span>(i = <span class="code-num">0</span>; i < G.numVertexes; i++)
+        visited[i] = <span class="code-num">0</span>;
+        
+    <span class="code-fn">InitQueue</span>(&Q); <span class="code-cm">// 初始化辅助队列</span>
+    
+    <span class="code-kw">for</span>(i = <span class="code-num">0</span>; i < G.numVertexes; i++) {
+        <span class="code-kw">if</span>(!visited[i]) {
+            visited[i] = <span class="code-num">1</span>;
+            <span class="code-fn">printf</span>(<span class="code-str">"%c "</span>, G.vexs[i]);
+            <span class="code-fn">EnQueue</span>(&Q, i); <span class="code-cm">// 入队</span>
+            
+            <span class="code-kw">while</span>(!<span class="code-fn">QueueEmpty</span>(Q)) {
+                <span class="code-fn">DeQueue</span>(&Q, &i); <span class="code-cm">// 出队</span>
+                
+                <span class="code-cm">// 找所有邻接点</span>
+                <span class="code-kw">for</span>(j = <span class="code-num">0</span>; j < G.numVertexes; j++) {
+                    <span class="code-kw">if</span>(G.arc[i][j] == <span class="code-num">1</span> && !visited[j]) {
+                        visited[j] = <span class="code-num">1</span>;
+                        <span class="code-fn">printf</span>(<span class="code-str">"%c "</span>, G.vexs[j]);
+                        <span class="code-fn">EnQueue</span>(&Q, j); <span class="code-cm">// 发现新节点，入队</span>
+                    }
+                }
+            }
+        }
+    }
+}</div>
+            <div class="flex flex-col gap-6">
+                <div class="card border-l-8 border-secondary">
+                    <h3 class="text-white text-[32px] mb-4">关键逻辑</h3>
+                    <ul class="space-y-4 text-[26px] text-slate-300">
+                        <li><strong class="text-secondary">入队时机</strong>：<strong class="text-white">发现</strong>未访问邻居时立即入队并标记 visited。</li>
+                        <li><strong class="text-secondary">出队时机</strong>：处理完当前节点后出队，转而处理队列头部节点的邻居。</li>
+                        <li><strong class="text-secondary">循环结构</strong>：外层循环处理非连通图，内层 while 循环处理当前连通分量。</li>
+                    </ul>
+                </div>
+                <div class="card bg-slate-800/30">
+                    <h3 class="text-white text-[32px] mb-4">应用场景</h3>
+                    <p class="text-[28px] text-slate-200">
+                        BFS 极其适合寻找<strong class="text-secondary">无权图的最短路径</strong>（如：最少步数走出迷宫、六度人脉）。
+                    </p>
+                </div>
+            </div>
+        </div>
+      </section>
+
+      <!-- P09: 对比与小结 -->
+      <section class="slide" data-title="对比与小结">
+        <h2>DFS vs BFS 对比</h2>
+        <div class="flex flex-col items-center justify-center flex-1 min-h-0 w-full">
+            <div class="w-full max-w-[1600px] overflow-hidden rounded-3xl border border-slate-700 shadow-2xl mb-8">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-800 text-white text-[32px]">
+                            <th class="p-6 border-b border-slate-600">维度</th>
+                            <th class="p-6 border-b border-slate-600 text-accent">深度优先 (DFS)</th>
+                            <th class="p-6 border-b border-slate-600 text-secondary">广度优先 (BFS)</th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-[28px] text-slate-200 bg-slate-900/50">
+                        <tr class="hover:bg-slate-800/50 transition-colors">
+                            <td class="p-6 border-b border-slate-700 font-bold text-white">数据结构</td>
+                            <td class="p-6 border-b border-slate-700"><span class="font-mono text-accent">Stack</span> (栈/递归)</td>
+                            <td class="p-6 border-b border-slate-700"><span class="font-mono text-secondary">Queue</span> (队列)</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition-colors">
+                            <td class="p-6 border-b border-slate-700 font-bold text-white">搜索路径</td>
+                            <td class="p-6 border-b border-slate-700">细长，迅速深入深层</td>
+                            <td class="p-6 border-b border-slate-700">宽广，层层推进</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition-colors">
+                            <td class="p-6 border-b border-slate-700 font-bold text-white">最优解</td>
+                            <td class="p-6 border-b border-slate-700">不能保证最短路径</td>
+                            <td class="p-6 border-b border-slate-700"><strong class="text-green-400">能找到最短路径</strong> (无权图)</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition-colors">
+                            <td class="p-6 font-bold text-white">时间复杂度</td>
+                            <td class="p-6" colspan="2">两者相同。邻接矩阵 <span class="font-mono">O(V²)</span>，邻接表 <span class="font-mono">O(V+E)</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="flex gap-8 w-full max-w-[1600px]">
+                <div class="flex-1 bg-accent/10 border border-accent/30 p-6 rounded-2xl">
+                    <h4 class="text-accent text-2xl font-bold mb-2">DFS 典型应用</h4>
+                    <p class="text-slate-300 text-xl">全排列、寻找所有路径、拓扑排序、判断环、连通性检测。</p>
+                </div>
+                <div class="flex-1 bg-secondary/10 border border-secondary/30 p-6 rounded-2xl">
+                    <h4 class="text-secondary text-2xl font-bold mb-2">BFS 典型应用</h4>
+                    <p class="text-slate-300 text-xl">最短路径(迷宫/地图)、社交网络(几度好友)、Web爬虫、垃圾回收(GC)。</p>
+                </div>
+            </div>
+        </div>
+      </section>
+
+      <!-- Page Number -->
+      <div id="page-number" class="absolute bottom-6 right-8 text-slate-400 text-[24px] font-mono z-50"></div>
+    </div>
+
+    <script>
+      // --- SLIDESHOW LOGIC ---
+      let currentSlide = 0;
+      const pageNumberEl = document.getElementById('page-number');
+      
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.has('page')) {
+        const page = parseInt(urlParams.get('page'));
+        if (!isNaN(page) && page > 0) currentSlide = page - 1;
+      }
+
+      function updateSlide() {
+        const slides = document.querySelectorAll('.slide');
+        if (currentSlide >= slides.length) currentSlide = slides.length - 1;
+        if (currentSlide < 0) currentSlide = 0;
+        
+        slides.forEach((slide, index) => {
+          slide.classList.remove('active');
+          if (index === currentSlide) {
+            slide.classList.add('active');
+            const title = slide.getAttribute('data-title');
+            if (title === 'DFS演示' && document.getElementById('dfs-nodes').children.length === 0) {
+                initDFSDemo();
+            } else if (title === 'BFS演示' && document.getElementById('bfs-nodes').children.length === 0) {
+                initBFSDemo();
+            } else if (title === 'BFS概念') {
+                initMazeDemo();
+            }
+          }
+        });
+        
+        if(pageNumberEl) pageNumberEl.textContent = `${currentSlide + 1} / ${slides.length}`;
+
+        try {
+          const url = new URL(window.location.href);
+          url.searchParams.set('page', currentSlide + 1);
+          window.history.replaceState(null, '', url.href);
+        } catch (e) {}
+      }
+      
+      function nextSlide() { 
+        if (currentSlide < document.querySelectorAll('.slide').length - 1) { 
+            currentSlide++; 
+            updateSlide(); 
+        } 
+      }
+      
+      function prevSlide() { 
+        if (currentSlide > 0) { 
+            currentSlide--; 
+            updateSlide(); 
+        } 
+      }
+      
+      function resizeApp() {
+        const app = document.getElementById('app');
+        const scale = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+        app.style.transform = `scale(${scale})`;
+      }
+      
+      window.addEventListener('resize', resizeApp);
+      window.addEventListener('load', () => { 
+        resizeApp(); 
+        updateSlide(); 
+      });
+      document.addEventListener('keydown', (e) => {
+        if (['ArrowRight', ' ', 'Enter'].includes(e.key)) nextSlide();
+        else if (e.key === 'ArrowLeft') prevSlide();
+      });
+
+      // --- MAZE DEMO LOGIC ---
+      const mazeSize = 10;
+      let mazeGrid = [];
+      let mazeInterval = null;
+      
+      // 0: path, 1: wall, 2: start, 3: end
+      const mazeLayout = [
+          [2, 0, 1, 0, 0, 0, 0, 1, 0, 0],
+          [0, 0, 1, 0, 1, 1, 0, 1, 0, 1],
+          [0, 1, 1, 0, 0, 0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 1, 1, 1, 1, 1, 0],
+          [1, 1, 0, 1, 1, 0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0, 0, 1, 1, 0, 1],
+          [0, 1, 1, 1, 1, 0, 1, 0, 0, 0],
+          [0, 0, 0, 1, 0, 0, 1, 0, 1, 0],
+          [1, 1, 0, 0, 0, 1, 1, 0, 3, 0],
+          [0, 0, 0, 1, 0, 0, 0, 0, 0, 0]
+      ];
+
+      function initMazeDemo() {
+          const gridEl = document.getElementById('maze-grid');
+          if(!gridEl) return;
+          gridEl.innerHTML = '';
+          
+          if(mazeInterval) clearInterval(mazeInterval);
+          
+          for(let y=0; y<mazeSize; y++) {
+              for(let x=0; x<mazeSize; x++) {
+                  const cell = document.createElement('div');
+                  cell.className = 'w-10 h-10 rounded-sm flex items-center justify-center text-xs font-bold transition-all duration-300';
+                  cell.id = `maze-${x}-${y}`;
+                  
+                  const type = mazeLayout[y][x];
+                  if(type === 1) cell.classList.add('bg-slate-700'); // Wall
+                  else if(type === 2) { cell.classList.add('bg-green-500', 'text-white'); cell.textContent = 'S'; } // Start
+                  else if(type === 3) { cell.classList.add('bg-red-500', 'text-white'); cell.textContent = 'E'; } // End
+                  else cell.classList.add('bg-slate-800/50'); // Path
+                  
+                  gridEl.appendChild(cell);
+              }
+          }
+          
+          document.getElementById('maze-status').textContent = "BFS Maze Solver";
+          setTimeout(runMazeBFS, 500);
+      }
+
+      function runMazeBFS() {
+          const start = {x:0, y:0};
+          const end = {x:8, y:8}; 
+          const queue = [start];
+          const visited = new Set(['0,0']);
+          const parent = {};
+          const dirs = [[0,1], [1,0], [0,-1], [-1,0]];
+          
+          let found = false;
+          
+          mazeInterval = setInterval(() => {
+              if(queue.length === 0 || found) {
+                  clearInterval(mazeInterval);
+                  return;
+              }
+              
+              const curr = queue.shift();
+              const currKey = `${curr.x},${curr.y}`;
+              
+              if(currKey !== '0,0' && currKey !== '8,8') {
+                   const el = document.getElementById(`maze-${curr.x}-${curr.y}`);
+                   if(el) {
+                       el.classList.remove('bg-secondary/30');
+                       el.classList.add('bg-secondary/50');
+                   }
+              }
+
+              if(curr.x === end.x && curr.y === end.y) {
+                  found = true;
+                  reconstructPath(parent, end);
+                  return;
+              }
+              
+              for(let d of dirs) {
+                  const nx = curr.x + d[0];
+                  const ny = curr.y + d[1];
+                  const key = `${nx},${ny}`;
+                  
+                  if(nx >= 0 && nx < mazeSize && ny >= 0 && ny < mazeSize && 
+                     mazeLayout[ny][nx] !== 1 && !visited.has(key)) {
+                      visited.add(key);
+                      parent[key] = curr;
+                      queue.push({x:nx, y:ny});
+                      
+                      if(nx !== end.x || ny !== end.y) {
+                          const el = document.getElementById(`maze-${nx}-${ny}`);
+                          if(el) el.classList.add('bg-secondary/30', 'shadow-[0_0_5px_rgba(6,182,212,0.5)]');
+                      }
+                  }
+              }
+          }, 100);
+      }
+
+      function reconstructPath(parent, end) {
+          let curr = end;
+          const path = [];
+          while(curr) {
+              path.push(curr);
+              const key = `${curr.x},${curr.y}`;
+              curr = parent[key];
+          }
+          
+          let i = path.length - 1;
+          const pathInterval = setInterval(() => {
+              if(i < 0) {
+                  clearInterval(pathInterval);
+                  document.getElementById('maze-status').textContent = "Path Found! (Shortest)";
+                  return;
+              }
+              const p = path[i];
+              if((p.x !== 0 || p.y !== 0) && (p.x !== 8 || p.y !== 8)) {
+                  const el = document.getElementById(`maze-${p.x}-${p.y}`);
+                  if(el) el.className = 'w-10 h-10 rounded-sm flex items-center justify-center text-xs font-bold bg-secondary text-white shadow-[0_0_15px_rgba(6,182,212,1)] scale-110 transition-transform';
+              }
+              i--;
+          }, 50);
+      }
+
+      // --- GRAPH DATA (Shared for DFS & BFS) ---
+      // A slightly more complex graph to show backtracking/branching
+      const graphData = {
+          nodes: [
+              { id: 'A', x: 400, y: 50 },
+              { id: 'B', x: 250, y: 150 },
+              { id: 'C', x: 550, y: 150 },
+              { id: 'D', x: 150, y: 300 },
+              { id: 'E', x: 350, y: 300 },
+              { id: 'F', x: 650, y: 300 },
+              { id: 'G', x: 250, y: 450 },
+              { id: 'H', x: 500, y: 450 }
+          ],
+          // Adjacency List
+          adj: {
+              'A': ['B', 'C'],
+              'B': ['A', 'D', 'E'],
+              'C': ['A', 'F'],
+              'D': ['B', 'G'],
+              'E': ['B', 'H'],
+              'F': ['C', 'H'],
+              'G': ['D'], // Dead end to force backtrack
+              'H': ['E', 'F']
+          }
+      };
+
+      // Helper to get edges for drawing
+      function getEdges() {
+          const edges = [];
+          const seen = new Set();
+          for (let u in graphData.adj) {
+              graphData.adj[u].forEach(v => {
+                  const key = [u, v].sort().join('-');
+                  if (!seen.has(key)) {
+                      seen.add(key);
+                      edges.push([u, v]);
+                  }
+              });
+          }
+          return edges;
+      }
+
+      // --- DFS LOGIC ---
+      let dfsSteps = [];
+      let dfsCurrentStepIndex = -1;
+
+      function generateDFSSteps() {
+          dfsSteps = [];
+          const visited = new Set();
+          const stack = []; // Call stack simulation
+          
+          // Helper for recursion simulation
+          function dfs(u, p) {
+              // Step: Enter Node
+              visited.add(u);
+              stack.push(u);
+              dfsSteps.push({
+                  type: 'visit',
+                  node: u,
+                  stack: [...stack],
+                  visited: [...visited],
+                  desc: `访问节点 ${u}，压入栈`
+              });
+
+              const neighbors = graphData.adj[u] || [];
+              // Sort to ensure deterministic order (alphabetical)
+              neighbors.sort(); 
+
+              for (let v of neighbors) {
+                  if (!visited.has(v)) {
+                      // Step: Edge Traversal
+                      dfsSteps.push({
+                          type: 'edge',
+                          from: u,
+                          to: v,
+                          stack: [...stack],
+                          visited: [...visited],
+                          desc: `发现未访问邻居 ${v}，深入...`
+                      });
+                      dfs(v, u);
+                      // Step: Backtrack (return to u)
+                      dfsSteps.push({
+                          type: 'backtrack',
+                          node: u,
+                          from: v,
+                          stack: [...stack],
+                          visited: [...visited],
+                          desc: `从 ${v} 回溯到 ${u}`
+                      });
+                  }
+              }
+              
+              // Step: Leave Node (Pop)
+              stack.pop();
+              dfsSteps.push({
+                  type: 'pop',
+                  node: u,
+                  stack: [...stack],
+                  visited: [...visited],
+                  desc: `节点 ${u} 所有邻居处理完毕，出栈`
+              });
+          }
+
+          dfs('A', null);
+          dfsSteps.push({ type: 'finish', desc: '遍历完成' });
+      }
+
+      function initDFSDemo() {
+          generateDFSSteps();
+          const svgEdges = document.getElementById('dfs-edges');
+          const svgNodes = document.getElementById('dfs-nodes');
+          const visitedContainer = document.getElementById('dfs-visited');
+          
+          // Draw Graph
+          svgEdges.innerHTML = '';
+          svgNodes.innerHTML = '';
+          
+          // Edges
+          getEdges().forEach(([u, v]) => {
+              const uNode = graphData.nodes.find(n => n.id === u);
+              const vNode = graphData.nodes.find(n => n.id === v);
+              const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+              line.setAttribute('x1', uNode.x);
+              line.setAttribute('y1', uNode.y);
+              line.setAttribute('x2', vNode.x);
+              line.setAttribute('y2', vNode.y);
+              line.setAttribute('stroke', '#334155');
+              line.setAttribute('stroke-width', '4');
+              line.id = `dfs-edge-${u}-${v}`;
+              // Add reverse id for easier lookup
+              line.dataset.reverseId = `dfs-edge-${v}-${u}`;
+              svgEdges.appendChild(line);
+          });
+
+          // Nodes
+          graphData.nodes.forEach(node => {
+              const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+              g.id = `dfs-node-${node.id}`;
+              g.innerHTML = `
+                  <circle r="25" cx="${node.x}" cy="${node.y}" fill="#1e293b" stroke="#334155" stroke-width="3" class="node-circle"/>
+                  <text x="${node.x}" y="${node.y+8}" text-anchor="middle" fill="#94a3b8" font-size="20" font-weight="bold">${node.id}</text>
+              `;
+              svgNodes.appendChild(g);
+          });
+
+          // Init Visited Array UI
+          visitedContainer.innerHTML = '';
+          graphData.nodes.forEach(node => {
+             const box = document.createElement('div');
+             box.className = 'w-10 h-10 border border-slate-600 flex items-center justify-center text-slate-500 font-bold rounded bg-slate-900';
+             box.id = `dfs-visited-${node.id}`;
+             box.textContent = node.id;
+             visitedContainer.appendChild(box);
+          });
+          
+          resetDFSStep();
+      }
+
+      function updateDFSVisuals() {
+          const status = document.getElementById('dfs-status');
+          const stackContainer = document.getElementById('dfs-stack');
+          
+          if (dfsCurrentStepIndex < 0) {
+              status.textContent = "Ready to start DFS(A)...";
+              stackContainer.innerHTML = '';
+              // Reset styles
+              document.querySelectorAll('#dfs-nodes circle').forEach(c => {
+                  c.setAttribute('fill', '#1e293b');
+                  c.setAttribute('stroke', '#334155');
+              });
+              document.querySelectorAll('#dfs-nodes text').forEach(t => t.setAttribute('fill', '#94a3b8'));
+              document.querySelectorAll('#dfs-edges line').forEach(l => l.setAttribute('stroke', '#334155'));
+              document.querySelectorAll('[id^="dfs-visited-"]').forEach(v => {
+                  v.className = 'w-10 h-10 border border-slate-600 flex items-center justify-center text-slate-500 font-bold rounded bg-slate-900';
+              });
+              return;
+          }
+
+          const step = dfsSteps[dfsCurrentStepIndex];
+          status.textContent = step.desc;
+
+          // 1. Update Stack UI
+          stackContainer.innerHTML = '';
+          if (step.stack) {
+              step.stack.forEach(nodeId => {
+                  const item = document.createElement('div');
+                  item.className = 'w-full py-2 bg-accent text-white text-center font-bold rounded shadow-lg animate-[fadeIn_0.2s_ease-out]';
+                  item.textContent = `(${nodeId})`;
+                  stackContainer.appendChild(item); // Flex-col-reverse handles bottom-up
+              });
+          }
+
+          // 2. Update Visited UI
+          if (step.visited) {
+              step.visited.forEach(nodeId => {
+                  const vBox = document.getElementById(`dfs-visited-${nodeId}`);
+                  if(vBox) vBox.className = 'w-10 h-10 border border-accent bg-accent text-white flex items-center justify-center font-bold rounded shadow-[0_0_10px_rgba(139,92,246,0.5)]';
+              });
+          }
+
+          // 3. Update Graph Nodes/Edges
+          // Reset all first (simplest way to handle backtrack visual state)
+          document.querySelectorAll('#dfs-nodes circle').forEach(c => {
+               c.setAttribute('fill', '#1e293b');
+               c.setAttribute('stroke', '#334155');
+          });
+          
+          // Highlight visited
+          if (step.visited) {
+              step.visited.forEach(nodeId => {
+                  const g = document.getElementById(`dfs-node-${nodeId}`);
+                  const circle = g.querySelector('circle');
+                  const text = g.querySelector('text');
+                  circle.setAttribute('fill', '#4c1d95'); // Dark violet
+                  circle.setAttribute('stroke', '#8b5cf6');
+                  text.setAttribute('fill', '#fff');
+              });
+          }
+          
+          // Highlight current active node (top of stack)
+          if (step.stack && step.stack.length > 0) {
+              const activeNode = step.stack[step.stack.length - 1];
+              const g = document.getElementById(`dfs-node-${activeNode}`);
+              const circle = g.querySelector('circle');
+              circle.setAttribute('fill', '#8b5cf6'); // Bright violet
+              circle.setAttribute('stroke', '#fff');
+          }
+      }
+
+      function nextDFSStep() {
+          if (dfsCurrentStepIndex < dfsSteps.length - 1) {
+              dfsCurrentStepIndex++;
+              updateDFSVisuals();
+          }
+      }
+      function prevDFSStep() {
+          if (dfsCurrentStepIndex > -1) {
+              dfsCurrentStepIndex--;
+              updateDFSVisuals();
+          }
+      }
+      function resetDFSStep() {
+          dfsCurrentStepIndex = -1;
+          updateDFSVisuals();
+      }
+
+
+      // --- BFS LOGIC ---
+      let bfsSteps = [];
+      let bfsCurrentStepIndex = -1;
+
+      function generateBFSSteps() {
+          bfsSteps = [];
+          const visited = new Set();
+          const queue = [];
+          
+          // Start
+          const start = 'A';
+          visited.add(start);
+          queue.push(start);
+          
+          bfsSteps.push({
+              type: 'start',
+              queue: [...queue],
+              visited: [...visited],
+              active: start,
+              desc: `初始状态：${start} 入队并标记访问`
+          });
+
+          while (queue.length > 0) {
+              const u = queue.shift(); // Dequeue
+              
+              bfsSteps.push({
+                  type: 'dequeue',
+                  queue: [...queue],
+                  visited: [...visited],
+                  active: u,
+                  desc: `队头 ${u} 出队，准备访问邻居`
+              });
+
+              const neighbors = graphData.adj[u] || [];
+              neighbors.sort();
+
+              for (let v of neighbors) {
+                  if (!visited.has(v)) {
+                      visited.add(v);
+                      queue.push(v);
+                      
+                      bfsSteps.push({
+                          type: 'enqueue',
+                          queue: [...queue],
+                          visited: [...visited],
+                          active: u,
+                          target: v,
+                          desc: `发现未访问邻居 ${v} -> 入队`
+                      });
+                  }
+              }
+          }
+          bfsSteps.push({ type: 'finish', desc: '队列为空，遍历结束' });
+      }
+
+      function initBFSDemo() {
+          generateBFSSteps();
+          const svgEdges = document.getElementById('bfs-edges');
+          const svgNodes = document.getElementById('bfs-nodes');
+          const visitedContainer = document.getElementById('bfs-visited');
+          
+          // Draw Graph (Same as DFS but different IDs)
+          svgEdges.innerHTML = '';
+          svgNodes.innerHTML = '';
+          
+          getEdges().forEach(([u, v]) => {
+              const uNode = graphData.nodes.find(n => n.id === u);
+              const vNode = graphData.nodes.find(n => n.id === v);
+              const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+              line.setAttribute('x1', uNode.x);
+              line.setAttribute('y1', uNode.y);
+              line.setAttribute('x2', vNode.x);
+              line.setAttribute('y2', vNode.y);
+              line.setAttribute('stroke', '#334155');
+              line.setAttribute('stroke-width', '4');
+              line.id = `bfs-edge-${u}-${v}`;
+              svgEdges.appendChild(line);
+          });
+
+          graphData.nodes.forEach(node => {
+              const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+              g.id = `bfs-node-${node.id}`;
+              g.innerHTML = `
+                  <circle r="25" cx="${node.x}" cy="${node.y}" fill="#1e293b" stroke="#334155" stroke-width="3" class="node-circle"/>
+                  <text x="${node.x}" y="${node.y+8}" text-anchor="middle" fill="#94a3b8" font-size="20" font-weight="bold">${node.id}</text>
+              `;
+              svgNodes.appendChild(g);
+          });
+
+          visitedContainer.innerHTML = '';
+          graphData.nodes.forEach(node => {
+             const box = document.createElement('div');
+             box.className = 'w-10 h-10 border border-slate-600 flex items-center justify-center text-slate-500 font-bold rounded bg-slate-900';
+             box.id = `bfs-visited-${node.id}`;
+             box.textContent = node.id;
+             visitedContainer.appendChild(box);
+          });
+          
+          resetBFSStep();
+      }
+
+      function updateBFSVisuals() {
+          const status = document.getElementById('bfs-status');
+          const queueContainer = document.getElementById('bfs-queue');
+          
+          if (bfsCurrentStepIndex < 0) {
+              status.textContent = "Ready to start BFS(A)...";
+              queueContainer.innerHTML = '';
+              document.querySelectorAll('#bfs-nodes circle').forEach(c => {
+                  c.setAttribute('fill', '#1e293b');
+                  c.setAttribute('stroke', '#334155');
+              });
+              document.querySelectorAll('#bfs-nodes text').forEach(t => t.setAttribute('fill', '#94a3b8'));
+              document.querySelectorAll('[id^="bfs-visited-"]').forEach(v => {
+                  v.className = 'w-10 h-10 border border-slate-600 flex items-center justify-center text-slate-500 font-bold rounded bg-slate-900';
+              });
+              return;
+          }
+
+          const step = bfsSteps[bfsCurrentStepIndex];
+          status.textContent = step.desc;
+
+          // 1. Update Queue UI
+          queueContainer.innerHTML = '';
+          if (step.queue) {
+              step.queue.forEach(nodeId => {
+                  const item = document.createElement('div');
+                  item.className = 'w-12 h-12 bg-secondary text-white flex items-center justify-center font-bold rounded-lg shadow-lg flex-shrink-0 animate-[fadeIn_0.2s_ease-out]';
+                  item.textContent = nodeId;
+                  queueContainer.appendChild(item);
+              });
+          }
+
+          // 2. Update Visited UI
+          if (step.visited) {
+              step.visited.forEach(nodeId => {
+                  const vBox = document.getElementById(`bfs-visited-${nodeId}`);
+                  if(vBox) vBox.className = 'w-10 h-10 border border-secondary bg-secondary text-white flex items-center justify-center font-bold rounded shadow-[0_0_10px_rgba(6,182,212,0.5)]';
+              });
+          }
+
+          // 3. Update Graph
+          // Reset
+          document.querySelectorAll('#bfs-nodes circle').forEach(c => {
+               c.setAttribute('fill', '#1e293b');
+               c.setAttribute('stroke', '#334155');
+          });
+          
+          // Visited nodes
+          if (step.visited) {
+              step.visited.forEach(nodeId => {
+                  const g = document.getElementById(`bfs-node-${nodeId}`);
+                  const circle = g.querySelector('circle');
+                  const text = g.querySelector('text');
+                  circle.setAttribute('fill', '#0e7490'); // Dark cyan
+                  circle.setAttribute('stroke', '#06b6d4');
+                  text.setAttribute('fill', '#fff');
+              });
+          }
+          
+          // Active node (being processed)
+          if (step.active) {
+              const g = document.getElementById(`bfs-node-${step.active}`);
+              const circle = g.querySelector('circle');
+              circle.setAttribute('fill', '#06b6d4'); // Bright cyan
+              circle.setAttribute('stroke', '#fff');
+          }
+      }
+
+      function nextBFSStep() {
+          if (bfsCurrentStepIndex < bfsSteps.length - 1) {
+              bfsCurrentStepIndex++;
+              updateBFSVisuals();
+          }
+      }
+      function prevBFSStep() {
+          if (bfsCurrentStepIndex > -1) {
+              bfsCurrentStepIndex--;
+              updateBFSVisuals();
+          }
+      }
+      function resetBFSStep() {
+          bfsCurrentStepIndex = -1;
+          updateBFSVisuals();
+      }
+
+    </script>
+  </body>
+</html>

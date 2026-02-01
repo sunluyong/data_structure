@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>21 图的应用：Floyd 最短路径</title>
+    <script src="https://unpkg.com/@tailwindcss/browser@4"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+    <style type="text/tailwindcss">
+      @theme {
+        --color-bg-dark: #030712;
+        --color-text-main: #f1f5f9;
+        --color-dijkstra: #f59e0b; /* Amber */
+        --color-floyd: #ec4899; /* Pink */
+        --color-success: #22c55e;
+        --color-info: #06b6d4;
+        --color-code-bg: #1e293b;
+      }
+      @layer base {
+        body { @apply bg-black text-text-main font-sans overflow-hidden flex justify-center items-center h-screen; }
+      }
+      @layer utilities {
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes highlight-cell {
+            0% { background-color: rgba(236, 72, 153, 0.5); transform: scale(1); }
+            50% { background-color: rgba(236, 72, 153, 0.8); transform: scale(1.1); }
+            100% { background-color: rgba(236, 72, 153, 0.2); transform: scale(1); }
+        }
+        .slide-container { @apply relative w-[1920px] h-[1080px] bg-bg-dark overflow-hidden shadow-2xl; }
+        .slide { @apply absolute inset-0 hidden flex-col p-8 opacity-0 transition-opacity duration-400 ease-in-out; }
+        .slide.active { @apply flex opacity-100; }
+        .bg-decoration { @apply absolute inset-0 z-0 pointer-events-none; background-image: radial-gradient(circle at 10% 10%, rgba(236,72,153,0.08) 0%, transparent 30%), radial-gradient(circle at 90% 90%, rgba(245,158,11,0.08) 0%, transparent 30%); }
+        .grid-overlay { @apply absolute inset-0 z-0; background-size: 60px 60px; background-image: linear-gradient(to right, rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.02) 1px, transparent 1px); }
+        
+        h1 { @apply text-[100px] font-extrabold leading-tight mb-8; background: linear-gradient(135deg, #fff 0%, var(--color-floyd) 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+        h2 { @apply text-[64px] mb-8 text-white inline-block pb-4 border-b-4 border-white/20; }
+        h3 { @apply text-[42px] mb-6 text-floyd; }
+        p { @apply text-[32px] mb-4 text-slate-200 leading-relaxed; }
+        .slide-content li { @apply text-[32px] mb-4 text-slate-200; }
+        strong { @apply text-white font-bold; }
+        
+        .card { @apply bg-white/5 border border-white/10 rounded-3xl p-8 mb-6 backdrop-blur-sm shadow-lg; }
+        .code-block { @apply font-mono bg-code-bg p-6 rounded-2xl border border-slate-700 text-[22px] leading-relaxed text-slate-200 overflow-auto whitespace-pre; }
+        
+        /* Syntax Highlighting */
+        .code-kw { @apply text-[#c678dd]; }
+        .code-type { @apply text-[#e5c07b]; }
+        .code-cm { @apply text-[#94a3b8] italic; }
+        .code-num { @apply text-[#d19a66]; }
+        .code-str { @apply text-[#98c379]; }
+        .code-fn { @apply text-[#61afef]; }
+        
+        .btn-primary { @apply px-6 py-3 bg-floyd/20 border border-floyd/50 rounded-xl text-floyd font-bold text-[24px] cursor-pointer transition-all hover:bg-floyd/30 hover:scale-105 active:scale-95; }
+        .btn-secondary { @apply px-6 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-slate-200 font-bold text-[24px] cursor-pointer transition-all hover:bg-slate-600/50; }
+        
+        /* Custom Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar { width: 10px; height: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #1e293b; border-radius: 5px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; border-radius: 5px; }
+
+        /* Matrix Table Styles */
+        .matrix-table td, .matrix-table th { @apply p-3 text-center border border-slate-700 w-16 h-16 text-2xl; }
+        .matrix-table th { @apply bg-slate-800 text-slate-300 font-bold; }
+        .matrix-table td { @apply bg-slate-900/50 text-slate-200 font-mono transition-colors duration-300; }
+        .matrix-table td.highlight { @apply bg-floyd/30 text-white font-bold scale-110 shadow-lg border-floyd; }
+        .matrix-table td.pivot { @apply bg-dijkstra/30 text-white font-bold; }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app" class="slide-container">
+      <div class="bg-decoration"></div>
+      <div class="grid-overlay"></div>
+
+      <!-- P01: 封面 -->
+      <section class="slide active justify-center items-center text-center" data-title="封面">
+        <div class="flex flex-col items-center z-10 relative -mt-20">
+          <div class="flex gap-16 mb-12">
+             <!-- Icon -->
+             <div class="w-40 h-40 relative flex items-center justify-center">
+                 <i class="fas fa-cubes text-8xl text-floyd drop-shadow-[0_0_25px_rgba(236,72,153,0.5)] animate-pulse"></i>
+                 <div class="absolute -right-16 -bottom-4 bg-slate-800 px-4 py-2 rounded-lg border border-slate-600 text-xl text-white font-mono">D[i][j]</div>
+             </div>
+          </div>
+
+          <div class="bg-slate-800/50 px-8 py-3 rounded-full border border-slate-600 mb-8 backdrop-blur-md">
+            <span class="text-slate-300 text-2xl font-mono tracking-[0.2em]">GRAPH ALGORITHMS</span>
+          </div>
+          
+          <h1>数据结构与算法</h1>
+          <p class="text-[56px] text-slate-300 mt-4">Floyd 多源最短路径算法</p>
+        </div>
+      </section>
+
+      <!-- P02: 核心概念 -->
+      <section class="slide" data-title="核心概念">
+        <h2>多源最短路径问题</h2>
+        <div class="grid grid-cols-2 gap-16 flex-1 min-h-0 items-center">
+            <div class="flex flex-col gap-8">
+                <div class="card border-l-8 border-floyd">
+                    <h3 class="text-floyd text-[40px] mb-4">定义</h3>
+                    <p class="text-[32px] text-white leading-relaxed">
+                        寻找图中<strong class="text-floyd">任意两个顶点</strong>之间的最短路径。<br/>
+                        不同于 Dijkstra (单源)，Floyd 算法一次性求出所有点对的最短距离。
+                    </p>
+                </div>
+                <div class="card bg-slate-800/30">
+                    <h3 class="text-slate-200 text-[32px] mb-6">Floyd 适用场景</h3>
+                    <ul class="space-y-6 text-[28px] text-slate-300">
+                        <li>
+                            <strong class="text-white block mb-2">多源最短路径 (All-Pairs)</strong>
+                            需要知道任意两点间距离，不仅是起点到其他点。
+                        </li>
+                        <li>
+                            <strong class="text-white block mb-2">适用范围</strong>
+                            <span class="text-green-400"><i class="fas fa-check-circle mr-2"></i>允许负权边</span>
+                            <span class="text-red-400 ml-4"><i class="fas fa-times-circle mr-2"></i>不允许负权回路</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="flex flex-col items-center justify-center relative h-full gap-8">
+                <div class="flex flex-col gap-6 justify-center w-full">
+                    <!-- Top: Graph & Initial Matrix -->
+                    <div class="flex gap-6 h-[340px]">
+                        <!-- Graph -->
+                        <div class="w-[35%] bg-slate-900/50 rounded-2xl border border-slate-700 relative flex flex-col items-center justify-center">
+                            <span class="absolute top-3 left-4 text-slate-400 text-xl font-mono">Graph G</span>
+                            <svg viewBox="0 0 240 200" class="w-full h-full overflow-visible">
+                                <defs>
+                                    <marker id="arrow-sm" markerWidth="10" markerHeight="7" refX="20" refY="3.5" orient="auto">
+                                        <polygon points="0 0, 10 3.5, 0 7" fill="#64748b" />
+                                    </marker>
+                                </defs>
+                                <!-- 0(Top), 1(Right), 2(Left) -->
+                                <g transform="translate(120, 40)">
+                                    <!-- Edges -->
+                                    <!-- 0->1 -->
+                                    <line x1="0" y1="0" x2="80" y2="120" stroke="#64748b" stroke-width="2" marker-end="url(#arrow-sm)"/>
+                                    <text x="50" y="60" fill="#94a3b8" font-size="18" font-weight="bold">2</text>
+                                    <!-- 1->2 -->
+                                    <line x1="80" y1="120" x2="-80" y2="120" stroke="#64748b" stroke-width="2" marker-end="url(#arrow-sm)"/>
+                                    <text x="0" y="110" fill="#94a3b8" font-size="18" font-weight="bold">3</text>
+                                    <!-- 2->0 -->
+                                    <line x1="-80" y1="120" x2="0" y2="0" stroke="#64748b" stroke-width="2" marker-end="url(#arrow-sm)"/>
+                                    <text x="-55" y="60" fill="#94a3b8" font-size="18" font-weight="bold">6</text>
+
+                                    <!-- Nodes -->
+                                    <circle cx="0" cy="0" r="20" fill="#0f172a" stroke="#ec4899" stroke-width="3"/>
+                                    <text x="0" y="6" text-anchor="middle" fill="white" font-size="18" font-weight="bold">0</text>
+                                    
+                                    <circle cx="80" cy="120" r="20" fill="#0f172a" stroke="#ec4899" stroke-width="3"/>
+                                    <text x="80" y="126" text-anchor="middle" fill="white" font-size="18" font-weight="bold">1</text>
+                                    
+                                    <circle cx="-80" cy="120" r="20" fill="#0f172a" stroke="#ec4899" stroke-width="3"/>
+                                    <text x="-80" y="126" text-anchor="middle" fill="white" font-size="18" font-weight="bold">2</text>
+                                </g>
+                            </svg>
+                        </div>
+                        
+                        <!-- Initial Matrix -->
+                        <div class="flex-1 bg-slate-900/50 rounded-2xl border border-slate-700 relative flex flex-col items-center justify-center p-6">
+                            <span class="absolute top-4 left-6 text-slate-400 text-2xl font-mono">D[0] (Initial)</span>
+                            <table class="border-collapse text-3xl w-full text-center">
+                                <tr class="text-slate-500 border-b border-slate-700"><td class="p-3"></td><td class="p-3">0</td><td class="p-3">1</td><td class="p-3">2</td></tr>
+                                <tr><td class="p-3 border-r border-slate-700 text-slate-500 font-bold">0</td><td class="p-3 text-floyd font-bold">0</td><td class="p-3 text-white">2</td><td class="p-3 text-slate-600">∞</td></tr>
+                                <tr><td class="p-3 border-r border-slate-700 text-slate-500 font-bold">1</td><td class="p-3 text-slate-600">∞</td><td class="p-3 text-floyd font-bold">0</td><td class="p-3 text-white">3</td></tr>
+                                <tr><td class="p-3 border-r border-slate-700 text-slate-500 font-bold">2</td><td class="p-3 text-white">6</td><td class="p-3 text-slate-600">∞</td><td class="p-3 text-floyd font-bold">0</td></tr>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Bottom: Final Matrix & Text -->
+                    <div class="flex-1 bg-slate-800/30 rounded-2xl border border-slate-700 flex items-center p-8 gap-4">
+                        <!-- Final Matrix -->
+                         <div class="flex flex-col items-center min-w-[320px]">
+                             <span class="text-slate-400 text-2xl font-mono mb-4">D[n] (Final)</span>
+                             <table class="border-collapse text-3xl w-full text-center">
+                                <tr class="text-slate-500 border-b border-slate-600"><td class="p-3"></td><td class="p-3">0</td><td class="p-3">1</td><td class="p-3">2</td></tr>
+                                <tr><td class="p-3 border-r border-slate-600 text-slate-500 font-bold">0</td><td class="p-3 text-floyd/50">0</td><td class="p-3 text-white/50">2</td><td class="p-3 text-white font-bold bg-floyd/20 rounded-lg">5</td></tr>
+                                <tr><td class="p-3 border-r border-slate-600 text-slate-500 font-bold">1</td><td class="p-3 text-white font-bold bg-floyd/20 rounded-lg">9</td><td class="p-3 text-floyd/50">0</td><td class="p-3 text-white/50">3</td></tr>
+                                <tr><td class="p-3 border-r border-slate-600 text-slate-500 font-bold">2</td><td class="p-3 text-white/50">6</td><td class="p-3 text-white font-bold bg-floyd/20 rounded-lg">8</td><td class="p-3 text-floyd/50">0</td></tr>
+                            </table>
+                        </div>
+                        
+                        <!-- Text -->
+                        <div class="flex-1 border-l border-slate-600 pl-10">
+                            <p class="text-[32px] text-white leading-relaxed font-bold mb-4">
+                                <i class="fas fa-check-double text-success mr-3"></i>全覆盖
+                            </p>
+                            <p class="text-[28px] text-slate-300 leading-relaxed">
+                                计算出的矩阵 <span class="font-mono text-floyd bg-floyd/10 px-3 py-1 rounded">D[n][n]</span> 
+                                最终包含了图中<strong class="text-white">所有点对</strong>的最短路径距离。
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+      </section>
+
+      <!-- P03: 算法原理 -->
+      <section class="slide" data-title="算法原理">
+        <h2>动态规划思想</h2>
+        <div class="grid grid-cols-[1fr_1.5fr] gap-12 flex-1 min-h-0 items-center mx-auto w-full">
+            <!-- Left Column: Theory & Insights -->
+            <div class="flex flex-col gap-6 h-full justify-center">
+                <div class="bg-slate-800/50 p-6 rounded-2xl border border-slate-600">
+                    <p class="text-[28px] text-slate-200 leading-relaxed m-0">
+                        <i class="fas fa-quote-left text-floyd/50 mr-3 text-2xl"></i>
+                        每次引入一个新的<strong class="text-floyd">中间点 k</strong>，
+                        检查是否能通过 k <strong class="text-white">缩短任意两点 (i, j) 间的路径</strong>。
+                        <i class="fas fa-quote-right text-floyd/50 ml-3 text-2xl"></i>
+                    </p>
+                </div>
+
+                <div class="card bg-slate-800/30">
+                    <h3 class="text-dijkstra text-[32px] mb-3"><i class="fas fa-lightbulb mr-3"></i>最优子结构</h3>
+                    <p class="text-[28px] text-slate-300 leading-relaxed">
+                        原问题的最优解，包含着子问题的最优解。<br/>
+                        <span class="text-slate-400 text-[24px]">如果最短路径经过 k，那么分段路径 i→k 和 k→j 也一定是最优的。</span>
+                    </p>
+                </div>
+
+                <div class="card bg-slate-800/30">
+                    <h3 class="text-white text-[32px] mb-3"><i class="fas fa-project-diagram mr-3 text-floyd"></i>算法本质</h3>
+                    <p class="text-[26px] text-slate-300 leading-relaxed mb-3">
+                        试图通过<strong class="text-white">动态规划</strong>，<strong class="text-floyd">并行地解决 V 次 Dijkstra</strong> 问题。
+                    </p>
+                    <p class="text-[22px] text-slate-400 m-0 border-t border-slate-700 pt-3">
+                        底层都依赖于相同的<strong class="text-white">“松弛” (Relaxation)</strong> 原理。
+                    </p>
+                </div>
+            </div>
+            <!-- Right Column: Formula & Visual -->
+            <div class="flex flex-col gap-8 h-full justify-center">
+                <div class="card border-l-8 border-floyd">
+                    <h3 class="text-floyd text-[36px] mb-4">状态转移方程</h3>
+                    <div class="bg-slate-900 p-6 rounded-xl border border-slate-700 text-center">
+                        <p class="text-[32px] font-mono text-white m-0 leading-tight">
+                            D[i][j] = min(D[i][j], <span class="text-floyd">D[i][k] + D[k][j]</span>)
+                        </p>
+                    </div>
+                </div>
+                
+                <div class="flex justify-center items-center flex-1 bg-slate-800/30 rounded-3xl border border-slate-700/50 p-4">
+                     <svg width="600" height="375" viewBox="0 0 400 250" class="overflow-visible">
+                        <defs>
+                            <marker id="arrow-tri" markerWidth="10" markerHeight="7" refX="16" refY="3.5" orient="auto">
+                                <polygon points="0 0, 10 3.5, 0 7" fill="#ec4899" />
+                            </marker>
+                        </defs>
+                        <!-- Triangle Logic -->
+                        <!-- i(50, 200), j(350, 200), k(200, 50) -->
+                        
+                        <!-- Direct i -> j -->
+                        <line x1="50" y1="200" x2="350" y2="200" stroke="#64748b" stroke-width="4" stroke-dasharray="8,4" marker-end="url(#arrow-tri)" />
+                        <text x="200" y="230" text-anchor="middle" fill="#64748b" font-size="24">D[i][j] (原路径)</text>
+                        
+                        <!-- Via k -->
+                        <line x1="50" y1="200" x2="200" y2="50" stroke="#ec4899" stroke-width="4" marker-end="url(#arrow-tri)" />
+                        <line x1="200" y1="50" x2="350" y2="200" stroke="#ec4899" stroke-width="4" marker-end="url(#arrow-tri)" />
+                        
+                        <text x="100" y="110" text-anchor="middle" fill="#ec4899" font-size="24">D[i][k]</text>
+                        <text x="300" y="110" text-anchor="middle" fill="#ec4899" font-size="24">D[k][j]</text>
+                        
+                        <!-- Nodes -->
+                        <circle cx="50" cy="200" r="25" fill="#0f172a" stroke="#fff" stroke-width="2"/>
+                        <text x="50" y="208" text-anchor="middle" fill="white" font-weight="bold" font-size="20">i</text>
+                        
+                        <circle cx="350" cy="200" r="25" fill="#0f172a" stroke="#fff" stroke-width="2"/>
+                        <text x="350" y="208" text-anchor="middle" fill="white" font-weight="bold" font-size="20">j</text>
+                        
+                        <circle cx="200" cy="50" r="25" fill="#ec4899" stroke="#fff" stroke-width="3"/>
+                        <text x="200" y="58" text-anchor="middle" fill="white" font-weight="bold" font-size="20">k</text>
+                     </svg>
+                </div>
+            </div>
+        </div>
+      </section>
+
+      <!-- P04: 算法演示 -->
+      <section class="slide" data-title="算法演示">
+        <h2>Floyd 算法演示</h2>
+        <div class="flex gap-8 flex-1 min-h-0 w-full items-start">
+            <!-- Left: Graph -->
+            <div class="w-[45%] flex flex-col gap-4">
+                <div class="bg-slate-900/50 rounded-3xl border border-slate-700 h-[500px] relative flex items-center justify-center">
+                    <svg id="floyd-graph" width="100%" height="100%" viewBox="0 0 400 400" class="overflow-visible">
+                        <!-- Graph will be drawn by JS -->
+                    </svg>
+                </div>
+                <div class="bg-slate-800/30 p-6 rounded-2xl border border-slate-700">
+                    <h3 class="text-[24px] text-white mb-2">当前状态</h3>
+                    <p id="floyd-status" class="text-[22px] text-floyd font-mono leading-tight min-h-[3em]">
+                        准备开始...
+                    </p>
+                </div>
+                 <!-- Controls -->
+                <div class="flex gap-4 mt-2">
+                    <button onclick="prevFloydStep()" class="btn-secondary flex-1"><i class="fas fa-step-backward mr-2"></i>上一步</button>
+                    <button onclick="resetFloyd()" class="btn-secondary w-16"><i class="fas fa-undo"></i></button>
+                    <button onclick="nextFloydStep()" class="btn-primary flex-1">下一步<i class="fas fa-step-forward ml-2"></i></button>
+                </div>
+            </div>
+
+            <!-- Right: Matrix -->
+            <div class="w-[55%] flex flex-col items-center gap-6">
+                <!-- D Matrix -->
+                <div class="bg-slate-800/30 rounded-2xl border border-slate-700 p-6 shadow-2xl w-full">
+                    <h3 class="text-white text-[24px] mb-4 flex justify-between w-full">
+                        <span><i class="fas fa-th mr-2 text-floyd"></i>距离矩阵 D[ ][ ]</span>
+                        <span id="k-indicator" class="text-floyd font-mono font-bold">k = -1 (Init)</span>
+                    </h3>
+                    <table class="matrix-table border-collapse mx-auto">
+                        <thead>
+                            <tr>
+                                <th class="bg-transparent border-none"></th>
+                                <th>0</th><th>1</th><th>2</th><th>3</th>
+                            </tr>
+                        </thead>
+                        <tbody id="floyd-matrix-body">
+                            <!-- Rows injected by JS -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- P Matrix -->
+                <div class="bg-slate-800/30 rounded-2xl border border-slate-700 p-6 shadow-2xl w-full">
+                    <h3 class="text-white text-[24px] mb-4 flex justify-between w-full">
+                        <span><i class="fas fa-route mr-2 text-info"></i>前驱矩阵 P[ ][ ]</span>
+                    </h3>
+                    <table class="matrix-table border-collapse mx-auto">
+                        <thead>
+                            <tr>
+                                <th class="bg-transparent border-none"></th>
+                                <th>0</th><th>1</th><th>2</th><th>3</th>
+                            </tr>
+                        </thead>
+                        <tbody id="floyd-p-matrix-body">
+                            <!-- Rows injected by JS -->
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div class="text-slate-400 text-[20px] text-center">
+                    <span class="inline-block w-4 h-4 bg-floyd/30 border border-floyd mr-2"></span>更新值
+                    <span class="inline-block w-4 h-4 bg-dijkstra/30 border border-dijkstra ml-4 mr-2"></span>中转行/列 (k)
+                </div>
+            </div>
+        </div>
+      </section>
+
+      <!-- P05: 代码实现 -->
+      <section class="slide" data-title="代码实现">
+        <h2>Floyd 代码实现</h2>
+        <div class="grid grid-cols-2 gap-8 flex-1 min-h-0">
+            <div class="code-block h-full custom-scrollbar text-[20px]"><span class="code-type">void</span> <span class="code-fn">Floyd</span>(<span class="code-type">MGraph</span> G) {
+    <span class="code-type">int</span> i, j, k;
+    <span class="code-type">int</span> D[MAXV][MAXV];
+    <span class="code-type">int</span> P[MAXV][MAXV]; <span class="code-cm">// 路径矩阵</span>
+
+    <span class="code-cm">// 1. 初始化</span>
+    <span class="code-kw">for</span>(i = 0; i < G.numVertexes; ++i) {
+        <span class="code-kw">for</span>(j = 0; j < G.numVertexes; ++j) {
+            D[i][j] = G.arc[i][j];
+            P[i][j] = j; <span class="code-cm">// 初始化路径</span>
+        }
+    }
+
+    <span class="code-cm">// 2. 三重循环核心算法</span>
+    <span class="code-cm">// k: 中转节点 (必须在最外层!)</span>
+    <span class="code-kw">for</span>(k = 0; k < G.numVertexes; ++k) {
+        <span class="code-cm">// i: 起点</span>
+        <span class="code-kw">for</span>(i = 0; i < G.numVertexes; ++i) {
+            <span class="code-cm">// j: 终点</span>
+            <span class="code-kw">for</span>(j = 0; j < G.numVertexes; ++j) {
+                
+                <span class="code-cm">// 如果经过 k 能缩短 i 到 j 的距离</span>
+                <span class="code-kw">if</span>(D[i][k] + D[k][j] < D[i][j]) {
+                    <span class="code-cm">// 更新距离</span>
+                    D[i][j] = D[i][k] + D[k][j];
+                    <span class="code-cm">// 更新路径前驱</span>
+                    P[i][j] = P[i][k];
+                }
+            }
+        }
+    }
+}</div>
+            <div class="flex flex-col gap-6">
+                <div class="card border-l-8 border-floyd">
+                    <h3 class="text-white text-[32px] mb-4">复杂度分析</h3>
+                    <ul class="space-y-4 text-[26px] text-slate-300">
+                        <li><strong class="text-floyd">时间复杂度</strong>：<span class="font-mono text-warn">O(V³)</span>。</li>
+                        <li><strong class="text-info">空间复杂度</strong>：<span class="font-mono">O(V²)</span> (存储二维矩阵)。</li>
+                        <li>虽然复杂度高，但常数小，且代码极其简单，适合节点数较少(V ≤ 300)的图。</li>
+                    </ul>
+                </div>
+                <div class="card bg-slate-800/30">
+                    <h3 class="text-white text-[32px] mb-4">易错点</h3>
+                    <p class="text-[26px] text-slate-200 mb-4">
+                        <i class="fas fa-exclamation-circle text-red-400 mr-2"></i>
+                        <strong class="text-white">循环顺序绝不能错！</strong><br/>
+                        <span class="text-floyd font-mono">k</span> (中转点) 必须在最外层。<br/>
+                        <span class="text-slate-400 text-[24px] block mt-2">因为算法本质是“逐步引入中间点 k”，所以 k 必须作为阶段划分的最外层循环。</span>
+                    </p>
+                </div>
+            </div>
+        </div>
+      </section>
+
+      <!-- P06: 总结与对比 -->
+      <section class="slide" data-title="总结与对比">
+        <h2>总结与对比</h2>
+        <div class="grid grid-cols-2 gap-12 flex-1 min-h-0 items-start">
+            <!-- Left: Greedy vs DP -->
+            <div class="flex flex-col gap-8">
+                <div class="card border-l-8 border-dijkstra">
+                    <h3 class="text-dijkstra text-[36px] mb-4">贪心 vs 动态规划</h3>
+                    <div class="space-y-6">
+                        <div>
+                            <strong class="text-white text-[30px] block mb-2">Dijkstra (贪心)</strong>
+                            <p class="text-[26px] text-slate-300 leading-relaxed m-0">
+                                每次“贪婪”地选择当前距离最近的未知节点。<br/>
+                                <span class="text-slate-400 text-[22px]">像走迷宫，每次只走确定的最短一步，不回头。</span>
+                            </p>
+                        </div>
+                        <div class="border-t border-slate-700 pt-4">
+                            <strong class="text-white text-[30px] block mb-2">Floyd (动态规划)</strong>
+                            <p class="text-[26px] text-slate-300 leading-relaxed m-0">
+                                逐步扩大“允许经过的中转点集合”。<br/>
+                                <span class="text-slate-400 text-[22px]">像拼图，先拼好局部（只经过0），再拼更大局部（经过0,1）...</span>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-slate-800/30 p-6 rounded-2xl border border-slate-700">
+                    <h3 class="text-white text-[30px] mb-4"><i class="fas fa-lightbulb text-yellow-400 mr-3"></i>核心区别</h3>
+                    <p class="text-[26px] text-slate-300 leading-relaxed">
+                        Dijkstra 关注<strong class="text-dijkstra">“点”</strong>的扩展（从源点向外辐射）。<br/>
+                        Floyd 关注<strong class="text-floyd">“路径”</strong>的优化（通过中转点松弛）。
+                    </p>
+                </div>
+            </div>
+
+            <!-- Right: Algorithm Comparison -->
+            <div class="flex flex-col gap-6">
+                <div class="card border-l-8 border-floyd h-full">
+                    <h3 class="text-floyd text-[36px] mb-6">Dijkstra vs Floyd</h3>
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="border-b border-slate-600">
+                                <th class="p-4 text-slate-400 text-[24px]">维度</th>
+                                <th class="p-4 text-dijkstra text-[24px]">Dijkstra</th>
+                                <th class="p-4 text-floyd text-[24px]">Floyd</th>
+                            </tr>
+                        </thead>
+                        <tbody class="text-[24px] text-slate-200">
+                            <tr class="border-b border-slate-700/50">
+                                <td class="p-4 font-bold text-white">解决问题</td>
+                                <td class="p-4">单源最短路径</td>
+                                <td class="p-4">多源最短路径</td>
+                            </tr>
+                            <tr class="border-b border-slate-700/50">
+                                <td class="p-4 font-bold text-white">时间复杂度</td>
+                                <td class="p-4 font-mono">O(V²) <span class="text-slate-500 text-[20px]">/ O(E log V)</span></td>
+                                <td class="p-4 font-mono">O(V³)</td>
+                            </tr>
+                            <tr class="border-b border-slate-700/50">
+                                <td class="p-4 font-bold text-white">空间复杂度</td>
+                                <td class="p-4 font-mono">O(V)</td>
+                                <td class="p-4 font-mono">O(V²)</td>
+                            </tr>
+                            <tr class="border-b border-slate-700/50">
+                                <td class="p-4 font-bold text-white">负权边</td>
+                                <td class="p-4 text-red-400"><i class="fas fa-times-circle"></i> 不支持</td>
+                                <td class="p-4 text-green-400"><i class="fas fa-check-circle"></i> 支持</td>
+                            </tr>
+                            <tr>
+                                <td class="p-4 font-bold text-white">实现难度</td>
+                                <td class="p-4">中等 (需辅助结构)</td>
+                                <td class="p-4">极简 (三重循环)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+      </section>
+
+      <!-- Page Number -->
+      <div id="page-number" class="absolute bottom-6 right-8 text-slate-400 text-[24px] font-mono z-50"></div>
+    </div>
+
+    <script>
+      // --- SLIDESHOW SYSTEM ---
+      let currentSlide = 0;
+      const pageNumberEl = document.getElementById('page-number');
+      
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.has('page')) {
+        const page = parseInt(urlParams.get('page'));
+        if (!isNaN(page) && page > 0) currentSlide = page - 1;
+      }
+
+      function updateSlide() {
+        const slides = document.querySelectorAll('.slide');
+        if (currentSlide >= slides.length) currentSlide = slides.length - 1;
+        if (currentSlide < 0) currentSlide = 0;
+        
+        slides.forEach((slide, index) => {
+          slide.classList.remove('active');
+          if (index === currentSlide) {
+            slide.classList.add('active');
+            const title = slide.getAttribute('data-title');
+            if (title === '算法演示' && document.getElementById('floyd-matrix-body').children.length === 0) {
+                initFloydDemo();
+            }
+          }
+        });
+        
+        if(pageNumberEl) pageNumberEl.textContent = `${currentSlide + 1} / ${slides.length}`;
+        try {
+          const url = new URL(window.location.href);
+          url.searchParams.set('page', currentSlide + 1);
+          window.history.replaceState(null, '', url.href);
+        } catch (e) {}
+      }
+      
+      function nextSlide() { 
+        if (currentSlide < document.querySelectorAll('.slide').length - 1) { 
+            currentSlide++; 
+            updateSlide(); 
+        } 
+      }
+      
+      function prevSlide() { 
+        if (currentSlide > 0) { 
+            currentSlide--; 
+            updateSlide(); 
+        } 
+      }
+      
+      function resizeApp() {
+        const app = document.getElementById('app');
+        const scale = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+        app.style.transform = `scale(${scale})`;
+      }
+      
+      window.addEventListener('resize', resizeApp);
+      window.addEventListener('load', () => { resizeApp(); updateSlide(); });
+      document.addEventListener('keydown', (e) => {
+        if (['ArrowRight', ' ', 'Enter'].includes(e.key)) nextSlide();
+        else if (e.key === 'ArrowLeft') prevSlide();
+      });
+
+      // --- FLOYD DEMO ---
+      const fNodes = [
+          {id: 0, label: '0', x: 60, y: 60},
+          {id: 1, label: '1', x: 340, y: 60},
+          {id: 2, label: '2', x: 340, y: 340},
+          {id: 3, label: '3', x: 60, y: 340}
+      ];
+      // Directed Graph
+      // 0->1(2), 1->0(6), 0->2(6), 1->2(3), 2->3(1), 3->0(5), 3->2(2)
+      // Let's make it simpler but interesting enough.
+      // 0 -> 1 (2)
+      // 1 -> 2 (3)
+      // 2 -> 3 (1)
+      // 3 -> 0 (5)
+      // 0 -> 2 (6) [Direct is 6, via 1 is 2+3=5]
+      const fEdges = [
+          {u: 0, v: 1, w: 2},
+          {u: 1, v: 2, w: 3},
+          {u: 2, v: 3, w: 1},
+          {u: 3, v: 0, w: 5},
+          {u: 0, v: 2, w: 6, t: 0.25}, // Shift closer to start (0)
+          {u: 3, v: 1, w: 8, t: 0.25}  // Shift closer to start (3)
+      ];
+      
+      const INF = 99;
+      let fSteps = [];
+      let fCurrentStep = -1;
+
+      function generateFloydSteps() {
+          fSteps = [];
+          const n = fNodes.length;
+          let D = Array.from({length: n}, () => Array(n).fill(INF));
+          let P = Array.from({length: n}, () => Array(n).fill(-1)); // Predecessor
+          let Next = Array.from({length: n}, () => Array(n).fill(null)); // For visual path tracing
+          
+          // Init
+          for(let i=0; i<n; i++) {
+              D[i][i] = 0;
+              P[i][i] = i;
+              Next[i][i] = i;
+          }
+          fEdges.forEach(e => {
+              D[e.u][e.v] = e.w;
+              P[e.u][e.v] = e.u;
+              Next[e.u][e.v] = e.v;
+          });
+          
+          // Helper to get edges for a path
+          const getPathEdges = (u, v, nextMatrix) => {
+              if (nextMatrix[u][v] === null) return [];
+              const edges = [];
+              let curr = u;
+              while (curr !== v) {
+                  const nxt = nextMatrix[curr][v];
+                  if (nxt === null) break; // Should not happen if path exists
+                  edges.push({u: curr, v: nxt});
+                  curr = nxt;
+              }
+              return edges;
+          };
+          
+          // Helper to get path string
+          const getPathStr = (u, v, nextMatrix) => {
+               if (nextMatrix[u][v] === null) return "无";
+               let path = `${u}`;
+               let curr = u;
+               while (curr !== v) {
+                   const nxt = nextMatrix[curr][v];
+                   if (nxt === null) break;
+                   path += `→${nxt}`;
+                   curr = nxt;
+               }
+               return path;
+          };
+
+          fSteps.push({
+              k: -1,
+              desc: "初始化：D 填入权值，P 填入直接前驱 (P[i][j]=i)",
+              matrix: JSON.parse(JSON.stringify(D)),
+              pMatrix: JSON.parse(JSON.stringify(P)),
+              highlights: [],
+              activeNodes: [],
+              activeEdges: []
+          });
+
+          for(let k=0; k<n; k++) {
+              // Snapshot of Next and D at start of k-loop is not enough because updates happen sequentially within i, j loops.
+              // Actually, standard Floyd uses previous iteration's values if we strictly follow D(k-1). 
+              // But in-place implementation uses current values.
+              // To show "Old Path" correctly as "what it was before this specific update", we need the Next matrix state 
+              // that allows reconstructing the path corresponding to the current D[i][j].
+              // The problem is that D[i][j] relies on Next[i][j], Next[Next[i][j]][j]...
+              // If Next[i][j] points to 'u', and Next[u][j] has changed in this k-loop, the path changes.
+              
+              // Let's make a deep copy of Next at the start of k-loop to trace "Old Paths" accurately relative to k-1 state.
+              const prevNext = JSON.parse(JSON.stringify(Next));
+
+              // Step: Select K
+              fSteps.push({
+                  k: k,
+                  desc: `k=${k} (中转点: ${fNodes[k].label})：选中 ${fNodes[k].label} 作为中转点`,
+                  matrix: JSON.parse(JSON.stringify(D)),
+                  pMatrix: JSON.parse(JSON.stringify(P)),
+                  highlights: [],
+                  activeNodes: [{id: k, type: 'pivot'}],
+                  activeEdges: []
+              });
+
+              for(let i=0; i<n; i++) {
+                  for(let j=0; j<n; j++) {
+                      if(i === k || j === k || i === j) continue; // Skip if k is endpoint or same node
+
+                      if(D[i][k] + D[k][j] < D[i][j]) {
+                          const oldDist = D[i][j];
+                          
+                          // Use prevNext to trace the old path to ensure we see the path as it was before k-loop updates
+                          // This avoids the issue where sub-path updates (like 0->2) change the trace of 3->2 before 3->2 is processed.
+                          const oldEdges = getPathEdges(i, j, prevNext).map(e => ({...e, type: 'old'}));
+                          const oldPathStr = getPathStr(i, j, prevNext);
+                          
+                          // Capture edges for new path parts (based on current Next, as we want the new optimal path via k)
+                          // i->k and k->j might have been updated in this k-loop already, which is fine/good for new path.
+                          const newEdges1 = getPathEdges(i, k, Next).map(e => ({...e, type: 'new'}));
+                          const newEdges2 = getPathEdges(k, j, Next).map(e => ({...e, type: 'new'}));
+                          
+                          const dist = D[i][k] + D[k][j];
+                          
+                          // Update Data
+                          D[i][j] = dist;
+                          P[i][j] = P[k][j]; // Standard Floyd update for Predecessor
+                          Next[i][j] = Next[i][k]; // Update Next for tracing
+                          
+                          // Construct new path string by combining i->k and k->j
+                          // Direct lookup getPathStr(i, j, Next) might fail if Next[Next[i][k]][j] is not yet updated in this k-loop
+                          const pathIK = getPathStr(i, k, Next);
+                          const pathKJ = getPathStr(k, j, Next);
+                          // Remove the first node (k) from pathKJ to avoid duplication
+                          const arrowIdx = pathKJ.indexOf('→');
+                          const pathKJ_suffix = arrowIdx !== -1 ? pathKJ.substring(arrowIdx) : ""; 
+                          const newPathStr = pathIK + pathKJ_suffix;
+                          
+                          fSteps.push({
+                              k: k,
+                              desc: `优化 ${i}→${j}：原 ${oldPathStr} (${oldDist === INF ? '∞' : oldDist})，新 ${newPathStr} (${dist})`,
+                              matrix: JSON.parse(JSON.stringify(D)),
+                              pMatrix: JSON.parse(JSON.stringify(P)),
+                              highlights: [{r: i, c: j}],
+                              activeNodes: [
+                                  {id: k, type: 'pivot'}
+                              ],
+                              activeEdges: [...oldEdges, ...newEdges1, ...newEdges2]
+                          });
+                      }
+                  }
+              }
+          }
+          
+          fSteps.push({
+              k: -2,
+              desc: "算法结束，矩阵 D 即为任意两点间的最短距离。",
+              matrix: JSON.parse(JSON.stringify(D)),
+              pMatrix: JSON.parse(JSON.stringify(P)),
+              highlights: [],
+              activeNodes: [],
+              activeEdges: []
+          });
+      }
+
+      function initFloydDemo() {
+          generateFloydSteps();
+          
+          // Draw Graph
+          const svg = document.getElementById('floyd-graph');
+          svg.innerHTML = `
+            <defs>
+                <marker id="arrow-f" markerWidth="16" markerHeight="12" refX="37" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L0,10 L15,5 z" fill="#64748b" /></marker>
+                <marker id="arrow-new" markerWidth="16" markerHeight="12" refX="37" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L0,10 L15,5 z" fill="#22c55e" /></marker>
+                <marker id="arrow-old" markerWidth="16" markerHeight="12" refX="37" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L0,10 L15,5 z" fill="#ef4444" /></marker>
+            </defs>
+          `;
+          
+          fEdges.forEach(e => {
+              const u = fNodes[e.u];
+              const v = fNodes[e.v];
+              
+              // Offset for multiple edges? Here simple.
+              const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+              line.setAttribute('id', `edge-${e.u}-${e.v}`);
+              line.setAttribute('x1', u.x); line.setAttribute('y1', u.y);
+              line.setAttribute('x2', v.x); line.setAttribute('y2', v.y);
+              line.setAttribute('stroke', '#334155');
+              line.setAttribute('stroke-width', '2');
+              line.setAttribute('marker-end', 'url(#arrow-f)');
+              line.setAttribute('transition', 'all 0.3s');
+              svg.appendChild(line);
+              
+              // Weight Label (midpoint or custom t)
+              const t = e.t || 0.5;
+              const mx = u.x + (v.x - u.x) * t;
+              const my = u.y + (v.y - u.y) * t;
+              
+              // Group for label
+              const labelGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+              
+              // Background halo (to hide line behind)
+              const bgText = document.createElementNS("http://www.w3.org/2000/svg", "text");
+              bgText.setAttribute('x', mx); 
+              bgText.setAttribute('y', my);
+              bgText.setAttribute('stroke', '#020617'); // slate-950 (very dark, matching bg)
+              bgText.setAttribute('stroke-width', '12'); // Thick stroke to mask the line
+              bgText.setAttribute('fill', '#020617');
+              bgText.setAttribute('font-size', '20');
+              bgText.setAttribute('font-weight', 'bold');
+              bgText.setAttribute('text-anchor', 'middle');
+              bgText.setAttribute('dominant-baseline', 'central');
+              bgText.textContent = e.w;
+              labelGroup.appendChild(bgText);
+
+              // Foreground text
+              const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+              text.setAttribute('x', mx); 
+              text.setAttribute('y', my);
+              text.setAttribute('fill', '#e2e8f0'); // slate-200 brighter
+              text.setAttribute('font-size', '20');
+              text.setAttribute('font-weight', 'bold');
+              text.setAttribute('text-anchor', 'middle');
+              text.setAttribute('dominant-baseline', 'central');
+              text.textContent = e.w;
+              labelGroup.appendChild(text);
+              
+              svg.appendChild(labelGroup);
+          });
+
+          fNodes.forEach(n => {
+              const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+              g.innerHTML = `
+                  <circle id="node-circle-${n.id}" r="20" cx="${n.x}" cy="${n.y}" fill="#1e293b" stroke="#ec4899" stroke-width="2" transition="all 0.3s" />
+                  <text x="${n.x}" y="${n.y+6}" text-anchor="middle" fill="#fff" font-weight="bold" font-size="18">${n.label}</text>
+              `;
+              svg.appendChild(g);
+          });
+          
+          // Init Matrix HTML
+          const tbody = document.getElementById('floyd-matrix-body');
+          tbody.innerHTML = '';
+          const pbody = document.getElementById('floyd-p-matrix-body');
+          pbody.innerHTML = '';
+
+          for(let i=0; i<fNodes.length; i++) {
+              const tr = document.createElement('tr');
+              tr.innerHTML = `<th class="bg-slate-800 text-slate-300 font-bold">${i}</th>` + 
+                             Array(fNodes.length).fill(0).map((_, j) => `<td id="cell-${i}-${j}">∞</td>`).join('');
+              tbody.appendChild(tr);
+
+              const ptr = document.createElement('tr');
+              ptr.innerHTML = `<th class="bg-slate-800 text-slate-300 font-bold">${i}</th>` + 
+                             Array(fNodes.length).fill(0).map((_, j) => `<td id="p-cell-${i}-${j}">-1</td>`).join('');
+              pbody.appendChild(ptr);
+          }
+          
+          resetFloyd();
+      }
+
+      function updateFloydVisuals() {
+          if(fCurrentStep < 0) {
+              fCurrentStep = 0; // Start at init
+          }
+          const step = fSteps[fCurrentStep];
+          
+          // Update Status
+          document.getElementById('floyd-status').textContent = step.desc;
+          
+          // Update K Indicator
+          const kInd = document.getElementById('k-indicator');
+          if(step.k >= 0) kInd.textContent = `k = ${step.k}`;
+          else if(step.k === -1) kInd.textContent = `k = Init`;
+          else kInd.textContent = `Done`;
+
+          // Reset Nodes
+          fNodes.forEach(n => {
+              const circle = document.getElementById(`node-circle-${n.id}`);
+              if(circle) {
+                  circle.setAttribute('fill', '#1e293b');
+                  circle.setAttribute('stroke', '#ec4899');
+                  circle.setAttribute('stroke-width', '2');
+                  circle.setAttribute('r', '20');
+              }
+          });
+          
+          // Reset Edges
+          fEdges.forEach(e => {
+              const line = document.getElementById(`edge-${e.u}-${e.v}`);
+              if(line) {
+                  line.setAttribute('stroke', '#334155');
+                  line.setAttribute('stroke-width', '2');
+                  line.setAttribute('stroke-dasharray', 'none');
+                  line.setAttribute('marker-end', 'url(#arrow-f)');
+              }
+          });
+
+          // Highlight Nodes
+          if (step.activeNodes) {
+              step.activeNodes.forEach(an => {
+                  const circle = document.getElementById(`node-circle-${an.id}`);
+                  if(circle) {
+                      if (an.type === 'pivot') { // k
+                          circle.setAttribute('fill', '#f59e0b'); // Amber
+                          circle.setAttribute('stroke', '#fff');
+                          circle.setAttribute('r', '24');
+                      }
+                  }
+              });
+          }
+          
+          // Highlight Edges
+          if (step.activeEdges) {
+              step.activeEdges.forEach(ae => {
+                  const line = document.getElementById(`edge-${ae.u}-${ae.v}`);
+                  if(line) {
+                      if (ae.type === 'new') {
+                          line.setAttribute('stroke', '#22c55e'); // Green
+                          line.setAttribute('stroke-width', '2');
+                          line.setAttribute('stroke-dasharray', 'none'); // Ensure solid line
+                          line.setAttribute('marker-end', 'url(#arrow-new)');
+                      } else if (ae.type === 'old') {
+                          line.setAttribute('stroke', '#ef4444'); // Red
+                          line.setAttribute('stroke-width', '2');
+                          line.setAttribute('stroke-dasharray', '5,5');
+                          line.setAttribute('marker-end', 'url(#arrow-old)');
+                      }
+                  }
+              });
+          }
+
+          // Update Matrix Cells
+          for(let i=0; i<4; i++) {
+              for(let j=0; j<4; j++) {
+                  // D Matrix
+                  const cell = document.getElementById(`cell-${i}-${j}`);
+                  const val = step.matrix[i][j];
+                  cell.textContent = val === INF ? '∞' : val;
+                  
+                  // P Matrix
+                  const pCell = document.getElementById(`p-cell-${i}-${j}`);
+                  const pVal = step.pMatrix[i][j];
+                  pCell.textContent = pVal === -1 ? '-' : pVal;
+
+                  // Reset classes
+                  cell.className = ''; 
+                  pCell.className = '';
+                  
+                  // Highlight logic
+                  const isPivot = (step.k >= 0 && (i === step.k || j === step.k));
+                  const isUpdated = step.highlights.some(h => h.r === i && h.c === j);
+                  
+                  if(isUpdated) {
+                      cell.classList.add('highlight');
+                      pCell.classList.add('highlight');
+                  } else if(isPivot) {
+                      cell.classList.add('pivot');
+                      pCell.classList.add('pivot');
+                  }
+              }
+          }
+      }
+
+      function nextFloydStep() {
+          if(fCurrentStep < fSteps.length - 1) {
+              fCurrentStep++;
+              updateFloydVisuals();
+          }
+      }
+
+      function prevFloydStep() {
+          if(fCurrentStep > 0) {
+              fCurrentStep--;
+              updateFloydVisuals();
+          }
+      }
+
+      function resetFloyd() {
+          fCurrentStep = 0;
+          updateFloydVisuals();
+      }
+    </script>
+  </body>
+</html>
