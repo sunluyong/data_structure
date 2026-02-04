@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>23 图的应用：关键路径</title>
+    <script src="https://unpkg.com/@tailwindcss/browser@4"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+    <style type="text/tailwindcss">
+      @theme {
+        --color-bg-dark: #030712;
+        --color-text-main: #f1f5f9;
+        --color-accent: #22d3ee; /* Cyan */
+        --color-secondary: #a78bfa; /* Purple */
+        --color-highlight: #f472b6; /* Pink */
+        --color-warn: #f59e0b;
+        --color-success: #22c55e;
+        --color-danger: #ef4444;
+        --color-code-bg: #1e293b;
+      }
+      @layer base {
+        body { @apply bg-black text-text-main font-sans overflow-hidden flex justify-center items-center h-screen; }
+      }
+      @layer utilities {
+        .slide-container { @apply relative w-[1920px] h-[1080px] bg-bg-dark overflow-hidden shadow-2xl; }
+        .slide { @apply absolute inset-0 hidden flex-col p-14 opacity-0 transition-opacity duration-400 ease-in-out; }
+        .slide.active { @apply flex opacity-100; }
+        .bg-decoration { @apply absolute inset-0 z-0 pointer-events-none; background-image: radial-gradient(circle at 15% 15%, rgba(34,211,238,0.08) 0%, transparent 30%), radial-gradient(circle at 85% 85%, rgba(167,139,250,0.08) 0%, transparent 30%); }
+        .grid-overlay { @apply absolute inset-0 z-0; background-size: 60px 60px; background-image: linear-gradient(to right, rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.02) 1px, transparent 1px); }
+        
+        h1 { @apply text-[100px] font-extrabold leading-tight mb-8; background: linear-gradient(135deg, #fff 0%, var(--color-accent) 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+        h2 { @apply text-[64px] mb-8 text-white inline-block pb-4 border-b-4 border-white/20; }
+        h3 { @apply text-[42px] mb-6 text-accent; }
+        p { @apply text-[32px] mb-4 text-slate-200 leading-relaxed; }
+        .slide-content li { @apply text-[32px] mb-4 text-slate-200; }
+        strong { @apply text-white font-bold; }
+        
+        .card { @apply bg-white/5 border border-white/10 rounded-3xl p-8 mb-6 backdrop-blur-sm shadow-lg; }
+        .btn-primary { @apply px-6 py-3 bg-accent/20 border border-accent/50 rounded-xl text-accent font-bold text-[24px] cursor-pointer transition-all hover:bg-accent/30 hover:scale-105 active:scale-95; }
+        .btn-secondary { @apply px-6 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-slate-200 font-bold text-[24px] cursor-pointer transition-all hover:bg-slate-600/50; }
+        
+        .custom-scrollbar::-webkit-scrollbar { width: 10px; height: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #1e293b; border-radius: 5px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; border-radius: 5px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app" class="slide-container">
+      <div class="bg-decoration"></div>
+      <div class="grid-overlay"></div>
+
+      <!-- P01: 封面 -->
+      <section class="slide active justify-center items-center text-center" data-title="封面">
+        <div class="flex flex-col items-center z-10 relative -mt-20">
+          <div class="w-40 h-40 relative mb-12">
+             <div class="absolute inset-0 border-4 border-accent/30 rounded-full animate-[spin_10s_linear_infinite]"></div>
+             <div class="absolute inset-4 border-4 border-secondary/30 rounded-full animate-[spin_15s_linear_infinite_reverse]"></div>
+             <div class="absolute inset-0 flex items-center justify-center">
+                 <i class="fas fa-project-diagram text-7xl text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.5)]"></i>
+             </div>
+          </div>
+
+          <div class="bg-slate-800/50 px-8 py-3 rounded-full border border-slate-600 mb-8 backdrop-blur-md">
+            <span class="text-slate-300 text-2xl font-mono tracking-[0.2em]">GRAPH APPLICATIONS</span>
+          </div>
+          
+          <h1>数据结构与算法</h1>
+          <p class="text-[56px] text-slate-300 mt-4">AOE 网与关键路径</p>
+          <div class="mt-12 flex gap-12 text-[32px] text-slate-400 font-mono">
+             <span class="flex items-center"><i class="fas fa-clock text-accent mr-3"></i> 最短工期</span>
+             <span class="text-slate-600">|</span>
+             <span class="flex items-center"><i class="fas fa-route text-secondary mr-3"></i> 最长路径</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- P02: AOE网概念 -->
+      <section class="slide" data-title="AOE网概念">
+        <h2>AOE 网 (Activity On Edge)</h2>
+        <div class="grid grid-cols-2 gap-16 flex-1 min-h-0 items-center">
+            <div class="flex flex-col gap-8">
+                <div class="card border-l-8 border-accent">
+                    <h3 class="text-accent text-[40px] mb-4">核心定义</h3>
+                    <p class="text-[32px] text-white leading-relaxed">
+                        在一个表示工程的<strong class="text-accent">有向无环图 (DAG)</strong> 中：
+                    </p>
+                    <ul class="space-y-6 text-[28px] text-slate-300 mt-4">
+                        <li><i class="fas fa-circle text-secondary mr-3"></i> <strong>顶点 (Vertex)</strong>：表示<strong class="text-white">事件 (Event)</strong>。<br><span class="text-slate-400 text-[24px]">如“食材备好”、“可以开饭”。</span></li>
+                        <li><i class="fas fa-long-arrow-alt-right text-accent mr-3"></i> <strong>有向边 (Edge)</strong>：表示<strong class="text-white">活动 (Activity)</strong>。<br><span class="text-slate-400 text-[24px]">如“打鸡蛋”、“炒菜”。</span></li>
+                        <li><i class="fas fa-weight-hanging text-warn mr-3"></i> <strong>权值 (Weight)</strong>：表示活动持续的<strong class="text-white">时间</strong>。</li>
+                    </ul>
+                </div>
+                <div class="card bg-slate-800/30">
+                    <p class="text-[28px] text-slate-300">
+                        <strong class="text-white">性质：</strong>
+                        只有在某顶点代表的事件发生后，从该顶点出发的活动才能开始。
+                    </p>
+                </div>
+            </div>
+            
+            <div class="flex flex-col items-center justify-center relative h-full bg-slate-900/30 rounded-3xl border border-slate-700/50 p-8">
+                <svg width="700" height="500" viewBox="0 0 700 500" class="overflow-visible">
+                    <defs>
+                        <marker id="arrow-aoe" markerWidth="20" markerHeight="15" refX="58" refY="6" orient="auto" markerUnits="userSpaceOnUse">
+                            <polygon points="0 0, 16 6, 0 12" fill="#334155" />
+                        </marker>
+                        <marker id="arrow-aoe-curve" markerWidth="20" markerHeight="15" refX="18" refY="6" orient="auto" markerUnits="userSpaceOnUse">
+                            <polygon points="0 0, 16 6, 0 12" fill="#334155" />
+                        </marker>
+                    </defs>
+
+                    <!-- Edges -->
+                    <!-- Start -> Ingredients Ready (Parallel Edges) -->
+                    <path d="M140,250 Q250,150 360,250" fill="none" stroke="#334155" stroke-width="4" marker-end="url(#arrow-aoe-curve)" />
+                    <text x="250" y="180" text-anchor="middle" fill="#22d3ee" font-size="24" font-weight="bold">打鸡蛋 (2min)</text>
+
+                    <path d="M140,250 Q250,350 360,250" fill="none" stroke="#334155" stroke-width="4" marker-end="url(#arrow-aoe-curve)" />
+                    <text x="250" y="340" text-anchor="middle" fill="#22d3ee" font-size="24" font-weight="bold">洗番茄 (1min)</text>
+
+                    <!-- Ingredients Ready -> Done -->
+                    <line x1="400" y1="250" x2="700" y2="250" stroke="#334155" stroke-width="4" marker-end="url(#arrow-aoe)" />
+                    <text x="550" y="230" text-anchor="middle" fill="#22d3ee" font-size="24" font-weight="bold">炒菜 (3min)</text>
+                    
+                    <!-- Nodes -->
+                    <!-- V1 Start -->
+                    <circle cx="100" cy="250" r="40" fill="#1e293b" stroke="#a78bfa" stroke-width="4" />
+                    <text x="100" y="260" text-anchor="middle" fill="#fff" font-size="24" font-weight="bold">V1</text>
+                    <text x="100" y="320" text-anchor="middle" fill="#a78bfa" font-size="20">开始</text>
+
+                    <!-- V2 Ingredients Ready -->
+                    <circle cx="400" cy="250" r="40" fill="#1e293b" stroke="#a78bfa" stroke-width="4" />
+                    <text x="400" y="260" text-anchor="middle" fill="#fff" font-size="24" font-weight="bold">V2</text>
+                    <text x="400" y="320" text-anchor="middle" fill="#a78bfa" font-size="20">食材备好</text>
+
+                    <!-- V3 Done (was V4) -->
+                    <circle cx="700" cy="250" r="40" fill="#1e293b" stroke="#a78bfa" stroke-width="4" />
+                    <text x="700" y="260" text-anchor="middle" fill="#fff" font-size="24" font-weight="bold">V3</text>
+                    <text x="700" y="320" text-anchor="middle" fill="#a78bfa" font-size="20">Done</text>
+                </svg>
+                <div class="mt-4 p-4 bg-slate-800/80 rounded-xl border border-slate-600 backdrop-blur-sm">
+                    <p class="text-[24px] text-slate-200 text-center m-0 leading-relaxed">
+                        工程的总工期取决于<strong class="text-white">最长</strong>的那条路径长度，<br/>这条路径被称为<strong class="text-highlight">关键路径 (Critical Path)</strong>。
+                    </p>
+                </div>
+            </div>
+        </div>
+      </section>
+
+      <!-- P03: 关键参数解析 -->
+      <section class="slide" data-title="关键参数解析">
+        <h2>关键参数解析</h2>
+        <div class="grid grid-cols-2 gap-12 flex-1 min-h-0">
+            <!-- Left Column: Vertex Parameters -->
+            <div class="flex flex-col gap-8">
+                <div class="card border-l-8 border-accent">
+                    <h3 class="text-accent text-[40px] mb-4"><i class="fas fa-circle mr-3"></i>事件 (顶点) 参数</h3>
+                    <div class="space-y-8">
+                        <div>
+                            <p class="text-[34px] text-white font-bold mb-2">ve(i) - 最早发生时间 <span class="text-[24px] text-slate-500 font-normal ml-2">(Earliest)</span></p>
+                            <p class="text-[28px] text-slate-300 leading-normal">
+                                事件 i <strong class="text-accent">最早</strong>可以在什么时候发生？
+                                <br><span class="text-slate-400 text-[24px]">取决于所有前驱活动都完成的时间点。</span>
+                            </p>
+                        </div>
+                        <div>
+                            <p class="text-[34px] text-white font-bold mb-2">vl(i) - 最晚发生时间 <span class="text-[24px] text-slate-500 font-normal ml-2">(Latest)</span></p>
+                            <p class="text-[28px] text-slate-300 leading-normal">
+                                事件 i <strong class="text-secondary">最晚</strong>必须在什么时候发生？
+                                <br><span class="text-slate-400 text-[24px]">为了不拖延整个工期，最迟不能晚于这个时间点。</span>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Edge Parameters -->
+            <div class="flex flex-col gap-8">
+                <div class="card border-l-8 border-highlight">
+                    <h3 class="text-highlight text-[40px] mb-4"><i class="fas fa-long-arrow-alt-right mr-3"></i>活动 (边) 参数</h3>
+                    <div class="space-y-8">
+                        <div>
+                            <p class="text-[34px] text-white font-bold mb-2">e(k) - 最早开始时间 <span class="text-[24px] text-slate-500 font-normal ml-2">(Earliest)</span></p>
+                            <p class="text-[28px] text-slate-300 leading-normal">
+                                活动 k <strong class="text-highlight">最早</strong>什么时候能开工？
+                                <br><span class="text-slate-400 text-[24px]">等于其起点事件的最早发生时间 ve(i)。</span>
+                            </p>
+                        </div>
+                        <div>
+                            <p class="text-[34px] text-white font-bold mb-2">l(k) - 最晚开始时间 <span class="text-[24px] text-slate-500 font-normal ml-2">(Latest)</span></p>
+                            <p class="text-[28px] text-slate-300 leading-normal">
+                                活动 k <strong class="text-warn">最晚</strong>必须什么时候开工？
+                                <br><span class="text-slate-400 text-[24px]">等于终点最晚时间减去耗时：vl(j) - weight。</span>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+      </section>
+      <section class="slide" data-title="ve计算">
+        <h2>1. 事件最早发生时间 ve(i)</h2>
+        <div class="flex gap-6 flex-1 min-h-0 w-full">
+            <div class="w-3/5 bg-slate-900/50 rounded-3xl border border-slate-700 relative flex items-center justify-center" id="ve-container">
+                <!-- SVG injected by JS -->
+            </div>
+            <div class="w-2/5 flex flex-col gap-6">
+                <div class="card border-l-8 border-accent flex-1">
+                    <h3 class="text-accent text-[32px] mb-4">正向推导 (Forward)</h3>
+                    <p class="text-[26px] text-slate-300 mb-4">
+                        从源点开始，往后推算。
+                    </p>
+                    <div class="bg-black/30 p-4 rounded-xl font-mono text-[24px] text-white mb-6 border border-slate-600">
+                        ve(j) = Max{ ve(i) + dut(&lt;i,j&gt;) }
+                    </div>
+                    <p class="text-[24px] text-slate-400">
+                        <i class="fas fa-lightbulb text-yellow-500 mr-2"></i> 只有所有前驱活动都完成了，事件 j 才能发生，所以要取<strong class="text-white">最大值</strong>。
+                    </p>
+                </div>
+                <div id="ve-status" class="h-30 text-[24px] text-accent font-mono p-4 bg-slate-800/50 rounded-xl border border-slate-700"></div>
+                <div class="flex gap-4">
+                    <button onclick="prevStep('ve')" class="btn-secondary flex-1">上一步</button>
+                    <button onclick="resetStep('ve')" class="btn-secondary w-16"><i class="fas fa-undo"></i></button>
+                    <button onclick="nextStep('ve')" class="btn-primary flex-1">下一步</button>
+                </div>
+            </div>
+        </div>
+      </section>
+
+      <!-- P05: vl 计算 -->
+      <section class="slide" data-title="vl计算">
+        <h2>2. 事件最晚发生时间 vl(i)</h2>
+        <div class="flex gap-8 flex-1 min-h-0 w-full">
+            <div class="w-3/5 bg-slate-900/50 rounded-3xl border border-slate-700 relative flex items-center justify-center" id="vl-container">
+                <!-- SVG injected by JS -->
+            </div>
+            <div class="w-2/5 flex flex-col gap-6">
+                <div class="card border-l-8 border-secondary flex-1">
+                    <h3 class="text-secondary text-[32px] mb-4">逆向推导 (Backward)</h3>
+                    <p class="text-[26px] text-slate-300 mb-4">
+                        从汇点开始，往前推算。
+                    </p>
+                    <div class="bg-black/30 p-4 rounded-xl font-mono text-[24px] text-white mb-6 border border-slate-600">
+                        vl(i) = Min{ vl(j) - dut(&lt;i,j&gt;) }
+                    </div>
+                    <p class="text-[24px] text-slate-400">
+                        <i class="fas fa-lightbulb text-yellow-500 mr-2"></i> 为了不耽误后续工期，必须在最晚时间前完成，所以要取<strong class="text-white">最小值</strong>。
+                    </p>
+                </div>
+                <div id="vl-status" class="h-30 text-[24px] text-secondary font-mono p-4 bg-slate-800/50 rounded-xl border border-slate-700"></div>
+                <div class="flex gap-4">
+                    <button onclick="prevStep('vl')" class="btn-secondary flex-1">上一步</button>
+                    <button onclick="resetStep('vl')" class="btn-secondary w-16"><i class="fas fa-undo"></i></button>
+                    <button onclick="nextStep('vl')" class="btn-primary flex-1">下一步</button>
+                </div>
+            </div>
+        </div>
+      </section>
+
+      <!-- P06: e & l 计算 -->
+      <section class="slide" data-title="el计算">
+        <h2>3. 活动最早/最晚开始时间</h2>
+        <div class="flex gap-8 flex-1 min-h-0 w-full">
+            <div class="w-3/5 bg-slate-900/50 rounded-3xl border border-slate-700 relative flex items-center justify-center" id="el-container">
+                <!-- SVG injected by JS -->
+            </div>
+            <div class="w-2/5 flex flex-col gap-6">
+                <div class="card border-l-8 border-highlight flex-1 overflow-y-auto custom-scrollbar">
+                    <h3 class="text-highlight text-[32px] mb-4">边计算公式</h3>
+                    <div class="space-y-6">
+                        <div>
+                            <p class="text-[24px] text-white font-bold mb-2">活动最早开始 e(k)</p>
+                            <p class="text-[22px] text-slate-300 font-mono bg-black/30 p-2 rounded">e(k) = ve(i) <span class="text-slate-500">// 起点最早发生</span></p>
+                        </div>
+                        <div>
+                            <p class="text-[24px] text-white font-bold mb-2">活动最晚开始 l(k)</p>
+                            <p class="text-[22px] text-slate-300 font-mono bg-black/30 p-2 rounded">l(k) = vl(j) - weight <span class="text-slate-500">// 终点最晚 - 耗时</span></p>
+                        </div>
+                        <div>
+                            <p class="text-[24px] text-white font-bold mb-2">机动时间 (Slack)</p>
+                            <p class="text-[22px] text-slate-300 font-mono bg-black/30 p-2 rounded">slack = l(k) - e(k)</p>
+                        </div>
+                    </div>
+                </div>
+                <div id="el-status" class="h-40 text-[22px] text-white font-mono p-4 bg-slate-800/50 rounded-xl border border-slate-700 whitespace-pre-line"></div>
+                <div class="flex gap-4">
+                    <button onclick="prevStep('el')" class="btn-secondary flex-1">上一步</button>
+                    <button onclick="resetStep('el')" class="btn-secondary w-16"><i class="fas fa-undo"></i></button>
+                    <button onclick="nextStep('el')" class="btn-primary flex-1">下一步</button>
+                </div>
+            </div>
+        </div>
+      </section>
+
+      <!-- P07: 关键路径 -->
+      <section class="slide" data-title="关键路径">
+        <h2>关键路径 (Critical Path)</h2>
+        <div class="flex gap-8 flex-1 min-h-0 w-full">
+            <div class="w-3/5 bg-slate-900/50 rounded-3xl border border-slate-700 relative flex items-center justify-center" id="cp-container">
+                <!-- SVG injected by JS -->
+            </div>
+            <div class="w-2/5 flex flex-col gap-6">
+                <div class="card border-l-8 border-red-500">
+                    <h3 class="text-red-500 text-[36px] mb-4">判定条件</h3>
+                    <p class="text-[30px] text-white mb-6">
+                        <span class="font-mono text-highlight">e(k) == l(k)</span> 的活动为<strong class="text-red-500">关键活动</strong>。
+                    </p>
+                    <p class="text-[26px] text-slate-300">
+                        由关键活动组成的从源点到汇点的路径，即为<strong class="text-white">关键路径</strong>。
+                    </p>
+                </div>
+                <div class="bg-slate-800/50 p-6 rounded-2xl border border-slate-700">
+                    <h4 class="text-white text-[28px] mb-4">本例结果：</h4>
+                    <ul class="text-[26px] text-slate-300 space-y-2 font-mono" id="cp-result">
+                        <!-- Injected -->
+                    </ul>
+                </div>
+                <button onclick="showCriticalPath()" class="btn-primary mt-auto">显示关键路径</button>
+            </div>
+        </div>
+      </section>
+
+      <!-- P08: 工程应用 -->
+      <section class="slide" data-title="工程应用">
+        <h2>工程进度控制应用</h2>
+        <div class="grid grid-cols-2 gap-16 flex-1 min-h-0 items-center">
+            <div class="flex flex-col gap-8">
+                <div class="card border-l-8 border-green-500">
+                    <h3 class="text-green-500 text-[36px] mb-4"><i class="fas fa-stopwatch mr-4"></i>缩短工期</h3>
+                    <p class="text-[28px] text-slate-200 leading-relaxed">
+                        要想缩短整个工程的工期，必须缩短<strong class="text-white">关键活动</strong>的持续时间。
+                    </p>
+                    <p class="text-[24px] text-slate-400 mt-4">
+                        注意：缩短到一定程度，关键路径可能会发生<strong class="text-warn">变化</strong>（非关键路径变成了关键路径）。
+                    </p>
+                </div>
+                <div class="card bg-slate-800/30">
+                    <h3 class="text-white text-[32px] mb-4">非关键活动</h3>
+                    <p class="text-[28px] text-slate-300">
+                        具有<strong class="text-highlight">机动时间 (Slack)</strong>。
+                        <br/>
+                        在不影响总工期的前提下，可以适当推迟开始，或调配资源支援关键活动。
+                    </p>
+                </div>
+            </div>
+            <div class="flex items-center justify-center">
+                <div class="relative w-full h-80 bg-slate-900 rounded-2xl border border-slate-700 p-8 flex flex-col justify-center gap-6">
+                    <!-- Gantt Chart Metaphor -->
+                    <div class="flex items-center gap-4">
+                        <div class="w-24 text-right text-slate-400 text-xl">Critical</div>
+                        <div class="flex-1 h-10 bg-slate-800 rounded-full overflow-hidden relative">
+                            <div class="absolute left-0 w-full h-full bg-red-500/80"></div>
+                            <div class="absolute left-0 w-full h-full flex items-center justify-center text-white font-bold">No Slack</div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <div class="w-24 text-right text-slate-400 text-xl">Normal</div>
+                        <div class="flex-1 h-10 bg-slate-800 rounded-full overflow-hidden relative">
+                            <div class="absolute left-0 w-3/4 h-full bg-blue-500/80"></div>
+                            <div class="absolute right-0 w-1/4 h-full bg-slate-700 repeating-linear-gradient-45"></div>
+                            <div class="absolute right-4 top-2 text-xs text-slate-400">Slack</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+      </section>
+
+      <!-- P09: 典型应用场景 -->
+      <section class="slide" data-title="典型应用场景">
+        <h2>AOE 网的典型应用场景</h2>
+        <div class="grid grid-cols-2 gap-16 flex-1 min-h-0 items-center">
+            <div class="flex flex-col gap-4">
+                <div class="card border-l-8 border-blue-500">
+                    <h3 class="text-blue-500 text-[36px] mb-4"><i class="fas fa-tasks mr-4"></i>项目管理 (PERT)</h3>
+                    <p class="text-[28px] text-slate-200">
+                        在软件开发、建筑施工等复杂项目中，用于<strong class="text-white">估算工期</strong>、<strong class="text-white">识别瓶颈</strong>。
+                    </p>
+                </div>
+                <div class="card border-l-8 border-purple-500">
+                    <h3 class="text-purple-500 text-[36px] mb-4"><i class="fas fa-industry mr-4"></i>生产流程优化</h3>
+                    <p class="text-[28px] text-slate-200">
+                        在流水线生产中，分析各工序依赖关系，通过优化<strong class="text-white">关键工序</strong>（如增加设备、人力）来提升整体产能。
+                    </p>
+                </div>
+                <div class="card border-l-8 border-orange-500">
+                    <h3 class="text-orange-500 text-[36px] mb-4"><i class="fas fa-truck-moving mr-4"></i>物流与调度</h3>
+                    <p class="text-[28px] text-slate-200">
+                        规划多阶段运输任务，确保物资在<strong class="text-white">最短时间</strong>内到达目的地，同时合理安排中转等待时间。
+                    </p>
+                </div>
+            </div>
+            
+            <div class="flex flex-col items-center justify-center bg-slate-900/30 rounded-3xl border border-slate-700/50 p-12">
+                <div class="text-center mb-12">
+                    <h3 class="text-white text-[48px] font-bold">核心价值</h3>
+                </div>
+                <ul class="space-y-8 text-[36px] text-slate-300 w-full px-8">
+                    <li class="flex items-center bg-slate-800/50 p-6 rounded-2xl border border-slate-700">
+                        <span class="w-12 h-12 rounded-full bg-accent flex items-center justify-center text-black font-bold mr-6">1</span>
+                        <span>预估整个工程的<strong class="text-accent">最短工期</strong></span>
+                    </li>
+                    <li class="flex items-center bg-slate-800/50 p-6 rounded-2xl border border-slate-700">
+                        <span class="w-12 h-12 rounded-full bg-highlight flex items-center justify-center text-black font-bold mr-6">2</span>
+                        <span>找出影响进度的<strong class="text-highlight">关键活动</strong></span>
+                    </li>
+                    <li class="flex items-center bg-slate-800/50 p-6 rounded-2xl border border-slate-700">
+                        <span class="w-12 h-12 rounded-full bg-green-500 flex items-center justify-center text-black font-bold mr-6">3</span>
+                        <span>合理调配资源，利用<strong class="text-green-500">机动时间</strong></span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+      </section>
+
+      <!-- Page Number -->
+      <div id="page-number" class="absolute bottom-6 right-8 text-slate-400 text-[24px] font-mono z-50"></div>
+    </div>
+
+    <script>
+      // --- GRAPH DATA ---
+      const nodes = [
+          { id: 'V1', x: 100, y: 300 },
+          { id: 'V2', x: 300, y: 150 },
+          { id: 'V3', x: 300, y: 450 },
+          { id: 'V4', x: 500, y: 150 },
+          { id: 'V5', x: 500, y: 300 },
+          { id: 'V6', x: 700, y: 300 }
+      ];
+      
+      const edges = [
+          { u: 0, v: 1, w: 3, id: 'a1' }, // V1->V2
+          { u: 0, v: 2, w: 2, id: 'a2' }, // V1->V3
+          { u: 1, v: 3, w: 2, id: 'a3' }, // V2->V4
+          { u: 1, v: 4, w: 3, id: 'a4' }, // V2->V5
+          { u: 2, v: 3, w: 4, id: 'a5' }, // V3->V4
+          { u: 2, v: 5, w: 3, id: 'a6' }, // V3->V6
+          { u: 3, v: 5, w: 2, id: 'a7' }, // V4->V6
+          { u: 4, v: 5, w: 1, id: 'a8' }  // V5->V6
+      ];
+
+      // Calculated Data
+      const ve = [0, 3, 2, 6, 6, 8];
+      const vl = [0, 4, 2, 6, 7, 8];
+      // Edge calculations: e, l, slack
+      const edgeCalc = edges.map(e => {
+          const ek = ve[e.u];
+          const lk = vl[e.v] - e.w;
+          return { ...e, ek, lk, slack: lk - ek, isCritical: (lk - ek === 0) };
+      });
+
+      // --- RENDER HELPERS ---
+      function createSVG(type) {
+          const container = document.getElementById(`${type}-container`);
+          if (!container) return;
+          container.innerHTML = '';
+          const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+          svg.setAttribute("width", "100%");
+          svg.setAttribute("height", "100%");
+          svg.setAttribute("viewBox", "0 0 800 600");
+          svg.classList.add("overflow-visible");
+          
+          // Defs for arrow
+          const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+          // Determine active color based on type
+          const activeColor = type === 'el' ? '#f472b6' : '#22d3ee';
+          
+          defs.innerHTML = `
+            <marker id="arrow-${type}" markerWidth="16" markerHeight="12" refX="48" refY="6" orient="auto" markerUnits="userSpaceOnUse">
+                <polygon points="0 0, 16 6, 0 12" fill="#475569" />
+            </marker>
+            <marker id="arrow-active-${type}" markerWidth="16" markerHeight="12" refX="48" refY="6" orient="auto" markerUnits="userSpaceOnUse">
+                <polygon points="0 0, 16 6, 0 12" fill="${activeColor}" />
+            </marker>
+             <marker id="arrow-critical-${type}" markerWidth="16" markerHeight="12" refX="48" refY="6" orient="auto" markerUnits="userSpaceOnUse">
+                <polygon points="0 0, 16 6, 0 12" fill="#ef4444" />
+            </marker>
+          `;
+          svg.appendChild(defs);
+
+          // Edges
+          const edgesG = document.createElementNS("http://www.w3.org/2000/svg", "g");
+          edgesG.id = `edges-${type}`;
+          edges.forEach((e, i) => {
+              const u = nodes[e.u];
+              const v = nodes[e.v];
+              const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+              g.id = `edge-${type}-${i}`;
+              
+              const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+              line.setAttribute("x1", u.x); line.setAttribute("y1", u.y);
+              line.setAttribute("x2", v.x); line.setAttribute("y2", v.y);
+              line.setAttribute("stroke", "#475569");
+              line.setAttribute("stroke-width", "3");
+              line.setAttribute("marker-end", `url(#arrow-${type})`);
+              
+              // Weight Label
+              const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+              
+              // Adjust position ratio: default 0.5 (center). 
+              // For a5/a6, move closer to start node (0.35) to avoid overlap
+              let ratio = 0.5;
+              if (e.id === 'a5' || e.id === 'a6') ratio = 0.35;
+              
+              const midX = u.x + (v.x - u.x) * ratio;
+              const midY = u.y + (v.y - u.y) * ratio;
+              
+              // Calculate angle
+              const dx = v.x - u.x;
+              const dy = v.y - u.y;
+              let angle = Math.atan2(dy, dx) * 180 / Math.PI;
+              
+              // Adjust angle to prevent upside down text
+              if (angle > 90 || angle < -90) {
+                  angle += 180;
+              }
+
+              text.setAttribute("x", midX);
+              text.setAttribute("y", midY - 10);
+              text.setAttribute("fill", "#94a3b8");
+              text.setAttribute("font-size", "20");
+              text.setAttribute("text-anchor", "middle");
+              text.setAttribute("transform", `rotate(${angle}, ${midX}, ${midY})`);
+              text.textContent = `${e.id}=${e.w}`;
+
+              g.appendChild(line);
+              g.appendChild(text);
+              edgesG.appendChild(g);
+          });
+          svg.appendChild(edgesG);
+
+          // Nodes
+          const nodesG = document.createElementNS("http://www.w3.org/2000/svg", "g");
+          nodesG.id = `nodes-${type}`;
+          nodes.forEach((n, i) => {
+              const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+              g.id = `node-${type}-${i}`;
+              
+              const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+              circle.setAttribute("cx", n.x); circle.setAttribute("cy", n.y);
+              circle.setAttribute("r", "30");
+              circle.setAttribute("fill", "#1e293b");
+              circle.setAttribute("stroke", "#475569");
+              circle.setAttribute("stroke-width", "3");
+              
+              const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+              text.setAttribute("x", n.x); text.setAttribute("y", n.y + 8);
+              text.setAttribute("text-anchor", "middle");
+              text.setAttribute("fill", "#fff");
+              text.setAttribute("font-weight", "bold");
+              text.setAttribute("font-size", "20");
+              text.textContent = n.id;
+              
+              // Value Label (ve/vl)
+              const valText = document.createElementNS("http://www.w3.org/2000/svg", "text");
+              valText.id = `val-${type}-${i}`;
+              valText.setAttribute("x", n.x); valText.setAttribute("y", n.y + 55);
+              valText.setAttribute("text-anchor", "middle");
+              valText.setAttribute("fill", "#22d3ee");
+              valText.setAttribute("font-size", "24");
+              valText.setAttribute("font-weight", "bold");
+              valText.textContent = ""; // Init empty
+
+              g.appendChild(circle);
+              g.appendChild(text);
+              g.appendChild(valText);
+              nodesG.appendChild(g);
+          });
+          svg.appendChild(nodesG);
+          container.appendChild(svg);
+      }
+
+      // --- ANIMATION STATE ---
+      const states = {
+          ve: { step: -1, max: 6 }, // 0..5 nodes + finish
+          vl: { step: -1, max: 6 },
+          el: { step: -1, max: 8 }  // 8 edges
+      };
+
+      function updateVisuals(type) {
+          const s = states[type];
+          const containerId = type === 'el' ? 'el-container' : (type === 'cp' ? 'cp-container' : `${type}-container`);
+          const statusEl = document.getElementById(`${type}-status`);
+          
+          if (type === 've') {
+              // Reset
+              nodes.forEach((_, i) => {
+                  const val = document.getElementById(`val-ve-${i}`);
+                  const node = document.getElementById(`node-ve-${i}`).querySelector('circle');
+                  if (i <= s.step) {
+                      val.textContent = `ve=${ve[i]}`;
+                      node.setAttribute("stroke", "#22d3ee");
+                  } else {
+                      val.textContent = "";
+                      node.setAttribute("stroke", "#475569");
+                  }
+              });
+              
+              if (s.step === -1) statusEl.textContent = "准备开始计算...";
+              else if (s.step < 6) {
+                  const curr = s.step;
+                  // Find incoming edges to explain max
+                  const incoming = edges.filter(e => e.v === curr);
+                  if (incoming.length === 0) {
+                      statusEl.textContent = `源点 V1: ve(0) = 0`;
+                  } else {
+                      const calcs = incoming.map(e => `ve(${e.u}) + ${e.w} = ${ve[e.u] + e.w}`);
+                      statusEl.textContent = `V${curr+1}: Max{ ${calcs.join(', ')} } = ${ve[curr]}`;
+                  }
+              }
+          } else if (type === 'vl') {
+              // Reset
+              nodes.forEach((_, i) => {
+                  const val = document.getElementById(`val-vl-${i}`);
+                  const node = document.getElementById(`node-vl-${i}`).querySelector('circle');
+                  // Reverse logic for display? No, just check if node index is >= n-1-step
+                  // But we step 0..5. Let's map step to node index.
+                  // Step 0 -> Node 5. Step 1 -> Node 4...
+                  const nodeIdx = 5 - s.step;
+                  
+                  if (s.step > -1 && i >= nodeIdx) {
+                      val.textContent = `vl=${vl[i]}`;
+                      node.setAttribute("stroke", "#a78bfa");
+                  } else {
+                      val.textContent = "";
+                      node.setAttribute("stroke", "#475569");
+                  }
+              });
+
+              if (s.step === -1) statusEl.textContent = "准备开始计算...";
+              else if (s.step < 6) {
+                  const curr = 5 - s.step;
+                  // Find outgoing edges
+                  const outgoing = edges.filter(e => e.u === curr);
+                  if (outgoing.length === 0) {
+                      statusEl.textContent = `汇点 V6: vl(5) = ve(5) = ${ve[5]}`;
+                  } else {
+                      const calcs = outgoing.map(e => `vl(${e.v}) - ${e.w} = ${vl[e.v] - e.w}`);
+                      statusEl.textContent = `V${curr+1}: Min{ ${calcs.join(', ')} } = ${vl[curr]}`;
+                  }
+              }
+          } else if (type === 'el') {
+              // Highlight current edge
+              edges.forEach((e, i) => {
+                  const g = document.getElementById(`edge-el-${i}`);
+                  const line = g.querySelector('line');
+                  if (i === s.step) {
+                      line.setAttribute("stroke", "#f472b6");
+                      line.setAttribute("marker-end", `url(#arrow-active-${type})`);
+                      // line.setAttribute("stroke-width", "6"); // 不加粗
+                  } else {
+                      line.setAttribute("stroke", "#475569");
+                      line.setAttribute("stroke-width", "3");
+                      line.setAttribute("marker-end", `url(#arrow-${type})`);
+                  }
+              });
+              
+              if (s.step > -1) {
+                  const e = edgeCalc[s.step];
+                  statusEl.innerHTML = `活动 <span class="text-highlight font-bold">${e.id}</span> (<span class="text-accent">V${e.u+1}</span> -> <span class="text-secondary">V${e.v+1}</span>):
+                  <span class="text-blue-400 font-bold">e(${e.id})</span> = ve(${e.u+1}) = <span class="text-blue-400 font-bold">${e.ek}</span>
+                  <span class="text-pink-400 font-bold">l(${e.id})</span> = vl(${e.v+1}) - ${e.w} = <span class="text-pink-400 font-bold">${e.lk}</span>
+                  Slack = ${e.slack} ${e.isCritical ? '<span class="text-red-500 font-bold ml-2">★ 关键活动</span>' : ''}`;
+              } else {
+                  statusEl.textContent = "点击下一步逐个计算活动参数";
+              }
+          }
+      }
+
+      function nextStep(type) {
+          if (states[type].step < states[type].max - 1) {
+              states[type].step++;
+              updateVisuals(type);
+          }
+      }
+      function prevStep(type) {
+          if (states[type].step > -1) {
+              states[type].step--;
+              updateVisuals(type);
+          }
+      }
+      function resetStep(type) {
+          states[type].step = -1;
+          updateVisuals(type);
+      }
+
+      function showCriticalPath() {
+          const containerId = 'cp';
+          // Highlight nodes and edges
+          edgeCalc.forEach((e, i) => {
+              if (e.isCritical) {
+                  const line = document.querySelector(`#edge-${containerId}-${i} line`);
+                  line.setAttribute("stroke", "#ef4444");
+                  // line.setAttribute("stroke-width", "6"); // 不加粗
+                  line.setAttribute("marker-end", `url(#arrow-critical-${containerId})`);
+              }
+          });
+          
+          // List result
+          const res = document.getElementById('cp-result');
+          const path = edgeCalc.filter(e => e.isCritical).map(e => e.id).join(' -> ');
+          const len = ve[5];
+          res.innerHTML = `
+            <li>关键活动：${edgeCalc.filter(e => e.isCritical).map(e => e.id).join(', ')}</li>
+            <li>路径长度：${len}</li>
+            <li class="text-red-400">V1 -> V3 -> V4 -> V6</li>
+          `;
+      }
+
+      // --- SLIDE LOGIC ---
+      let currentSlide = 0;
+      const pageNumberEl = document.getElementById('page-number');
+      
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.has('page')) {
+        const page = parseInt(urlParams.get('page'));
+        if (!isNaN(page) && page > 0) currentSlide = page - 1;
+      }
+
+      function updateSlide() {
+        const slides = document.querySelectorAll('.slide');
+        if (currentSlide >= slides.length) currentSlide = slides.length - 1;
+        if (currentSlide < 0) currentSlide = 0;
+
+        slides.forEach((slide, index) => {
+          slide.classList.remove('active');
+          if (index === currentSlide) {
+            slide.classList.add('active');
+            // Init SVGs if needed
+            const title = slide.getAttribute('data-title');
+            if (title === 've计算' && document.getElementById('ve-container').children.length === 0) {
+                createSVG('ve');
+                // Pre-fill nodes for context
+            } else if (title === 'vl计算' && document.getElementById('vl-container').children.length === 0) {
+                createSVG('vl');
+                // Show ve values as context? Maybe not to avoid clutter
+            } else if (title === 'el计算' && document.getElementById('el-container').children.length === 0) {
+                createSVG('el');
+                // Show ve/vl on nodes
+                nodes.forEach((_, i) => {
+                    const t = document.getElementById(`val-el-${i}`);
+                    if (t) {
+                        t.textContent = ''; // Clear
+                        
+                        // ve (Blue)
+                        const tspanVe = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
+                        tspanVe.textContent = ve[i];
+                        tspanVe.setAttribute("fill", "#22d3ee"); // accent (cyan/blue)
+                        tspanVe.setAttribute("font-weight", "bold");
+                        
+                        // Separator
+                        const tspanSep = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
+                        tspanSep.textContent = " / ";
+                        tspanSep.setAttribute("fill", "#94a3b8");
+                        
+                        // vl (Pink)
+                        const tspanVl = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
+                        tspanVl.textContent = vl[i];
+                        tspanVl.setAttribute("fill", "#f472b6"); // highlight (pink)
+                        tspanVl.setAttribute("font-weight", "bold");
+
+                        t.appendChild(tspanVe);
+                        t.appendChild(tspanSep);
+                        t.appendChild(tspanVl);
+                        
+                        t.setAttribute("font-size", "22");
+                    }
+                });
+            } else if (title === '关键路径' && document.getElementById('cp-container').children.length === 0) {
+                createSVG('cp');
+                
+                // Populate Vertex Table for CP page
+                const tableContainer = document.getElementById('vertex-params-list-cp');
+                if (tableContainer) {
+                    let html = `
+                    <div class="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+                        <h4 class="text-white text-[24px] mb-3 border-b border-slate-600 pb-2">顶点参数表</h4>
+                        <div class="grid grid-cols-3 gap-y-2 text-[22px] font-mono text-center">
+                            <div class="text-slate-500 text-[20px]">Vertex</div>
+                            <div class="text-accent text-[20px]">ve(i)</div>
+                            <div class="text-secondary text-[20px]">vl(i)</div>`;
+                    
+                    nodes.forEach((n, i) => {
+                        html += `
+                            <div class="text-slate-300">${n.id}</div>
+                            <div class="text-accent">${ve[i]}</div>
+                            <div class="text-secondary">${vl[i]}</div>
+                        `;
+                    });
+                    
+                    html += `</div></div>`;
+                    tableContainer.innerHTML = html;
+                }
+
+                // Show ve/vl on nodes for Critical Path
+                nodes.forEach((_, i) => {
+                    const t = document.getElementById(`val-cp-${i}`);
+                    if (t) {
+                        t.textContent = ''; // Clear
+                        
+                        // ve (Blue)
+                        const tspanVe = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
+                        tspanVe.textContent = ve[i];
+                        tspanVe.setAttribute("fill", "#22d3ee"); // accent
+                        tspanVe.setAttribute("font-weight", "bold");
+                        
+                        // Separator
+                        const tspanSep = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
+                        tspanSep.textContent = " / ";
+                        tspanSep.setAttribute("fill", "#94a3b8");
+                        
+                        // vl (Pink)
+                        const tspanVl = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
+                        tspanVl.textContent = vl[i];
+                        tspanVl.setAttribute("fill", "#f472b6"); // highlight
+                        tspanVl.setAttribute("font-weight", "bold");
+
+                        t.appendChild(tspanVe);
+                        t.appendChild(tspanSep);
+                        t.appendChild(tspanVl);
+                        
+                        t.setAttribute("font-size", "22");
+                    }
+                });
+            }
+          }
+        });
+        if(pageNumberEl) pageNumberEl.textContent = `${currentSlide + 1} / ${slides.length}`;
+
+        try {
+          const url = new URL(window.location.href);
+          url.searchParams.set('page', currentSlide + 1);
+          window.history.replaceState(null, '', url.href);
+        } catch (e) {}
+      }
+
+      function nextSlide() {
+        const slides = document.querySelectorAll('.slide');
+        if (currentSlide < slides.length - 1) {
+            currentSlide++;
+            updateSlide();
+        }
+      }
+      function prevSlide() {
+        if (currentSlide > 0) {
+            currentSlide--;
+            updateSlide();
+        }
+      }
+
+      document.addEventListener('keydown', (e) => {
+        if (['ArrowRight', ' ', 'Enter'].includes(e.key)) nextSlide();
+        else if (e.key === 'ArrowLeft') prevSlide();
+      });
+
+      // Init
+      window.addEventListener('load', () => {
+          const app = document.getElementById('app');
+          const scale = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+          app.style.transform = `scale(${scale})`;
+          updateSlide();
+      });
+      window.addEventListener('resize', () => {
+          const app = document.getElementById('app');
+          const scale = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+          app.style.transform = `scale(${scale})`;
+      });
+    </script>
+  </body>
+</html>

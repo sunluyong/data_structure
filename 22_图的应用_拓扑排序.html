@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>22 图的应用：拓扑排序</title>
+    <script src="https://unpkg.com/@tailwindcss/browser@4"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+    <style type="text/tailwindcss">
+      @theme {
+        --color-bg-dark: #030712;
+        --color-text-main: #f1f5f9;
+        --color-primary: #8b5cf6; /* Violet */
+        --color-secondary: #06b6d4; /* Cyan */
+        --color-accent: #f43f5e; /* Rose */
+        --color-success: #10b981; /* Emerald */
+        --color-code-bg: #1e293b;
+      }
+      @layer base {
+        body { @apply bg-black text-text-main font-sans overflow-hidden flex justify-center items-center h-screen; }
+      }
+      @layer utilities {
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes pulse-ring {
+            0% { transform: scale(1); opacity: 0.5; }
+            50% { transform: scale(1.2); opacity: 0; }
+            100% { transform: scale(1); opacity: 0; }
+        }
+        .slide-container { @apply relative w-[1920px] h-[1080px] bg-bg-dark overflow-hidden shadow-2xl; }
+        .slide { @apply absolute inset-0 hidden flex-col p-12 opacity-0 transition-opacity duration-500 ease-in-out; }
+        .slide.active { @apply flex opacity-100; }
+        .bg-decoration { @apply absolute inset-0 z-0 pointer-events-none; background-image: radial-gradient(circle at 15% 15%, rgba(139, 92, 246, 0.08) 0%, transparent 35%), radial-gradient(circle at 85% 85%, rgba(6, 182, 212, 0.08) 0%, transparent 35%); }
+        .grid-overlay { @apply absolute inset-0 z-0; background-size: 80px 80px; background-image: linear-gradient(to right, rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.02) 1px, transparent 1px); }
+        
+        h1 { @apply text-[100px] font-extrabold leading-tight mb-8; background: linear-gradient(135deg, #fff 0%, var(--color-primary) 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+        h2 { @apply text-[64px] mb-10 text-white inline-block pb-4 border-b-4 border-white/20; }
+        h3 { @apply text-[42px] mb-6 text-primary; }
+        p { @apply text-[32px] mb-6 text-slate-200 leading-relaxed; }
+        .slide-content li { @apply text-[32px] mb-4 text-slate-200; }
+        strong { @apply text-white font-bold; }
+        
+        .card { @apply bg-white/5 border border-white/10 rounded-3xl p-8 mb-6 backdrop-blur-sm shadow-lg; }
+        .code-block { @apply font-mono bg-code-bg p-8 rounded-2xl border border-slate-700 text-[24px] leading-relaxed text-slate-200 overflow-auto whitespace-pre; }
+        
+        /* Syntax Highlighting */
+        .code-kw { @apply text-[#c678dd]; }
+        .code-type { @apply text-[#e5c07b]; }
+        .code-cm { @apply text-[#94a3b8] italic; }
+        .code-num { @apply text-[#d19a66]; }
+        .code-str { @apply text-[#98c379]; }
+        .code-fn { @apply text-[#61afef]; }
+        
+        .btn-primary { @apply px-8 py-4 bg-primary/20 border border-primary/50 rounded-xl text-primary font-bold text-[24px] cursor-pointer transition-all hover:bg-primary/30 hover:scale-105 active:scale-95; }
+        .btn-secondary { @apply px-8 py-4 bg-slate-700/50 border border-slate-600 rounded-xl text-slate-200 font-bold text-[24px] cursor-pointer transition-all hover:bg-slate-600/50; }
+        
+        /* Custom Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar { width: 10px; height: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #1e293b; border-radius: 5px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; border-radius: 5px; }
+
+        /* Visualization Specifics */
+        .node-circle { transition: all 0.4s ease; }
+        .node-circle.active { stroke: var(--color-success); stroke-width: 4px; filter: drop-shadow(0 0 8px var(--color-success)); }
+        .node-circle.removed { opacity: 0.2; }
+        .node-text.removed { opacity: 0.2; }
+        .edge-line { transition: all 0.4s ease; }
+        .edge-line.removed { opacity: 0.1; stroke-dasharray: 5,5; }
+        
+        .stack-item { @apply w-16 h-16 bg-slate-800 border-2 border-primary rounded-lg flex items-center justify-center text-2xl font-bold text-white mb-2 transition-all duration-300; }
+        .result-item { @apply w-16 h-16 bg-success/20 border-2 border-success rounded-full flex items-center justify-center text-2xl font-bold text-white mr-4 animate-[fadeIn_0.5s_ease-out]; }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app" class="slide-container">
+      <div class="bg-decoration"></div>
+      <div class="grid-overlay"></div>
+
+      <!-- P01: 封面 -->
+      <section class="slide active justify-center items-center text-center" data-title="封面">
+        <div class="flex flex-col items-center z-10 relative -mt-20">
+          <div class="flex gap-16 mb-12">
+             <!-- Icon -->
+             <div class="w-48 h-48 relative flex items-center justify-center">
+                 <i class="fas fa-layer-group text-9xl text-primary drop-shadow-[0_0_30px_rgba(139,92,246,0.5)]"></i>
+                 <div class="absolute -right-12 -top-4">
+                    <i class="fas fa-arrow-right text-6xl text-secondary animate-pulse"></i>
+                 </div>
+             </div>
+          </div>
+
+          <div class="bg-slate-800/50 px-10 py-4 rounded-full border border-slate-600 mb-10 backdrop-blur-md">
+            <span class="text-slate-300 text-3xl font-mono tracking-[0.2em]">GRAPH ALGORITHMS</span>
+          </div>
+          
+          <h1>数据结构与算法</h1>
+          <p class="text-[64px] text-slate-300 mt-6 font-bold">图论：拓扑排序</p>
+        </div>
+      </section>
+
+      <!-- P02: 拓扑排序介绍 -->
+      <section class="slide" data-title="拓扑排序介绍">
+        <h2>拓扑排序介绍</h2>
+        <div class="grid grid-cols-2 gap-16 flex-1 min-h-0 items-center">
+            <div class="flex flex-col gap-8">
+                <div class="card border-l-8 border-primary">
+                    <h3 class="text-primary text-[36px] mb-4">定义</h3>
+                    <p class="text-[30px] text-white leading-relaxed">
+                        拓扑排序（Topological Sort）是针对<strong class="text-secondary">有向无环图（DAG）</strong>的一种节点线性排序方法。<br/>
+                        <span class="text-slate-300 block mt-4 text-[28px]">
+                            <i class="fas fa-quote-left text-primary mr-2"></i>
+                            核心约束：对于每一条有向边 u → v，在排序结果中，<strong class="text-white">u 一定出现在 v 之前</strong>。
+                        </span>
+                    </p>
+                </div>
+                
+                <div class="card bg-slate-800/30">
+                    <h3 class="text-secondary text-[32px] mb-4"><i class="fas fa-bullseye mr-3"></i>本质</h3>
+                    <p class="text-[30px] text-slate-200 leading-relaxed">
+                        解决<strong class="text-accent">“先做什么、后做什么”</strong>的依赖顺序问题。
+                    </p>
+                </div>
+            </div>
+            
+            <div class="flex flex-col gap-8 h-full justify-center">
+                 <div class="card border-l-8 border-secondary h-full flex flex-col justify-center">
+                    <h3 class="text-white text-[36px] mb-8">典型应用场景</h3>
+                    <ul class="space-y-8 text-[32px] text-slate-200">
+                        <li class="flex items-center">
+                            <span class="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center text-primary mr-6"><i class="fas fa-tasks"></i></span>
+                            <div>
+                                <strong class="block text-white mb-1">任务调度</strong>
+                                <span class="text-[26px] text-slate-400">任务 A 必须在任务 B 之前完成</span>
+                            </div>
+                        </li>
+                        <li class="flex items-center">
+                            <span class="w-16 h-16 rounded-full bg-secondary/20 flex items-center justify-center text-secondary mr-6"><i class="fas fa-cubes"></i></span>
+                            <div>
+                                <strong class="block text-white mb-1">编译依赖</strong>
+                                <span class="text-[26px] text-slate-400">源文件 / 模块之间的依赖顺序</span>
+                            </div>
+                        </li>
+                        <li class="flex items-center">
+                            <span class="w-16 h-16 rounded-full bg-success/20 flex items-center justify-center text-success mr-6"><i class="fas fa-graduation-cap"></i></span>
+                            <div>
+                                <strong class="block text-white mb-1">课程安排</strong>
+                                <span class="text-[26px] text-slate-400">先修课 → 后续课程</span>
+                            </div>
+                        </li>
+                        <li class="flex items-center">
+                            <span class="w-16 h-16 rounded-full bg-accent/20 flex items-center justify-center text-accent mr-6"><i class="fas fa-industry"></i></span>
+                            <div>
+                                <strong class="block text-white mb-1">数据流水线</strong>
+                                <span class="text-[26px] text-slate-400">上游产出 → 下游消费</span>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+      </section>
+
+      <!-- P03: 算法原理 -->
+      <section class="slide" data-title="算法原理">
+        <h2>拓扑排序算法逻辑</h2>
+        <div class="grid grid-cols-[1.2fr_1fr] gap-12 flex-1 min-h-0 items-center">
+            <div class="flex flex-col gap-8">
+                <div class="card border-l-8 border-secondary">
+                    <h3 class="text-secondary text-[36px] mb-4">基本思想</h3>
+                    <p class="text-[30px] text-slate-200 leading-relaxed">
+                        “每次找到一个<strong class="text-white">没有前驱</strong>（入度为0）的顶点，将其输出，并<strong class="text-accent">删去</strong>该顶点及其发出的所有边。”
+                    </p>
+                </div>
+                
+                <div class="bg-slate-800/50 p-8 rounded-2xl border border-slate-600">
+                    <h3 class="text-white text-[32px] mb-6">详细步骤</h3>
+                    <ol class="list-decimal list-inside space-y-6 text-[28px] text-slate-300 marker:text-primary marker:font-bold">
+                        <li>
+                            <span class="text-white">统计入度</span>：遍历图，计算每个顶点的入度 (Indegree)
+                        </li>
+                        <li>
+                            <span class="text-white">入栈</span>：将所有入度为 0 的顶点压入<strong class="text-accent">栈 (Stack)</strong>
+                        </li>
+                        <li>
+                            <span class="text-white">循环处理</span>：
+                            <ul class="list-disc list-inside pl-8 mt-2 space-y-2 text-slate-400">
+                                <li>弹出栈顶的顶点 V，输出 V</li>
+                                <li>遍历 V 的所有邻接点 W，将 W 的入度减 1</li>
+                                <li>如果 W 的入度变为 0，则将 W 入栈</li>
+                            </ul>
+                        </li>
+                    </ol>
+                </div>
+            </div>
+            
+            <div class="flex flex-col items-center justify-center h-full">
+                <!-- Processing Graph Snapshot -->
+                <div class="bg-slate-900/50 rounded-3xl border border-slate-700 p-4 w-full h-[600px] flex items-center justify-center relative">
+                    <h4 class="absolute top-6 left-6 text-slate-400 text-xl font-mono">处理完顶点A的快照</h4>
+                    <svg viewBox="0 0 500 400" class="w-full h-full overflow-visible">
+                        <defs>
+                            <marker id="arrow-normal" markerWidth="10" markerHeight="10" refX="10" refY="5" orient="auto">
+                                <path d="M0,0 L10,5 L0,10 z" fill="#64748b" />
+                            </marker>
+                             <marker id="arrow-removed" markerWidth="10" markerHeight="10" refX="14" refY="5" orient="auto">
+                                <path d="M0,0 L10,5 L0,10 z" fill="#334155" />
+                            </marker>
+                        </defs>
+
+                        <!-- Node A (Processed) -->
+                        <g transform="translate(80, 200)">
+                            <circle cx="0" cy="0" r="30" fill="#0f172a" stroke="#334155" stroke-width="2" stroke-dasharray="5,5" />
+                            <text x="0" y="8" text-anchor="middle" fill="#475569" font-weight="bold" font-size="20">A</text>
+                            <text x="0" y="50" text-anchor="middle" fill="#475569" font-size="16">已输出</text>
+                        </g>
+
+                        <!-- Edges from A (Removed) -->
+                        <!-- A -> B -->
+                        <line x1="105" y1="185" x2="225" y2="115" stroke="#334155" stroke-width="2" stroke-dasharray="5,5" marker-end="url(#arrow-removed)" />
+                        <!-- A -> C -->
+                        <line x1="105" y1="215" x2="225" y2="285" stroke="#334155" stroke-width="2" stroke-dasharray="5,5" marker-end="url(#arrow-removed)" />
+
+                        <!-- Node B (Active, In:0) -->
+                        <g transform="translate(250, 100)">
+                            <circle cx="0" cy="0" r="35" fill="#1e293b" stroke="#10b981" stroke-width="4" />
+                            <text x="0" y="8" text-anchor="middle" fill="white" font-weight="bold" font-size="24">B</text>
+                            <rect x="-30" y="45" width="60" height="26" rx="4" fill="#10b981" />
+                            <text x="0" y="63" text-anchor="middle" fill="#020617" font-weight="bold" font-size="16">In: 0</text>
+                        </g>
+
+                        <!-- Node C (Active, In:0) -->
+                        <g transform="translate(250, 300)">
+                            <circle cx="0" cy="0" r="35" fill="#1e293b" stroke="#10b981" stroke-width="4" />
+                            <text x="0" y="8" text-anchor="middle" fill="white" font-weight="bold" font-size="24">C</text>
+                            <rect x="-30" y="45" width="60" height="26" rx="4" fill="#10b981" />
+                            <text x="0" y="63" text-anchor="middle" fill="#020617" font-weight="bold" font-size="16">In: 0</text>
+                        </g>
+
+                        <!-- Edges to D (Waiting) -->
+                        <!-- B -> D -->
+                        <line x1="280" y1="115" x2="390" y2="185" stroke="#64748b" stroke-width="2" marker-end="url(#arrow-normal)" />
+                        <!-- C -> D -->
+                        <line x1="280" y1="285" x2="390" y2="215" stroke="#64748b" stroke-width="2" marker-end="url(#arrow-normal)" />
+
+                        <!-- Node D (Waiting) -->
+                        <g transform="translate(420, 200)">
+                            <circle cx="0" cy="0" r="30" fill="#1e293b" stroke="#8b5cf6" stroke-width="2" />
+                            <text x="0" y="8" text-anchor="middle" fill="white" font-weight="bold" font-size="20">D</text>
+                            <text x="0" y="50" text-anchor="middle" fill="#94a3b8" font-size="16">In: 2</text>
+                        </g>
+                        
+                        <!-- Dynamic Effect: Minus 1 -->
+                        <g transform="translate(165, 130)">
+                            <text x="0" y="0" fill="#f43f5e" font-weight="bold" font-size="20" opacity="0.8">-1</text>
+                        </g>
+                        <g transform="translate(165, 270)">
+                            <text x="-20" y="0" fill="#f43f5e" font-weight="bold" font-size="20" opacity="0.8">-1</text>
+                        </g>
+                    </svg>
+                </div>
+            </div>
+        </div>
+      </section>
+
+      <!-- P04: 算法演示 -->
+      <section class="slide" data-title="算法演示">
+        <h2>拓扑排序演示</h2>
+        <div class="flex gap-8 flex-1 min-h-0 w-full items-start">
+            <!-- Left: Graph Area -->
+            <div class="flex-1 flex flex-col gap-4 h-full">
+                <div class="bg-slate-900/50 rounded-3xl border border-slate-700 flex-1 relative flex items-center justify-center overflow-hidden">
+                    <svg id="demo-graph" width="100%" height="100%" viewBox="0 0 800 500" class="overflow-visible">
+                        <!-- Graph content generated by JS -->
+                    </svg>
+                    <div class="absolute top-4 left-4 flex gap-4">
+                        <div class="flex items-center gap-2">
+                            <span class="w-4 h-4 rounded-full bg-slate-800 border-2 border-slate-500"></span>
+                            <span class="text-slate-400 text-lg">普通节点</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="w-4 h-4 rounded-full bg-slate-800 border-2 border-success"></span>
+                            <span class="text-success text-lg">入度为0 (可入栈)</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Controls -->
+                    <div class="bg-slate-800/30 p-4 rounded-2xl border border-slate-700 flex items-center justify-between">
+                        <div class="text-[24px] text-primary font-mono" id="demo-status">准备就绪</div>
+                        <div class="flex gap-4">
+                            <button onclick="prevStep()" class="btn-secondary px-4 py-2"><i class="fas fa-step-backward"></i> 上一步</button>
+                            <button onclick="resetDemo()" class="btn-secondary px-4 py-2" title="重置"><i class="fas fa-refresh"></i></button>
+                            <button onclick="nextStep()" class="btn-primary py-2 px-6">下一步 <i class="fas fa-step-forward ml-2"></i></button>
+                        </div>
+                    </div>
+            </div>
+
+            <!-- Right: Data Structures -->
+            <div class="w-[650px] flex flex-col gap-6 h-full">
+                <!-- Indegree Table -->
+                <div class="bg-slate-800/30 rounded-2xl border border-slate-700 p-6">
+                    <h3 class="text-white text-[24px] mb-4"><i class="fas fa-list-ol mr-2 text-secondary"></i>入度数组</h3>
+                    <div class="flex gap-2" id="indegree-container">
+                        <!-- Generated by JS -->
+                    </div>
+                </div>
+
+                <!-- Stack -->
+                <div class="bg-slate-800/30 rounded-2xl border border-slate-700 p-6 h-[420px] flex flex-col">
+                    <h3 class="text-white text-[24px] mb-4"><i class="fas fa-layer-group mr-2 text-primary"></i>栈 (Stack)</h3>
+                    <div class="flex-1 bg-slate-900/50 rounded-xl border border-slate-700 p-4 flex flex-col-reverse items-center justify-start gap-2 overflow-y-auto custom-scrollbar" id="stack-container">
+                        <!-- Stack Items -->
+                    </div>
+                </div>
+
+                <!-- Result Sequence -->
+                <div class="bg-slate-800/30 rounded-2xl border border-slate-700 p-6 flex-1 flex flex-col">
+                    <h3 class="text-white text-[24px] mb-4"><i class="fas fa-sort-amount-down mr-2 text-success"></i>排序结果</h3>
+                    <div class="flex flex-wrap gap-4 items-start content-start overflow-y-auto custom-scrollbar" id="result-container">
+                        <!-- Result Items -->
+                    </div>
+                </div>
+            </div>
+        </div>
+      </section>
+
+      <!-- P05: 代码实现 -->
+      <section class="slide" data-title="代码实现">
+        <h2>代码实现</h2>
+        <div class="grid grid-cols-2 gap-8 flex-1 min-h-0">
+            <div class="code-block h-full custom-scrollbar text-[20px]"><span class="code-cm">// 边表结点</span>
+<span class="code-kw">typedef</span> <span class="code-kw">struct</span> EdgeNode {
+    <span class="code-type">int</span> adjvex;              <span class="code-cm">// 顶点对应的下标</span>
+    <span class="code-kw">struct</span> EdgeNode *next;   <span class="code-cm">// 指向下一个邻接点</span>
+} <span class="code-type">EdgeNode</span>;
+
+<span class="code-cm">// 顶点表结点</span>
+<span class="code-kw">typedef</span> <span class="code-kw">struct</span> VertexNode {
+    <span class="code-type">int</span> in;                  <span class="code-cm">// 顶点入度</span>
+    <span class="code-type">int</span> data;                <span class="code-cm">// 顶点数据</span>
+    <span class="code-type">EdgeNode</span> *firstedge;     <span class="code-cm">// 边表头指针</span>
+} <span class="code-type">VertexNode</span>, <span class="code-type">AdjList</span>[MAXVEX];
+
+<span class="code-cm">// 图结构</span>
+<span class="code-kw">typedef</span> <span class="code-kw">struct</span> {
+    <span class="code-type">AdjList</span> adjList;
+    <span class="code-type">int</span> numV, numE; 
+} <span class="code-type">GraphAdjList</span>;
+
+<span class="code-type">Status</span> <span class="code-fn">TopologicalSort</span>(<span class="code-type">GraphAdjList</span> GL) {
+    <span class="code-type">EdgeNode</span> *e;
+    <span class="code-type">int</span> i, k, current;
+    <span class="code-type">int</span> top = 0;
+    <span class="code-type">int</span> count = 0;
+    <span class="code-type">int</span> *stack = (<span class="code-type">int</span> *)malloc(GL.numV * <span class="code-kw">sizeof</span>(<span class="code-type">int</span>));
+
+    <span class="code-cm">// 1. 初始化：遍历所有顶点，将入度为0的顶点入栈</span>
+    <span class="code-kw">for</span>(i = 0; i < GL.numV; i++)
+        <span class="code-kw">if</span>(GL.adjList[i].in == 0)
+            <span class="code-cm">// 入栈操作</span>
+            stack[++top] = i;
+
+    <span class="code-cm">// 2. 主循环：只要栈不为空，就继续处理</span>
+    <span class="code-kw">while</span>(top != 0) {
+        <span class="code-cm">// 出栈，获取当前处理的顶点下标</span>
+        current = stack[top--];
+        printf(<span class="code-str">"%d -> "</span>, GL.adjList[current].data);
+        count++;
+
+        <span class="code-cm">// 遍历当前顶点的所有邻接点(出边)</span>
+        <span class="code-cm">// 获取第一条边</span>
+        e = GL.adjList[current].firstedge;
+        <span class="code-kw">while</span>(e) {
+            <span class="code-cm">// k 是 current 的邻接点下标</span>
+            k = e->adjvex;
+            
+            <span class="code-cm">// 入度减 1</span>
+            <span class="code-kw">if</span>(!(--GL.adjList[k].in))
+                <span class="code-cm">// 入度为0的顶点入栈</span>
+                stack[++top] = k;
+                
+            <span class="code-cm">// 指向下一条边</span>
+            e = e->next;
+        }
+    }
+    
+    <span class="code-cm">// 3. 环检测：如果输出的顶点数少于总顶点数，说明图中有环</span>
+    <span class="code-kw">if</span>(count < GL.numV)
+        <span class="code-kw">return</span> ERROR;
+    <span class="code-kw">else</span>
+        <span class="code-kw">return</span> OK;
+}</div>
+            <div class="flex flex-col gap-6">
+                <div class="card border-l-8 border-primary">
+                    <h3 class="text-white text-[32px] mb-4">关键点解析</h3>
+                    <ul class="space-y-4 text-[26px] text-slate-300">
+                        <li><strong class="text-primary">邻接表结构</strong>：方便查找每个顶点的邻接点（出边）。</li>
+                        <li><strong class="text-secondary">入度数组</strong>：需预先计算好，存储在<strong class="text-white"> adjList[i].in</strong> 中。</li>
+                        <li><strong class="text-accent">辅助数据结构</strong>
+                            <span class="block text-slate-300 text-[24px] mt-1">
+                                使用<strong class="text-white">栈 (Stack)</strong> 来存储当前入度为 0 的顶点。
+                            </span>
+                        </li>
+                    </ul>
+                </div>
+                
+                <div class="bg-slate-800/30 p-6 rounded-2xl border border-slate-700">
+                    <h3 class="text-white text-[32px] mb-4">复杂度分析</h3>
+                    <p class="text-[26px] text-slate-200 mb-2">
+                        <strong class="text-primary">时间复杂度：O(V + E)</strong>
+                    </p>
+                    <p class="text-[22px] text-slate-400 mb-4">
+                        初始化扫描入度表 O(V)，每个顶点入栈出栈一次 O(V)，每条边被访问一次 O(E)。
+                    </p>
+                    <p class="text-[26px] text-slate-200 mb-2">
+                        <strong class="text-secondary">空间复杂度：O(V)</strong>
+                    </p>
+                    <p class="text-[22px] text-slate-400">
+                        需要维护入度数组和栈。
+                    </p>
+                </div>
+            </div>
+        </div>
+      </section>
+
+      <!-- P06: 下节预告 -->
+      <section class="slide" data-title="下节预告">
+        <h2>下节预告：关键路径</h2>
+        <div class="flex flex-col items-center justify-center flex-1 min-h-0">
+            <div class="flex items-center gap-16 mb-16">
+                 <div class="w-48 h-48 rounded-full bg-slate-800 border-4 border-primary flex items-center justify-center relative shadow-[0_0_30px_rgba(139,92,246,0.3)]">
+                    <i class="fas fa-project-diagram text-8xl text-primary"></i>
+                    <div class="absolute -bottom-6 bg-primary text-white px-6 py-2 rounded-full text-2xl font-bold">AOE网</div>
+                 </div>
+                 <i class="fas fa-arrow-right text-6xl text-slate-600 animate-pulse"></i>
+                 <div class="w-48 h-48 rounded-full bg-slate-800 border-4 border-accent flex items-center justify-center relative shadow-[0_0_30px_rgba(244,63,94,0.3)]">
+                    <i class="fas fa-hourglass-half text-8xl text-accent"></i>
+                    <div class="absolute -bottom-6 bg-accent text-white px-6 py-2 rounded-full text-2xl font-bold">工期</div>
+                 </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-12 w-full max-w-[1400px]">
+                <div class="card border-l-8 border-primary">
+                    <h3 class="text-primary text-[36px] mb-6">核心问题</h3>
+                    <ul class="space-y-8 text-[30px] text-slate-200">
+                        <li class="flex items-start">
+                            <i class="fas fa-question-circle text-secondary mt-2 mr-4"></i>
+                            <span>完成整个工程<strong class="text-white">至少</strong>需要多少时间？</span>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fas fa-question-circle text-secondary mt-2 mr-4"></i>
+                            <span>哪些活动是影响进度的<strong class="text-accent">关键</strong>？</span>
+                        </li>
+                    </ul>
+                </div>
+                
+                <div class="card border-l-8 border-accent">
+                    <h3 class="text-accent text-[36px] mb-6">新概念解锁</h3>
+                    <ul class="space-y-6 text-[30px] text-slate-200">
+                        <li class="flex items-center">
+                            <span class="w-12 h-12 rounded bg-slate-700 flex items-center justify-center mr-4 text-xl font-mono text-slate-300">1</span>
+                            <span>AOE 网 (Activity On Edge)</span>
+                        </li>
+                        <li class="flex items-center">
+                            <span class="w-12 h-12 rounded bg-slate-700 flex items-center justify-center mr-4 text-xl font-mono text-slate-300">2</span>
+                            <span>最早/最晚开始时间</span>
+                        </li>
+                        <li class="flex items-center">
+                            <span class="w-12 h-12 rounded bg-slate-700 flex items-center justify-center mr-4 text-xl font-mono text-slate-300">3</span>
+                            <span>关键路径 (Critical Path)</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="mt-16 text-center">
+                <p class="text-[32px] text-slate-400">
+                    <i class="fas fa-info-circle mr-2"></i>
+                    拓扑排序是解决关键路径问题的重要基础
+                </p>
+            </div>
+        </div>
+      </section>
+
+      <!-- Page Number -->
+      <div id="page-number" class="absolute bottom-6 right-8 text-slate-400 text-[24px] font-mono z-50"></div>
+    </div>
+
+    <script>
+      // --- SLIDESHOW SYSTEM ---
+      let currentSlide = 0;
+      const pageNumberEl = document.getElementById('page-number');
+      
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.has('page')) {
+        const page = parseInt(urlParams.get('page'));
+        if (!isNaN(page) && page > 0) currentSlide = page - 1;
+      }
+
+      function updateSlide() {
+        const slides = document.querySelectorAll('.slide');
+        if (currentSlide >= slides.length) currentSlide = slides.length - 1;
+        if (currentSlide < 0) currentSlide = 0;
+        
+        slides.forEach((slide, index) => {
+          slide.classList.remove('active');
+          if (index === currentSlide) {
+            slide.classList.add('active');
+            const title = slide.getAttribute('data-title');
+            if (title === '算法演示' && document.getElementById('demo-graph').children.length === 0) {
+                initDemo();
+            }
+          }
+        });
+        
+        if(pageNumberEl) pageNumberEl.textContent = `${currentSlide + 1} / ${slides.length}`;
+        try {
+          const url = new URL(window.location.href);
+          url.searchParams.set('page', currentSlide + 1);
+          window.history.replaceState(null, '', url.href);
+        } catch (e) {}
+      }
+      
+      function nextSlide() { 
+        if (currentSlide < document.querySelectorAll('.slide').length - 1) { 
+            currentSlide++; 
+            updateSlide(); 
+        } 
+      }
+      
+      function prevSlide() { 
+        if (currentSlide > 0) { 
+            currentSlide--; 
+            updateSlide(); 
+        } 
+      }
+      
+      function resizeApp() {
+        const app = document.getElementById('app');
+        const scale = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+        app.style.transform = `scale(${scale})`;
+      }
+      
+      window.addEventListener('resize', resizeApp);
+      window.addEventListener('load', () => { resizeApp(); updateSlide(); });
+      document.addEventListener('keydown', (e) => {
+        if (['ArrowRight', ' ', 'Enter'].includes(e.key)) nextSlide();
+        else if (e.key === 'ArrowLeft') prevSlide();
+      });
+
+      // --- TOPOLOGICAL SORT DEMO ---
+      // Graph Data: A simple DAG
+      // Nodes: 0-5 (6 nodes)
+      // Edges: 0->1, 0->2, 1->3, 2->3, 2->4, 3->5, 4->5
+      const nodes = [
+          {id: 0, label: 'V0', x: 100, y: 250},
+          {id: 1, label: 'V1', x: 300, y: 100},
+          {id: 2, label: 'V2', x: 300, y: 400},
+          {id: 3, label: 'V3', x: 500, y: 100},
+          {id: 4, label: 'V4', x: 500, y: 400},
+          {id: 5, label: 'V5', x: 700, y: 250}
+      ];
+      const edges = [
+          {u: 0, v: 1}, {u: 0, v: 2},
+          {u: 1, v: 3},
+          {u: 2, v: 3}, {u: 2, v: 4},
+          {u: 3, v: 5},
+          {u: 4, v: 5}
+      ];
+
+      let adj = [];
+      let inDegree = [];
+      let stack = [];
+      let result = [];
+      let stepState = 0; // 0: Init, 1: Find 0-in, 2: Push Stack, 3: Pop & Output, 4: Remove Edges
+      let currentProcessingNode = -1;
+      let historyStack = [];
+      let removedEdges = new Set();
+
+      function initDemo() {
+          // Build Graph
+          const svg = document.getElementById('demo-graph');
+          svg.innerHTML = `
+            <defs>
+                <marker id="arrow-demo" markerWidth="12" markerHeight="12" refX="12" refY="6" orient="auto">
+                    <path d="M0,0 L12,6 L0,12 z" fill="#64748b" />
+                </marker>
+            </defs>
+          `;
+          
+          // Draw Edges
+          edges.forEach(e => {
+              const u = nodes[e.u];
+              const v = nodes[e.v];
+              
+              // Calculate intersection with target node circle (r=24)
+              const dx = v.x - u.x;
+              const dy = v.y - u.y;
+              const dist = Math.sqrt(dx*dx + dy*dy);
+              const r = 28; // Radius + padding
+              
+              // Shorten line at the end
+              const ratio = (dist - r) / dist;
+              const x2 = u.x + dx * ratio;
+              const y2 = u.y + dy * ratio;
+
+              const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+              line.setAttribute('id', `edge-${e.u}-${e.v}`);
+              line.setAttribute('x1', u.x); line.setAttribute('y1', u.y);
+              line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+              line.setAttribute('stroke', '#64748b');
+              line.setAttribute('stroke-width', '2');
+              line.setAttribute('marker-end', 'url(#arrow-demo)');
+              line.classList.add('edge-line');
+              svg.appendChild(line);
+          });
+
+          // Draw Nodes
+          nodes.forEach(n => {
+              const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+              g.setAttribute('id', `node-group-${n.id}`);
+              g.innerHTML = `
+                  <circle id="node-${n.id}" class="node-circle" r="24" cx="${n.x}" cy="${n.y}" fill="#1e293b" stroke="#8b5cf6" stroke-width="2" />
+                  <text id="text-${n.id}" class="node-text" x="${n.x}" y="${n.y+8}" text-anchor="middle" fill="#fff" font-weight="bold" font-size="20">${n.label}</text>
+              `;
+              svg.appendChild(g);
+          });
+
+          resetDemoData();
+          renderDataStructures();
+      }
+
+      function resetDemoData() {
+          adj = Array.from({length: nodes.length}, () => []);
+          inDegree = Array(nodes.length).fill(0);
+          edges.forEach(e => {
+              adj[e.u].push(e.v);
+              inDegree[e.v]++;
+          });
+          stack = [];
+          result = [];
+          stepState = 0;
+          currentProcessingNode = -1;
+          historyStack = [];
+          removedEdges = new Set();
+          
+          // Reset Visuals
+          updateVisuals();
+          
+          document.getElementById('demo-status').textContent = "初始状态：计算入度";
+      }
+
+      function updateVisuals() {
+          // Reset all first
+          document.querySelectorAll('.node-circle').forEach(el => {
+              el.classList.remove('active', 'removed');
+              el.setAttribute('stroke', '#8b5cf6');
+          });
+          document.querySelectorAll('.node-text').forEach(el => el.classList.remove('removed'));
+          document.querySelectorAll('.edge-line').forEach(el => classListRemove(el, 'removed'));
+
+          // Apply state
+          // 1. Edges
+          removedEdges.forEach(id => {
+              const el = document.getElementById(id);
+              if(el) el.classList.add('removed');
+          });
+
+          // 2. Nodes in Stack (Active)
+          stack.forEach(id => {
+              const circle = document.getElementById(`node-${id}`);
+              if(circle) {
+                  circle.setAttribute('stroke', '#10b981');
+                  circle.classList.add('active');
+              }
+          });
+
+          // 3. Nodes in Result (Processed)
+          // They are just normal or whatever style we want. 
+          // Currently we removed the 'removed' class logic for nodes as requested.
+      }
+
+      function saveState() {
+          return {
+              inDegree: [...inDegree],
+              stack: [...stack],
+              result: [...result],
+              stepState: stepState,
+              currentProcessingNode: currentProcessingNode,
+              removedEdges: new Set(removedEdges),
+              statusText: document.getElementById('demo-status').textContent
+          };
+      }
+
+      function restoreState(state) {
+          inDegree = state.inDegree;
+          stack = state.stack;
+          result = state.result;
+          stepState = state.stepState;
+          currentProcessingNode = state.currentProcessingNode;
+          removedEdges = state.removedEdges;
+          document.getElementById('demo-status').textContent = state.statusText;
+          
+          updateVisuals();
+          renderDataStructures();
+      }
+
+      function prevStep() {
+          if (historyStack.length === 0) return;
+          const state = historyStack.pop();
+          restoreState(state);
+      }
+
+      function classListRemove(el, cls) {
+          el.classList.remove(cls);
+          el.style.opacity = 1; // Reset inline style if any
+      }
+
+      function renderDataStructures() {
+          // Indegree
+          const inContainer = document.getElementById('indegree-container');
+          inContainer.innerHTML = '';
+          nodes.forEach((n, i) => {
+              const div = document.createElement('div');
+              div.className = `flex-1 flex flex-col items-center bg-slate-900 p-2 rounded border ${inDegree[i] === 0 && !result.includes(i) ? 'border-success bg-success/10' : 'border-slate-600'}`;
+              div.innerHTML = `
+                  <span class="text-slate-400 text-sm">${n.label}</span>
+                  <span class="text-xl font-bold ${inDegree[i]===0 ? 'text-success' : 'text-white'}">${inDegree[i]}</span>
+              `;
+              inContainer.appendChild(div);
+          });
+
+          // Stack
+          const stackContainer = document.getElementById('stack-container');
+          stackContainer.innerHTML = '';
+          stack.forEach(id => {
+              const div = document.createElement('div');
+              div.className = 'stack-item animate-[fadeIn_0.3s_ease-out]';
+              div.textContent = nodes[id].label;
+              stackContainer.appendChild(div);
+          });
+
+          // Result
+          const resContainer = document.getElementById('result-container');
+          resContainer.innerHTML = '';
+          result.forEach(id => {
+              const div = document.createElement('div');
+              div.className = 'result-item';
+              div.textContent = nodes[id].label;
+              resContainer.appendChild(div);
+          });
+      }
+
+      function nextStep() {
+          const status = document.getElementById('demo-status');
+          
+          // Save state before changing anything
+          historyStack.push(saveState());
+
+          if (stepState === 0) {
+              // Find 0-in nodes and push to stack
+              let found = false;
+              nodes.forEach((n, i) => {
+                  if (inDegree[i] === 0 && !stack.includes(i) && !result.includes(i)) {
+                      stack.push(i);
+                      found = true;
+                      // Highlight node
+                      const circle = document.getElementById(`node-${i}`);
+                      circle.setAttribute('stroke', '#10b981'); // Success color
+                      circle.classList.add('active');
+                  }
+              });
+              
+              if (found) {
+                  status.textContent = "发现入度为0的节点 -> 入栈";
+                  stepState = 1;
+              } else {
+                  if (stack.length > 0) {
+                      stepState = 1; // Go to pop
+                      // Don't recursive call nextStep here to allow animation/step-by-step feeling
+                      // But logic says we should proceed? 
+                      // Let's just update status and let user click next.
+                      // Actually, if we found nothing new, but stack has items, we should probably just stay in state 1 ready to pop?
+                      // The original logic recursively called nextStep. 
+                      // Let's remove recursive call to avoid double history push if we want strict step-by-step.
+                      // But if nothing happened in this step, we should probably undo the history push?
+                      // Or just let it be a "check" step.
+                      
+                      // Let's stick to original logic flow but handle history carefully.
+                      // If we recursively call, we get multiple history entries for one click.
+                      // Better to just transition state and let user click again?
+                      // Or execute the logic immediately.
+                      
+                      // Original:
+                      // stepState = 1; nextStep(); return;
+                      
+                      // Modified:
+                      // Since we pushed history, if we call nextStep() again, we push again.
+                      // We should pop the history we just pushed if we are going to auto-advance.
+                      historyStack.pop(); 
+                      stepState = 1;
+                      nextStep();
+                      return;
+                  } else {
+                      if (result.length === nodes.length) {
+                          status.textContent = "完成！所有节点已排序。";
+                      } else {
+                          status.textContent = "错误：存在环，无法继续！";
+                      }
+                      // Nothing changed really, maybe pop history?
+                      // But status changed. Keep it.
+                      return;
+                  }
+              }
+          } else if (stepState === 1) {
+              // Pop from stack
+              if (stack.length === 0) {
+                  // Try to find more
+                  historyStack.pop(); // Auto-advance
+                  stepState = 0;
+                  nextStep();
+                  return;
+              }
+              
+              const u = stack.pop();
+              currentProcessingNode = u;
+              result.push(u);
+              
+              // Visual: Remove node
+              const circle = document.getElementById(`node-${u}`);
+              circle.classList.remove('active');
+              // circle.classList.add('removed');
+              // document.getElementById(`text-${u}`).classList.add('removed');
+              
+              status.textContent = `弹出 ${nodes[u].label} -> 输出结果，准备删除边`;
+              stepState = 2;
+          } else if (stepState === 2) {
+              // Remove edges and update neighbors
+              const u = currentProcessingNode;
+              const neighbors = adj[u];
+              
+              neighbors.forEach(v => {
+                  inDegree[v]--;
+                  // Visual: Fade edge
+                  const edge = document.getElementById(`edge-${u}-${v}`);
+                  if(edge) {
+                      edge.classList.add('removed');
+                      removedEdges.add(`edge-${u}-${v}`);
+                  }
+              });
+              
+              status.textContent = `删除 ${nodes[u].label} 的出边 -> 更新邻居入度`;
+              stepState = 1; // Go back to pop or find new
+          }
+          
+          renderDataStructures();
+      }
+
+      function resetDemo() {
+          resetDemoData();
+          renderDataStructures();
+      }
+    </script>
+  </body>
+</html>
